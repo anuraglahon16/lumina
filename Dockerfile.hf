@@ -1,0 +1,48 @@
+# Hugging Face Spaces (Docker SDK).
+#
+# Differences from the main Dockerfile, all forced by the platform:
+#   - One container, so both services run in it and only the gateway is exposed.
+#   - Spaces route a single public port; 7860 is the default and is declared as
+#     `app_port` in the README front matter.
+#   - The container runs as uid 1000, and files must be owned by it.
+#   - Disk is wiped on restart unless a Storage Bucket is attached, so /data is
+#     created here and simply reused if a bucket is mounted over it.
+
+FROM node:22-slim
+
+# Spaces run as uid 1000. The node image already ships a uid-1000 user called
+# `node`, so reuse it rather than colliding with useradd. Switching before the
+# COPY steps gets ownership right on the way in, instead of fixing it afterwards
+# with a recursive chown that would duplicate every file into a new layer.
+
+# Writable whether or not a Storage Bucket is attached. Without one this is
+# ephemeral: threads, memories and uploads do not survive a restart.
+RUN mkdir -p /data && chmod 777 /data
+
+USER node
+ENV HOME=/home/node \
+    PATH=/home/node/.local/bin:$PATH
+WORKDIR $HOME/app
+
+ENV NODE_ENV=production \
+    GATEWAY_PORT=7860 \
+    AGENT_PORT=8787 \
+    AGENT_HOST=127.0.0.1 \
+    AGENT_URL=http://127.0.0.1:8787 \
+    DATA_DIR=/data \
+    FRAME_ANCESTORS="'self' https://huggingface.co https://*.hf.space"
+
+COPY --chown=node package*.json ./
+RUN npm ci --omit=dev
+
+COPY --chown=node src ./src
+COPY --chown=node eval ./eval
+COPY --chown=node scripts ./scripts
+
+EXPOSE 7860
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=15s \
+  CMD node -e "fetch('http://127.0.0.1:7860/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+
+# Runs the agent on loopback and the gateway on the public port.
+CMD ["node", "scripts/dev.js"]

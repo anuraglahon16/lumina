@@ -1,0 +1,20 @@
+# Dependencies
+node_modules/
+
+# Secrets. .env holds real API keys; only .env.example is tracked.
+.env
+.env.*
+!.env.example
+
+# Runtime data: threads, memories, uploaded documents, run logs, cache.
+data/
+
+# Generated evaluation reports.
+eval/results-*.json
+
+# The Hugging Face Space is its own git repo, deployed separately.
+hf-space/
+
+# Local noise
+*.log
+.DS_Store

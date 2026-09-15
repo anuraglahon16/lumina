@@ -1,0 +1,73 @@
+# Two services, as the assignment specifies. The agent is not published to the
+# host: only the gateway is reachable, and INTERNAL_TOKEN makes that structural.
+services:
+  agent:
+    build: .
+    command: ["node", "src/agent/server.js"]
+    # Everything in .env reaches the container. Without this, only the variables
+    # enumerated below exist inside it, so any knob tuned in .env (budgets,
+    # cache TTLs, rate limits) is silently ignored in Docker while working
+    # locally. Explicit `environment:` entries still win over the file.
+    env_file: .env
+    environment:
+      AGENT_HOST: 0.0.0.0
+      AGENT_PORT: 8787
+      DATA_DIR: /data
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?set ANTHROPIC_API_KEY in your environment or .env}
+      TAVILY_API_KEY: ${TAVILY_API_KEY:-}
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+      SERPER_API_KEY: ${SERPER_API_KEY:-}
+      VOYAGE_API_KEY: ${VOYAGE_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-lumina-internal}
+      LUMINA_MODEL: ${LUMINA_MODEL:-claude-sonnet-5}
+      LUMINA_BRANCH_MODEL: ${LUMINA_BRANCH_MODEL:-}
+      LUMINA_FAST_MODEL: ${LUMINA_FAST_MODEL:-claude-haiku-4-5}
+      LLM_BREAKER_THRESHOLD: ${LLM_BREAKER_THRESHOLD:-4}
+      LLM_BREAKER_COOLDOWN_MS: ${LLM_BREAKER_COOLDOWN_MS:-30000}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - lumina-data:/data
+    expose:
+      - "8787"
+    # The image's default health check probes the gateway's port and path. The
+    # agent listens elsewhere and serves /v1/health, so it needs its own, or the
+    # container reports unhealthy forever and gets restarted in a loop.
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/v1/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+    restart: unless-stopped
+
+  gateway:
+    build: .
+    command: ["node", "src/gateway/server.js"]
+    # Everything in .env reaches the container. Without this, only the variables
+    # enumerated below exist inside it, so any knob tuned in .env (budgets,
+    # cache TTLs, rate limits) is silently ignored in Docker while working
+    # locally. Explicit `environment:` entries still win over the file.
+    env_file: .env
+    environment:
+      GATEWAY_PORT: 8080
+      AGENT_URL: http://agent:8787
+      INTERNAL_TOKEN: ${INTERNAL_TOKEN:-lumina-internal}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
+      DEMO_PASSWORD: ${DEMO_PASSWORD:-}
+      AUTH_SECRET: ${AUTH_SECRET:-}
+      FRAME_ANCESTORS: ${FRAME_ANCESTORS:-}
+      RL_IDENTITY_CAPACITY: ${RL_IDENTITY_CAPACITY:-15}
+      RL_IDENTITY_REFILL: ${RL_IDENTITY_REFILL:-0.2}
+      # /evals serves whatever report is on the shared volume.
+      EVAL_RESULTS_DIR: /data/eval
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    volumes:
+      - lumina-data:/data:ro
+    ports:
+      - "8080:8080"
+    depends_on:
+      - agent
+    restart: unless-stopped
+
+volumes:
+  lumina-data:

@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LUMINA: citation-grounded research</title>
+<link rel="stylesheet" href="/styles.css" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>◈</text></svg>" />
+</head>
+<body>
+<div class="app">
+  <button type="button" id="sidebar-toggle" class="sidebar-toggle" aria-expanded="false" aria-controls="sidebar" aria-label="Threads, memory, documents and runs">☰</button>
+  <aside class="sidebar" id="sidebar">
+    <div class="brand-row">
+      <div class="brand"><span class="mark">◈</span> LUMINA</div>
+      <nav class="app-nav" aria-label="Sections">
+        <a href="/" class="active" aria-current="page">Ask</a>
+        <a href="/runs">Runs</a>
+        <a href="/evals">Evals</a>
+      </nav>
+    </div>
+
+    <button class="new-thread" id="new-thread">New thread</button>
+
+    <nav class="tabs" id="side-tabs">
+      <button data-tab="threads" class="active">Threads</button>
+      <button data-tab="memory">Memory</button>
+      <button data-tab="docs">Docs</button>
+      <button data-tab="runs">Runs</button>
+    </nav>
+
+    <section class="panel active" data-panel="threads">
+      <div class="panel-list" id="thread-list"></div>
+    </section>
+
+    <section class="panel" data-panel="memory">
+      <p class="panel-note">Long-term memory persists across threads. Everything here is visible and deletable.</p>
+      <form id="memory-form" class="inline-form">
+        <input id="memory-input" placeholder="Remember something about me…" maxlength="300" />
+        <button type="submit">Add</button>
+      </form>
+      <div class="panel-list" id="memory-list"></div>
+      <button class="danger-link" id="clear-memories">Forget everything</button>
+    </section>
+
+    <section class="panel" data-panel="docs">
+      <p class="panel-note">Uploads are parsed, chunked, embedded, and indexed in the background. Answers cite them by page.</p>
+      <label class="upload">
+        <input type="file" id="file-input" multiple accept=".pdf,.txt,.md,.html,.htm,.csv,.json" />
+        <span>Choose files…</span>
+      </label>
+      <div class="panel-list" id="doc-list"></div>
+    </section>
+
+    <section class="panel" data-panel="runs">
+      <p class="panel-note">Every run is logged with latency, cost, tokens, tool calls, cache behaviour, and why it stopped.</p>
+      <div id="run-stats" class="run-stats"></div>
+      <div class="panel-list" id="run-list"></div>
+    </section>
+
+    <div class="status" id="status"></div>
+  </aside>
+
+  <main class="main">
+    <div class="conversation" id="conversation" aria-label="Conversation">
+      <div class="empty" id="empty-state">
+        <h1>Ask anything.</h1>
+        <p>LUMINA searches the web, reads the pages it finds, and answers only from what it actually retrieved, with citations you can check.</p>
+        <div class="examples" id="examples">
+          <button>What changed in the EU AI Act's GPAI obligations, and when do they apply?</button>
+          <button>Compare Postgres logical replication with Debezium for CDC in 2026.</button>
+          <button>Is there good evidence that creatine helps cognition in healthy adults?</button>
+        </div>
+      </div>
+    </div>
+
+    <form class="composer" id="composer">
+      <div class="composer-inner">
+        <textarea id="question" rows="1" placeholder="Ask a research question…" maxlength="2000"></textarea>
+        <div class="composer-actions">
+          <div class="mode-toggle" id="mode-toggle" role="radiogroup" aria-label="Search mode">
+            <button type="button" data-mode="quick" class="active" role="radio" aria-checked="true">
+              Quick <span class="hint">capped, fast</span>
+            </button>
+            <button type="button" data-mode="deep" role="radio" aria-checked="false">
+              Deep Search <span class="hint">plans &amp; branches</span>
+            </button>
+          </div>
+          <button type="submit" id="ask" class="ask">Ask</button>
+        </div>
+      </div>
+    </form>
+  </main>
+</div>
+<script type="module" src="/app.js"></script>
+</body>
+</html>

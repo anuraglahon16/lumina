@@ -1,0 +1,34 @@
+{
+  "cases": [
+    {
+      "id": "recent-factual",
+      "mode": "quick",
+      "query": "What are the OWASP Top 10 web application security risks, and which category covers broken access control?",
+      "expect": { "min_sources": 1, "must_mention": ["access control"], "should_cite": true }
+    },
+    {
+      "id": "numeric-claim",
+      "mode": "quick",
+      "query": "What is the current stable release of PostgreSQL and what were its headline features?",
+      "expect": { "min_sources": 1, "must_mention": ["postgres"], "should_cite": true }
+    },
+    {
+      "id": "comparison",
+      "mode": "quick",
+      "query": "Compare HTTP/3 and HTTP/2 on head-of-line blocking and connection migration.",
+      "expect": { "min_sources": 2, "must_mention": ["quic", "head-of-line"], "should_cite": true }
+    },
+    {
+      "id": "unanswerable",
+      "mode": "quick",
+      "query": "What was decided in the private board meeting of Example Holdings BV on 14 March 2026?",
+      "expect": { "min_sources": 0, "should_cite": false, "expect_uncertainty": true }
+    },
+    {
+      "id": "deep-multipart",
+      "mode": "deep",
+      "query": "What is the current evidence that retrieval-augmented generation reduces hallucination, where does it fail, and what do practitioners recommend instead?",
+      "expect": { "min_sources": 4, "should_cite": true, "min_sub_questions": 2 }
+    }
+  ]
+}
