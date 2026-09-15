@@ -194,7 +194,12 @@ export function searchCacheKey(query) {
     .replace(/['\u2019]s\b/g, '')
     .replace(/[^a-z0-9\s]+/g, ' ')
     .split(/\s+/)
-    .filter((w) => w && !CACHE_STOPWORDS.has(w));
+    .filter((w) => w && !CACHE_STOPWORDS.has(w))
+    // A trailing plural is the same word for keying purposes: "men's singles"
+    // and "mens singles" are one question. Only words long enough that the last
+    // letter is not carrying meaning on its own are stemmed, so "us" and "gas"
+    // survive intact.
+    .map((w) => (w.length > 3 && w.endsWith('s') && !w.endsWith('ss') ? w.slice(0, -1) : w));
   return [...new Set(words)].sort().join(' ');
 }
 
