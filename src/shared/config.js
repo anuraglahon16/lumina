@@ -52,6 +52,23 @@ export const config = {
     },
   },
 
+  /**
+   * MongoDB, optional.
+   *
+   * Unset means the JSON store, which is correct for one container. Set it when
+   * you need state shared between processes, or a vector index larger than
+   * memory. `vectorBackend` exists because $vectorSearch is an Atlas feature: a
+   * local mongod cannot do it, so development falls back to scanning and health
+   * says which one is live rather than leaving it to be guessed.
+   */
+  mongo: {
+    uri: process.env.MONGODB_URI || undefined,
+    db: process.env.MONGODB_DB || 'lumina',
+    vectorBackend: process.env.VECTOR_BACKEND || (process.env.MONGODB_URI?.includes('mongodb+srv') ? 'atlas-vector-search' : 'mongo-cosine-scan'),
+    vectorIndex: process.env.VECTOR_INDEX || 'chunk_vector_index',
+    vectorDim: num(process.env.VECTOR_DIM, 1024),
+  },
+
   agent: {
     port: num(process.env.AGENT_PORT, 8787),
     dataDir: process.env.DATA_DIR || path.join(ROOT, 'data'),

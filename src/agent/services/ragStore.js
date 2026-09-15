@@ -2,6 +2,7 @@ import { config } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
+import { usingMongoVectors, vectorBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc } from './vectorStore.js';
 
 const documents = collection('documents');
 const chunks = collection('chunks');
@@ -52,24 +53,27 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
     const slice = docChunks.slice(i, i + batchSize);
     const { vectors, provider: p } = await embedBatch(slice.map((c) => c.text), { inputType: 'document' });
     provider = p;
-    slice.forEach((chunk, j) => {
-      chunks.put({
-        id: newId('chk'),
-        doc_id: doc.id,
-        user_id: doc.user_id,
-        filename: doc.filename,
-        index: chunk.index,
-        page: chunk.page,
-        page_label: chunk.page_label,
-        text: chunk.text,
-        tokens: tokenize(chunk.text),
-        embedding: vectors[j],
-      });
-    });
+    const records = slice.map((chunk, j) => ({
+      id: newId('chk'),
+      chunk_id: `${doc.id}:${chunk.index}`,
+      doc_id: doc.id,
+      user_id: doc.user_id,
+      filename: doc.filename,
+      index: chunk.index,
+      page: chunk.page,
+      page_label: chunk.page_label,
+      text: chunk.text,
+      tokens: tokenize(chunk.text),
+      embedding: vectors[j],
+    }));
+    // Written to whichever store is configured. Mongo is the shared one, so it
+    // is what a second process would read; the local store stays the default.
+    if (usingMongoVectors()) await putChunks(records);
+    else for (const r of records) chunks.put(r);
     onProgress?.(Math.min(1, (i + slice.length) / docChunks.length));
   }
-  await chunks.flush();
-  return { provider, count: docChunks.length };
+  if (!usingMongoVectors()) await chunks.flush();
+  return { provider, count: docChunks.length, backend: vectorBackend() };
 }
 
 /** Okapi BM25 over the candidate corpus, computed per query. */
@@ -158,14 +162,33 @@ function normalizeScores(map) {
  * embedding key configured.
  */
 export async function searchChunks(query, { userId, docIds, topK = config.rag.topK, recorder } = {}) {
-  const corpus = [...chunks.items.values()].filter(
-    (c) => c.user_id === userId && (!docIds?.length || docIds.includes(c.doc_id)),
-  );
-  if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: null };
-
   const { vector, provider } = await embedQuery(query, { recorder });
-  const dense = new Map();
-  for (const chunk of corpus) dense.set(chunk.id, cosine(vector, chunk.embedding));
+
+  // Dense retrieval happens where the chunks live: the index does it on Atlas,
+  // a scan does it on a local mongod, and the in-process store does it here.
+  // Everything after this point is identical, because fusion works on rankings
+  // rather than on whatever each backend calls a score.
+  let corpus;
+  let dense = new Map();
+  let backend;
+
+  if (usingMongoVectors()) {
+    const [near, all] = await Promise.all([
+      nearestChunks(vector, { userId, docIds, limit: Math.max(topK * 8, 50) }),
+      allChunks({ userId, docIds }),
+    ]);
+    backend = near.backend;
+    corpus = all;
+    for (const c of near.candidates) dense.set(c.id ?? c.chunk_id, c.score);
+  } else {
+    backend = 'in-process';
+    corpus = [...chunks.items.values()].filter(
+      (c) => c.user_id === userId && (!docIds?.length || docIds.includes(c.doc_id)),
+    );
+    for (const chunk of corpus) dense.set(chunk.id, cosine(vector, chunk.embedding));
+  }
+
+  if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: provider, backend };
 
   const lexical = bm25Scores(tokenize(query), corpus);
   // The local embedder is lexical, not semantic, so leaning on it as if it
@@ -191,6 +214,7 @@ export async function searchChunks(query, { userId, docIds, topK = config.rag.to
   return {
     corpus_size: corpus.length,
     embedding_provider: provider,
+    backend,
     results: scored.map((r) => ({
       chunk_id: r.chunk.id,
       doc_id: r.chunk.doc_id,

@@ -7,10 +7,12 @@ import { cache } from '../services/cache.js';
 import { searchHealth, resolveProviders } from '../services/search/index.js';
 import { resolveEmbeddingProvider } from '../services/embeddings.js';
 import { breakerReport } from '../../shared/circuitBreaker.js';
+import { vectorBackend } from '../services/vectorStore.js';
+import { pingMongo, mongoEnabled } from '../store/mongo.js';
 
 export const observabilityRouter = express.Router();
 
-observabilityRouter.get('/health', (req, res) => {
+observabilityRouter.get('/health', async (req, res) => {
   const caps = capabilities();
   res.json({
     status: caps.llm ? 'ok' : 'degraded',
@@ -24,6 +26,12 @@ observabilityRouter.get('/health', (req, res) => {
       // with no sources.
       search_last: searchHealth(),
       embedding_provider: resolveEmbeddingProvider(),
+      // Where chunks live and how vectors are searched. "mongo-cosine-scan"
+      // means a real database but no Atlas index, which is a working setup that
+      // should never be mistaken for the indexed one.
+      store: mongoEnabled() ? 'mongodb' : 'json',
+      vector_backend: vectorBackend(),
+      mongo: await pingMongo(),
       // A tripped breaker is why calls are failing fast, so health says so
       // rather than leaving it to be inferred from errors.
       circuits: breakerReport(),
