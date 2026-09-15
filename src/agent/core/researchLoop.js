@@ -26,8 +26,13 @@ export async function runResearchLoop({
   effort,
   hasDocuments,
   signal,
+  // Injected so the loop's control flow can be tested without a model or a
+  // network: the behaviours worth pinning here are when it stops, why, and what
+  // it refuses to accept, none of which are about the model's own output.
+  complete: completeFn = complete,
+  executor,
 }) {
-  const execute = createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch });
+  const execute = executor || createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch });
   const tools = toolDefinitionsFor({ hasDocuments });
   const messages = [{ role: 'user', content: userMessage }];
   const notes = [];
@@ -50,7 +55,7 @@ export async function runResearchLoop({
       break;
     }
 
-    const message = await complete({
+    const message = await completeFn({
       purpose: branch ? `research:${branch}` : 'research',
       recorder,
       model,
