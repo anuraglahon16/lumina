@@ -69,6 +69,15 @@ export const config = {
     vectorDim: num(process.env.VECTOR_DIM, 1024),
   },
 
+  /**
+   * Whether the process may outlive a response. Vercel sets VERCEL=1; anything
+   * else can say so explicitly. Background work is skipped where it would
+   * silently never run.
+   */
+  runtime: {
+    serverless: bool(process.env.SERVERLESS, Boolean(process.env.VERCEL)),
+  },
+
   agent: {
     port: num(process.env.AGENT_PORT, 8787),
     dataDir: process.env.DATA_DIR || path.join(ROOT, 'data'),

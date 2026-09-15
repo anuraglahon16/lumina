@@ -85,6 +85,22 @@ class JobQueue extends EventEmitter {
     return jobs.list(compact({ user_id: filter.userId, type: filter.type }), opts);
   }
 
+  /**
+   * Wait for one job to leave the queue.
+   *
+   * Only needed where the process cannot outlive its response. Elsewhere the
+   * whole point of the queue is that the caller does not wait.
+   */
+  async drain(jobId, { timeoutMs = 280_000 } = {}) {
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      const job = await jobs.get(jobId);
+      if (!job || ['completed', 'failed'].includes(job.status)) return job;
+      await new Promise((r) => setTimeout(r, 200));
+    }
+    return jobs.get(jobId);
+  }
+
   #pump() {
     while (this.running < this.concurrency && this.queue.length) {
       const jobId = this.queue.shift();

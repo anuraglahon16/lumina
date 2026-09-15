@@ -3,6 +3,7 @@ import { parseDocument } from './parsers.js';
 import { chunkPages } from './chunker.js';
 import { createDocument, updateDocument, indexChunks, getDocument } from './ragStore.js';
 import { createLogger } from '../../shared/logger.js';
+import { config } from '../../shared/config.js';
 
 const log = createLogger('ingest');
 
@@ -20,7 +21,15 @@ export async function enqueueDocument({ userId, filename, mimetype, buffer }) {
   pendingUploads.set(doc.id, buffer);
   const job = await jobQueue.enqueue('index_document', { doc_id: doc.id }, { userId, maxAttempts: 2 });
   await updateDocument(doc.id, { job_id: job.id });
-  return { document: { ...await getDocument(doc.id) }, job };
+
+  // On a platform that freezes the process once a response is sent, returning
+  // 202 and indexing afterwards means never indexing at all: the upload would
+  // sit at "queued" forever and the document would never become searchable.
+  // Waiting costs the user the indexing time on upload, which is the honest
+  // trade and the only one available.
+  if (config.runtime.serverless) await jobQueue.drain(job.id);
+
+  return { document: { ...(await getDocument(doc.id)) }, job: await jobQueue.get(job.id) };
 }
 
 jobQueue.register('index_document', async ({ doc_id: docId }, ctx) => {
