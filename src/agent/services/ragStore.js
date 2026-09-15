@@ -2,12 +2,13 @@ import { config } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
-import { usingMongoVectors, vectorBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc } from './vectorStore.js';
+import { usingMongoVectors, vectorBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc, countChunks } from './vectorStore.js';
+import { compact } from '../store/filter.js';
 
 const documents = collection('documents');
 const chunks = collection('chunks');
 
-export function createDocument({ userId, filename, mimetype, size }) {
+export async function createDocument({ userId, filename, mimetype, size }) {
   return documents.put({
     id: newId('doc'),
     user_id: userId,
@@ -27,21 +28,23 @@ export function createDocument({ userId, filename, mimetype, size }) {
 
 export const getDocument = (id) => documents.get(id);
 
-export function listDocuments(userId, opts = {}) {
-  return documents.list((d) => d.user_id === userId, { limit: 100, ...opts });
+export async function listDocuments(userId, opts = {}) {
+  return documents.list({ user_id: userId }, { limit: 100, ...opts });
 }
 
-export function updateDocument(id, patch) {
+export async function updateDocument(id, patch) {
   return documents.patch(id, patch);
 }
 
-export function deleteDocument(id, userId) {
-  const doc = documents.get(id);
+export async function deleteDocument(id, userId) {
+  const doc = await documents.get(id);
   if (!doc || doc.user_id !== userId) return false;
-  for (const chunk of [...chunks.items.values()]) {
-    if (chunk.doc_id === id) chunks.delete(chunk.id);
+  if (usingMongoVectors()) {
+    await deleteChunksForDoc(id);
+  } else {
+    for (const chunk of await chunks.all({ doc_id: id })) await chunks.delete(chunk.id);
   }
-  documents.delete(id);
+  await documents.delete(id);
   return true;
 }
 
@@ -69,7 +72,7 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
     // Written to whichever store is configured. Mongo is the shared one, so it
     // is what a second process would read; the local store stays the default.
     if (usingMongoVectors()) await putChunks(records);
-    else for (const r of records) chunks.put(r);
+    else for (const r of records) await chunks.put(r);
     onProgress?.(Math.min(1, (i + slice.length) / docChunks.length));
   }
   if (!usingMongoVectors()) await chunks.flush();
@@ -182,9 +185,7 @@ export async function searchChunks(query, { userId, docIds, topK = config.rag.to
     for (const c of near.candidates) dense.set(c.id ?? c.chunk_id, c.score);
   } else {
     backend = 'in-process';
-    corpus = [...chunks.items.values()].filter(
-      (c) => c.user_id === userId && (!docIds?.length || docIds.includes(c.doc_id)),
-    );
+    corpus = await chunks.all(compact({ user_id: userId, doc_id: docIds?.length ? { $in: docIds } : undefined }));
     for (const chunk of corpus) dense.set(chunk.id, cosine(vector, chunk.embedding));
   }
 
@@ -229,11 +230,11 @@ export async function searchChunks(query, { userId, docIds, topK = config.rag.to
   };
 }
 
-export function documentStats(userId) {
-  const docs = [...documents.items.values()].filter((d) => d.user_id === userId);
+export async function documentStats(userId) {
+  const docs = await documents.all({ user_id: userId });
   return {
     documents: docs.length,
     indexed: docs.filter((d) => d.status === 'indexed').length,
-    chunks: [...chunks.items.values()].filter((c) => c.user_id === userId).length,
+    chunks: usingMongoVectors() ? await countChunks(userId) : await chunks.count({ user_id: userId }),
   };
 }

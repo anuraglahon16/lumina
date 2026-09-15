@@ -31,7 +31,7 @@ const handleUpload = (req, res, next) =>
     return next(badRequest(`Upload rejected: ${err.message}`));
   });
 
-documentsRouter.post('/documents', handleUpload, (req, res, next) => {
+documentsRouter.post('/documents', handleUpload, async (req, res, next) => {
   const files = req.files || [];
   if (!files.length) return next(badRequest('No files uploaded (expected multipart field "files")'));
 
@@ -42,7 +42,7 @@ documentsRouter.post('/documents', handleUpload, (req, res, next) => {
       rejected.push({ filename: file.originalname, reason: `unsupported type: ${file.mimetype || 'unknown'}` });
       continue;
     }
-    const { document, job } = enqueueDocument({
+    const { document, job } = await enqueueDocument({
       userId: req.userId,
       filename: file.originalname,
       mimetype: file.mimetype,
@@ -61,20 +61,20 @@ documentsRouter.post('/documents', handleUpload, (req, res, next) => {
   res.status(202).json({ accepted, rejected });
 });
 
-documentsRouter.get('/documents', (req, res) => {
-  const { total, items } = listDocuments(req.userId);
-  res.json({ total, stats: documentStats(req.userId), items: items.map(publicDoc) });
+documentsRouter.get('/documents', async (req, res) => {
+  const { total, items } = await listDocuments(req.userId);
+  res.json({ total, stats: await documentStats(req.userId), items: items.map(publicDoc) });
 });
 
-documentsRouter.get('/documents/:id', (req, res, next) => {
-  const doc = getDocument(req.params.id);
+documentsRouter.get('/documents/:id', async (req, res, next) => {
+  const doc = await getDocument(req.params.id);
   if (!doc || doc.user_id !== req.userId) return next(notFound('Document not found'));
-  const job = doc.job_id ? jobQueue.get(doc.job_id) : null;
+  const job = doc.job_id ? await jobQueue.get(doc.job_id) : null;
   res.json({ ...publicDoc(doc), job: job && { id: job.id, status: job.status, stage: job.stage, progress: job.progress, error: job.error } });
 });
 
-documentsRouter.delete('/documents/:id', (req, res, next) => {
-  if (!deleteDocument(req.params.id, req.userId)) return next(notFound('Document not found'));
+documentsRouter.delete('/documents/:id', async (req, res, next) => {
+  if (!await deleteDocument(req.params.id, req.userId)) return next(notFound('Document not found'));
   res.status(204).end();
 });
 

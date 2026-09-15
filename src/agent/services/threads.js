@@ -9,7 +9,7 @@ const threads = collection('threads');
  * this is verbatim, scoped to one thread, and never promoted automatically
  * without passing through extraction.
  */
-export function createThread({ userId, title }) {
+export async function createThread({ userId, title }) {
   return threads.put({
     id: newId('thr'),
     user_id: userId,
@@ -19,19 +19,19 @@ export function createThread({ userId, title }) {
   });
 }
 
-export function getThread(id, userId) {
-  const thread = threads.get(id);
+export async function getThread(id, userId) {
+  const thread = await threads.get(id);
   if (!thread || (userId && thread.user_id !== userId)) return null;
   return thread;
 }
 
-export function ensureThread({ threadId, userId, title }) {
-  const existing = threadId ? getThread(threadId, userId) : null;
+export async function ensureThread({ threadId, userId, title }) {
+  const existing = threadId ? await getThread(threadId, userId) : null;
   return existing || createThread({ userId, title });
 }
 
-export function appendMessage(threadId, message) {
-  const thread = threads.get(threadId);
+export async function appendMessage(threadId, message) {
+  const thread = await threads.get(threadId);
   if (!thread) return null;
   const entry = { id: newId('msg'), at: new Date().toISOString(), ...message };
   const messages = [...thread.messages, entry];
@@ -40,13 +40,13 @@ export function appendMessage(threadId, message) {
   if (thread.title === 'New thread' && message.role === 'user' && message.content) {
     patch.title = message.content.slice(0, 80);
   }
-  threads.put({ ...thread, ...patch });
+  await threads.put({ ...thread, ...patch });
   return entry;
 }
 
 /** Recent turns, condensed into plain message params for the model. */
-export function threadContext(threadId, { window = config.memory.threadWindow } = {}) {
-  const thread = threads.get(threadId);
+export async function threadContext(threadId, { window = config.memory.threadWindow } = {}) {
+  const thread = await threads.get(threadId);
   if (!thread) return [];
   return thread.messages
     .filter((m) => m.role === 'user' || m.role === 'assistant')
@@ -54,8 +54,8 @@ export function threadContext(threadId, { window = config.memory.threadWindow } 
     .map((m) => ({ role: m.role, content: m.content }));
 }
 
-export function listThreads(userId, opts = {}) {
-  const { total, items } = threads.list((t) => t.user_id === userId, { sortKey: 'last_activity_at', limit: 50, ...opts });
+export async function listThreads(userId, opts = {}) {
+  const { total, items } = await threads.list({ user_id: userId }, { sortKey: 'last_activity_at', limit: 50, ...opts });
   return {
     total,
     items: items.map((t) => ({
@@ -68,8 +68,8 @@ export function listThreads(userId, opts = {}) {
   };
 }
 
-export function deleteThread(id, userId) {
-  const thread = getThread(id, userId);
+export async function deleteThread(id, userId) {
+  const thread = await getThread(id, userId);
   if (!thread) return false;
   return threads.delete(id);
 }

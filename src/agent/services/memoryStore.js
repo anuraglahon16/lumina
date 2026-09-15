@@ -18,7 +18,7 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
 
   // De-duplicate on exact text, and near-duplicate on embedding similarity.
   const fingerprint = sha256(`${userId}:${text.toLowerCase()}`);
-  const exact = [...memories.items.values()].find((m) => m.fingerprint === fingerprint);
+  const exact = (await memories.all({ user_id: userId, fingerprint }))[0] || null;
   if (exact) {
     return memories.put({ ...exact, hits: (exact.hits || 0) + 1, last_seen_at: new Date().toISOString() });
   }
@@ -26,15 +26,14 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
   const { vectors } = await embedBatch([text], { inputType: 'document' });
   const embedding = vectors[0];
 
-  const near = [...memories.items.values()]
-    .filter((m) => m.user_id === userId)
+  const near = (await memories.all({ user_id: userId }))
     .map((m) => ({ m, sim: cosine(embedding, m.embedding) }))
     .sort((a, b) => b.sim - a.sim)[0];
   if (near && near.sim > 0.95) {
     return memories.put({ ...near.m, hits: (near.m.hits || 0) + 1, last_seen_at: new Date().toISOString() });
   }
 
-  const record = memories.put({
+  const record = await memories.put({
     id: newId('mem'),
     user_id: userId,
     content: text,
@@ -50,7 +49,7 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
   });
 
   // Bounded store: evict the least useful (oldest, least-hit) beyond the cap.
-  const all = [...memories.items.values()].filter((m) => m.user_id === userId);
+  const all = await memories.all({ user_id: userId });
   if (all.length > config.memory.maxLongTerm) {
     all
       .sort((a, b) => (a.hits || 0) - (b.hits || 0) || String(a.last_seen_at).localeCompare(String(b.last_seen_at)))
@@ -61,7 +60,7 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
 }
 
 export async function searchMemories(query, { userId, topK = config.memory.injectTopK } = {}) {
-  const pool = [...memories.items.values()].filter((m) => m.user_id === userId);
+  const pool = await memories.all({ user_id: userId });
   if (!pool.length) return [];
   const { vector, provider } = await embedQuery(query);
   const queryTerms = new Set(tokenize(query));
@@ -87,26 +86,21 @@ export async function searchMemories(query, { userId, topK = config.memory.injec
     .map((r) => ({ ...publicMemory(r.memory), score: Number(r.score.toFixed(4)) }));
 }
 
-export function listMemories(userId, opts = {}) {
-  const { total, items } = memories.list((m) => m.user_id === userId, { limit: 200, ...opts });
+export async function listMemories(userId, opts = {}) {
+  const { total, items } = await memories.list({ user_id: userId }, { limit: 200, ...opts });
   return { total, items: items.map(publicMemory) };
 }
 
-export function deleteMemory(id, userId) {
-  const m = memories.get(id);
+export async function deleteMemory(id, userId) {
+  const m = await memories.get(id);
   if (!m || m.user_id !== userId) return false;
   return memories.delete(id);
 }
 
-export function clearMemories(userId) {
-  let n = 0;
-  for (const m of [...memories.items.values()]) {
-    if (m.user_id === userId) {
-      memories.delete(m.id);
-      n += 1;
-    }
-  }
-  return n;
+export async function clearMemories(userId) {
+  const mine = await memories.all({ user_id: userId });
+  for (const m of mine) await memories.delete(m.id);
+  return mine.length;
 }
 
 /** Never ship embeddings or token lists to the client. */

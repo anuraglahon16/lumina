@@ -10,7 +10,7 @@ memoriesRouter.get('/memories', async (req, res) => {
   if (req.query.q) {
     return res.json({ items: await searchMemories(String(req.query.q), { userId: req.userId, topK: 20 }) });
   }
-  res.json(listMemories(req.userId, { limit: Number(req.query.limit) || 200 }));
+  res.json(await listMemories(req.userId, { limit: Number(req.query.limit) || 200 }));
 });
 
 memoriesRouter.post('/memories', async (req, res, next) => {
@@ -22,11 +22,11 @@ memoriesRouter.post('/memories', async (req, res, next) => {
   res.status(201).json(saved);
 });
 
-memoriesRouter.delete('/memories/:id', (req, res, next) => {
-  if (!deleteMemory(req.params.id, req.userId)) return next(notFound('Memory not found'));
+memoriesRouter.delete('/memories/:id', async (req, res, next) => {
+  if (!(await deleteMemory(req.params.id, req.userId))) return next(notFound('Memory not found'));
   res.status(204).end();
 });
 
-memoriesRouter.delete('/memories', (req, res) => {
-  res.json({ deleted: clearMemories(req.userId) });
+memoriesRouter.delete('/memories', async (req, res) => {
+  res.json({ deleted: await clearMemories(req.userId) });
 });

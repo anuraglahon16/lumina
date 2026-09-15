@@ -30,7 +30,7 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
   const deadline = Date.now() + limits.wallClockMs;
   const ledger = new EvidenceLedger();
   const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'deep', query, model: config.llm.model });
-  const thread = ensureThread({ threadId, userId, title: query });
+  const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {
     run_id: recorder.id,
@@ -42,14 +42,14 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
     search_provider: resolveProviders()[0],
   });
 
-  appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id, mode: 'deep' });
+  await appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id, mode: 'deep' });
 
   try {
     // ---- context ----------------------------------------------------------
     recorder.startPhase('context');
     const memories = await searchMemories(query, { userId }).catch(() => []);
-    const docs = documentStats(userId);
-    const history = threadContext(thread.id).slice(0, -1);
+    const docs = await documentStats(userId);
+    const history = (await threadContext(thread.id)).slice(0, -1);
     recorder.endPhase('context', { memories: memories.length, documents: docs.indexed });
     if (memories.length) emit('memory_used', { memories });
 
@@ -120,7 +120,7 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
       signal,
     });
 
-    appendMessage(thread.id, {
+    await appendMessage(thread.id, {
       role: 'assistant',
       content: answer,
       run_id: recorder.id,

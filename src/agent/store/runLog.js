@@ -3,6 +3,7 @@ import path from 'node:path';
 import { config, priceFor } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from './jsonStore.js';
+import { compact } from './filter.js';
 
 const runs = collection('runs');
 
@@ -165,7 +166,7 @@ export class RunRecorder {
     if (citations) this.run.citations = { ...this.run.citations, ...citations };
     if (sources) this.run.sources = { ...this.run.sources, ...sources };
     for (const name of [...this.openPhases.keys()]) this.endPhase(name, { unterminated: true });
-    runs.put(this.run);
+    void runs.put(this.run);
     ndjson().write(`${JSON.stringify(this.run)}\n`);
     return this.run;
   }
@@ -175,23 +176,20 @@ export class RunRecorder {
   }
 }
 
-export function getRun(id) {
+export async function getRun(id) {
   return runs.get(id);
 }
 
-export function listRuns(filter = {}, opts = {}) {
+export async function listRuns(filter = {}, opts = {}) {
   return runs.list(
-    (r) =>
-      (!filter.userId || r.user_id === filter.userId) &&
-      (!filter.mode || r.mode === filter.mode) &&
-      (!filter.threadId || r.thread_id === filter.threadId),
+    compact({ user_id: filter.userId, mode: filter.mode, thread_id: filter.threadId }),
     opts,
   );
 }
 
 /** Aggregate metrics across stored runs: the numbers you actually watch. */
-export function runStats(filter = {}) {
-  const { items } = listRuns(filter, { limit: 10000 });
+export async function runStats(filter = {}) {
+  const { items } = await listRuns(filter, { limit: 10000 });
   if (!items.length) return { runs: 0 };
   const pick = (f) => items.map(f).filter((v) => typeof v === 'number').sort((a, b) => a - b);
   const pct = (arr, p) => (arr.length ? arr[Math.min(arr.length - 1, Math.floor((p / 100) * arr.length))] : null);

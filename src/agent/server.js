@@ -59,6 +59,10 @@ app.use((req, res) => res.status(404).json({ error: { code: 'not_found', message
 app.use(errorHandler(log));
 
 const host = process.env.AGENT_HOST || '127.0.0.1';
+// Jobs left running by a previous process are reconciled once the store is
+// reachable, rather than in a constructor that cannot await.
+jobQueue.reconcile().catch((err) => log.warn('job_reconcile_failed', { err: err.message }));
+
 const server = app.listen(config.agent.port, host, () => {
   log.info('agent_listening', {
     port: config.agent.port,

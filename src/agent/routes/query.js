@@ -36,7 +36,7 @@ queryRouter.post('/query', async (req, res, next) => {
     // Detached Deep Search: return a handle, stream it later.
     const streamId = newId('strm');
     const stream = createRunStream(streamId);
-    const job = jobQueue.enqueue('agent_run', { query, mode, threadId, userId, requestId: req.requestId, streamId }, { userId });
+    const job = await jobQueue.enqueue('agent_run', { query, mode, threadId, userId, requestId: req.requestId, streamId }, { userId });
     return res.status(202).json({
       job_id: job.id,
       stream_id: streamId,

@@ -24,7 +24,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
   const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.model });
-  const thread = ensureThread({ threadId, userId, title: query });
+  const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {
     run_id: recorder.id,
@@ -36,16 +36,16 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     search_provider: resolveProviders()[0],
   });
 
-  appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id });
+  await appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id });
 
   try {
     // ---- context assembly -------------------------------------------------
     recorder.startPhase('context');
     const [memories, docs] = await Promise.all([
       searchMemories(query, { userId }).catch(() => []),
-      Promise.resolve(documentStats(userId)),
+      documentStats(userId),
     ]);
-    const history = threadContext(thread.id).slice(0, -1);
+    const history = (await threadContext(thread.id)).slice(0, -1);
     recorder.endPhase('context', { memories: memories.length, thread_turns: history.length, documents: docs.indexed });
 
     if (memories.length) emit('memory_used', { memories });
@@ -112,7 +112,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       signal,
     });
 
-    appendMessage(thread.id, {
+    await appendMessage(thread.id, {
       role: 'assistant',
       content: answer,
       run_id: recorder.id,

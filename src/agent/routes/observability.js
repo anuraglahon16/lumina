@@ -41,7 +41,7 @@ observabilityRouter.get('/health', async (req, res) => {
   });
 });
 
-observabilityRouter.get('/capabilities', (req, res) => {
+observabilityRouter.get('/capabilities', async (req, res) => {
   res.json({
     capabilities: capabilities(),
     active: {
@@ -62,36 +62,36 @@ observabilityRouter.get('/capabilities', (req, res) => {
 });
 
 /** Run logs: everything the harness measured, per run. */
-observabilityRouter.get('/runs', (req, res) => {
+observabilityRouter.get('/runs', async (req, res) => {
   res.json(
-    listRuns(
+    await listRuns(
       { userId: req.userId, mode: req.query.mode, threadId: req.query.thread_id },
       { limit: Number(req.query.limit) || 50 },
     ),
   );
 });
 
-observabilityRouter.get('/runs/stats', (req, res) => {
+observabilityRouter.get('/runs/stats', async (req, res) => {
   const allUsers = req.query.all === 'true';
-  const stats = runStats({ userId: allUsers ? undefined : req.userId, mode: req.query.mode });
+  const stats = await runStats({ userId: allUsers ? undefined : req.userId, mode: req.query.mode });
   // Stats are per-user, and an API client without the cookie is a fresh user
   // every call, so an empty result looks like "nothing was ever run". Say which
   // scope produced it instead of returning a bare zero.
   res.json({ ...stats, scope: allUsers ? 'all_users' : 'current_user', ...(stats.runs === 0 && !allUsers ? { hint: 'No runs for this user. Use ?all=true for every user.' } : {}) });
 });
 
-observabilityRouter.get('/runs/:id', (req, res, next) => {
-  const run = getRun(req.params.id);
+observabilityRouter.get('/runs/:id', async (req, res, next) => {
+  const run = await getRun(req.params.id);
   if (!run || run.user_id !== req.userId) return next(notFound('Run not found'));
   res.json(run);
 });
 
-observabilityRouter.get('/jobs', (req, res) => {
-  res.json(jobQueue.list({ userId: req.userId, type: req.query.type }, { limit: Number(req.query.limit) || 50 }));
+observabilityRouter.get('/jobs', async (req, res) => {
+  res.json(await jobQueue.list({ userId: req.userId, type: req.query.type }, { limit: Number(req.query.limit) || 50 }));
 });
 
-observabilityRouter.get('/jobs/:id', (req, res, next) => {
-  const job = jobQueue.get(req.params.id);
+observabilityRouter.get('/jobs/:id', async (req, res, next) => {
+  const job = await jobQueue.get(req.params.id);
   if (!job || (job.user_id && job.user_id !== req.userId)) return next(notFound('Job not found'));
   res.json(job);
 });
