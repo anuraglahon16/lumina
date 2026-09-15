@@ -139,7 +139,10 @@ export const config = {
   cache: {
     enabled: bool(process.env.CACHE_ENABLED, true),
     searchTtlMs: num(process.env.CACHE_SEARCH_TTL_MS, 30 * 60 * 1000),
-    fetchTtlMs: num(process.env.CACHE_FETCH_TTL_MS, 6 * 60 * 60 * 1000),
+    // A fetched page is the expensive half of a run, in latency and in budget,
+    // and an article's text rarely changes within a day. Search results keep a
+    // short TTL because freshness is the point of searching.
+    fetchTtlMs: num(process.env.CACHE_FETCH_TTL_MS, 24 * 60 * 60 * 1000),
     embedTtlMs: num(process.env.CACHE_EMBED_TTL_MS, 30 * 24 * 60 * 60 * 1000),
     maxEntries: num(process.env.CACHE_MAX_ENTRIES, 2000),
   },

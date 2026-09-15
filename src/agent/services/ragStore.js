@@ -73,6 +73,41 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
 }
 
 /** Okapi BM25 over the candidate corpus, computed per query. */
+/** Descending score order, as a chunk id to 1-based rank map. */
+function rank(scores) {
+  return new Map(
+    [...scores.entries()]
+      .filter(([, v]) => v > 0)
+      .sort((a, b) => b[1] - a[1])
+      .map(([id], i) => [id, i + 1]),
+  );
+}
+
+/**
+ * Reciprocal rank fusion.
+ *
+ * Blending normalised scores assumes cosine similarity and BM25 are on
+ * comparable scales, which they are not: BM25 is unbounded and corpus
+ * dependent, cosine sits in a narrow band, so min-max normalising each makes
+ * the blend depend on the spread of whatever happened to be retrieved. One
+ * outlier compresses everything else toward zero and the weight stops meaning
+ * what it says.
+ *
+ * RRF uses each ranker's *ordering* instead of its numbers, so no scale has to
+ * be reconciled. A chunk ranked highly by either retriever scores well; one
+ * ranked highly by both scores best. k damps the top of the curve so rank 1 is
+ * not overwhelmingly larger than rank 2.
+ */
+function reciprocalRankFusion(rankings, { k = 60 } = {}) {
+  const out = new Map();
+  for (const { ranking, weight } of rankings) {
+    for (const [id, r] of ranking) {
+      out.set(id, (out.get(id) || 0) + weight * (1 / (k + r)));
+    }
+  }
+  return out;
+}
+
 function bm25Scores(queryTerms, corpus, { k1 = 1.5, b = 0.75 } = {}) {
   const N = corpus.length;
   if (!N) return new Map();
@@ -133,20 +168,23 @@ export async function searchChunks(query, { userId, docIds, topK = config.rag.to
   for (const chunk of corpus) dense.set(chunk.id, cosine(vector, chunk.embedding));
 
   const lexical = bm25Scores(tokenize(query), corpus);
-  const nDense = normalizeScores(dense);
-  const nLex = normalizeScores(lexical);
   // The local embedder is lexical, not semantic, so leaning on it as if it
   // were dense retrieval double-counts the same signal. Shift weight to BM25.
   const w = provider === 'local' ? Math.min(config.rag.denseWeight, 0.4) : config.rag.denseWeight;
 
+  const fused = reciprocalRankFusion([
+    { ranking: rank(dense), weight: w },
+    { ranking: rank(lexical), weight: 1 - w },
+  ]);
+
   const scored = corpus
     .map((chunk) => ({
       chunk,
-      score: w * (nDense.get(chunk.id) || 0) + (1 - w) * (nLex.get(chunk.id) || 0),
+      score: fused.get(chunk.id) || 0,
       dense_score: Number((dense.get(chunk.id) || 0).toFixed(4)),
       lexical_score: Number((lexical.get(chunk.id) || 0).toFixed(4)),
     }))
-    .filter((r) => r.score > 0.01)
+    .filter((r) => r.score > 0)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK);
 

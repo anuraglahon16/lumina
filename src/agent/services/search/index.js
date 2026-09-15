@@ -168,6 +168,36 @@ export function searchHealth() {
   return Object.fromEntries(providerHealth);
 }
 
+/**
+ * Cache key for a search.
+ *
+ * The model writes the query, and it rephrases the same intent every time:
+ * "US Open 2021 men's singles champion", "2021 US Open men's singles champion",
+ * "who won the 2021 US Open men". Keying on the raw string means those are
+ * three misses and three paid API calls for one question, which is most of why
+ * the hit rate sat near a tenth.
+ *
+ * So the key is built from the query's content words, sorted. Word order is
+ * dropped deliberately: search engines are themselves largely order
+ * insensitive, and for research queries the reordering above is the common
+ * case. The cost of being wrong is bounded, since a stale or slightly-off
+ * result set is still only a set of leads that must be fetched before anything
+ * can be cited.
+ */
+const CACHE_STOPWORDS = new Set(
+  'a an the of in on at to for with from by as is are was were be do does did what which who whom how why when where can could should would will'.split(' '),
+);
+
+export function searchCacheKey(query) {
+  const words = String(query)
+    .toLowerCase()
+    .replace(/['\u2019]s\b/g, '')
+    .replace(/[^a-z0-9\s]+/g, ' ')
+    .split(/\s+/)
+    .filter((w) => w && !CACHE_STOPWORDS.has(w));
+  return [...new Set(words)].sort().join(' ');
+}
+
 /** Provider order: explicit choice, else best available key, else keyless. */
 export function resolveProviders() {
   if (config.search.provider !== 'auto') return [config.search.provider];
@@ -191,7 +221,7 @@ export async function webSearch(query, { limit = config.search.resultsPerQuery, 
   const order = resolveProviders();
   const { value, cached: wasCached } = await cached(
     'search',
-    { q: trimmed.toLowerCase(), limit, order: order[0] },
+    { q: searchCacheKey(trimmed), limit, order: order[0] },
     config.cache.searchTtlMs,
     async () => {
       const errors = [];
