@@ -442,6 +442,13 @@ async function ask(question) {
       case 'iteration':
         turn.slots['trace-budget'].textContent = budgetLabel(data.budget);
         break;
+      case 'reasoning':
+        // The agent already streamed this and the UI discarded it, leaving the
+        // trace as a list of tool names during the longest part of a run. The
+        // model's own account of what it is doing is better than silence, and
+        // costs nothing extra: it is on the wire either way.
+        if (data.text?.trim()) traceRow(turn, 'researching', 'thinking', esc(data.text.trim()), 'note');
+        break;
       case 'tool_call':
         traceRow(turn, 'researching', `→ ${esc(data.tool)}`, describeToolInput(data.tool, data.input));
         turn.slots['trace-budget'].textContent = budgetLabel(data.budget);
