@@ -4,7 +4,7 @@
     "api/index.js": {
       "maxDuration": 300,
       "memory": 1024,
-      "includeFiles": "src/gateway/public/**,eval/results-published.json"
+      "includeFiles": "{src/gateway/public/**,eval/results-published.json}"
     }
   },
   "rewrites": [
