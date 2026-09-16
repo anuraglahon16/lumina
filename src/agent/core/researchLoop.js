@@ -36,6 +36,11 @@ export async function runResearchLoop({
   const tools = toolDefinitionsFor({ hasDocuments });
   const messages = [{ role: 'user', content: userMessage }];
   const notes = [];
+  // Counted from here rather than from the ledger's total: Deep Search branches
+  // share one ledger, so a global count would stop a branch because a sibling
+  // had been reading.
+  const sourcesBefore = ledger.citable.length;
+  const enough = budget.limits?.sufficientSources || 0;
   let terminationReason = null;
   // Bounded, so a model that insists it is finished is not argued with forever.
   const MAX_NUDGES = 2;
@@ -139,6 +144,13 @@ export async function runResearchLoop({
         content: result.content,
       })),
     });
+
+    // Enough pages read, so the next turn would only be the model agreeing that
+    // it is finished. This is a stop, not a cap: the run got what it came for.
+    if (enough && ledger.citable.length - sourcesBefore >= enough) {
+      terminationReason = 'sufficient_evidence';
+      break;
+    }
 
     // A blocked tool means the budget is spent. The tool result already told
     // the model to stop; there is nothing left to spend on another turn, so go

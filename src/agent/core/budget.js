@@ -20,9 +20,25 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
     onExpire?.();
     controller.abort(new Error('wall_clock_exceeded'));
   }, Math.max(0, remainingMs));
+
+  // The caller's signal is forwarded by hand rather than composed with
+  // `AbortSignal.any`. The composite it returns keeps its link to the source
+  // signals weakly, and a synthesis call was observed running for 864 seconds
+  // under a 390-second ceiling that never fired: the deadline existed, held
+  // nothing, and was collected. One owned controller cannot be collected out
+  // from under the request it is bounding.
+  const forward = () => controller.abort(outer.reason);
+  if (outer) {
+    if (outer.aborted) controller.abort(outer.reason);
+    else outer.addEventListener('abort', forward, { once: true });
+  }
+
   return {
-    signal: outer ? AbortSignal.any([outer, controller.signal]) : controller.signal,
-    release: () => clearTimeout(timer),
+    signal: controller.signal,
+    release: () => {
+      clearTimeout(timer);
+      outer?.removeEventListener('abort', forward);
+    },
   };
 }
 

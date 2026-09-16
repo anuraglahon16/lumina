@@ -52,25 +52,37 @@ export async function synthesizeAnswer({
   });
 
   let streamed = '';
-  const message = await streamComplete({
-    purpose: 'synthesis',
-    recorder,
-    model,
-    system,
-    messages: [{ role: 'user', content: userMessage }],
-    maxTokens,
-    effort,
-    signal,
-    onText: (delta) => {
-      if (!streamed) recorder?.markFirstToken();
-      streamed += delta;
-      emit?.('token', { text: delta });
-    },
-  });
+  let message;
+  let cancelled = false;
+  try {
+    message = await streamComplete({
+      purpose: 'synthesis',
+      recorder,
+      model,
+      system,
+      messages: [{ role: 'user', content: userMessage }],
+      maxTokens,
+      effort,
+      signal,
+      onText: (delta) => {
+        if (!streamed) recorder?.markFirstToken();
+        streamed += delta;
+        emit?.('token', { text: delta });
+      },
+    });
+  } catch (err) {
+    // A cancelled synthesis that already streamed text is not a failed run. The
+    // reader watched those words appear; throwing here would replace an answer
+    // they can see with an error, which is the worse outcome. With nothing
+    // streamed there is no answer to keep, so the error stands.
+    if (!(err?.aborted || err?.name === 'AbortError') || !streamed.trim()) throw err;
+    cancelled = true;
+    message = { content: [], stop_reason: 'cancelled' };
+  }
 
   recorder?.endPhase('synthesis');
 
-  const raw = textOf(message) || streamed;
+  const raw = (textOf(message) || streamed) + (cancelled ? '\n\n*The answer was cut short before it finished.*' : '');
 
   // Normalise punctuation before validating, so groundedness is scored on the
   // text the user will actually read rather than on a draft of it.
@@ -83,7 +95,7 @@ export async function synthesizeAnswer({
     text: validation.answer,
     revised: validation.answer !== raw,
     restyled: styled.replaced,
-    truncated: message.stop_reason === 'max_tokens',
+    truncated: message.stop_reason === 'max_tokens' || cancelled,
   });
 
   emit?.('citations', {
@@ -99,6 +111,6 @@ export async function synthesizeAnswer({
   return {
     answer: validation.answer,
     validation,
-    truncated: message.stop_reason === 'max_tokens',
+    truncated: message.stop_reason === 'max_tokens' || cancelled,
   };
 }

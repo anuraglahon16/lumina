@@ -2,6 +2,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../../shared/config.js';
 import { createLogger } from '../../shared/logger.js';
 import { HttpError } from '../../shared/errors.js';
+import { deadlineSignal } from './budget.js';
 import { breaker } from '../../shared/circuitBreaker.js';
 
 const log = createLogger('llm');
@@ -128,14 +129,7 @@ function normalizeError(err) {
  * run's wall clock) still wins, because whichever fires first aborts the call.
  */
 function boundedSignal(signal) {
-  const controller = new AbortController();
-  const timer = setTimeout(
-    () => controller.abort(new Error('llm_call_ceiling')),
-    config.llm.timeoutMs * (config.llm.maxRetries + 1) + 30_000,
-  );
-  // Owned rather than taken from AbortSignal.timeout, whose handle is unref'd
-  // and so does not hold the event loop open for the deadline it promises.
-  return { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, release: () => clearTimeout(timer) };
+  return deadlineSignal(config.llm.callCeilingMs, signal);
 }
 
 /**

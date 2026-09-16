@@ -233,3 +233,63 @@ test('an error that is not an abort still propagates', async () => {
   };
   await assert.rejects(() => run({ complete: boom }), /provider exploded/);
 });
+
+/* ------------------------------------------ stopping once there is enough read */
+
+test('the loop stops once it has read enough, without asking the model again', async () => {
+  // The turn this removes produced no tool call and no text anyone reads: the
+  // model agreeing it was finished, for three to five seconds of the time
+  // before the first answer token.
+  const ledger = ledgerWith({ sources: 0, candidates: 4 });
+  const model = scriptedModel([
+    useTool('fetch_page', { url: 'https://a' }),
+    say('should never be reached'),
+  ]);
+  const result = await run({
+    complete: model,
+    ledger,
+    budget: budget({ sufficientSources: 1 }),
+    // The executor is what puts a source in the ledger in the real loop.
+    executor: async () => {
+      ledger.citable.push({ n: ledger.citable.length + 1 });
+      return { ok: true, content: 'page text' };
+    },
+  });
+
+  assert.equal(model.calls.length, 1, 'the confirming turn is not spent');
+  assert.equal(result.termination_reason, 'sufficient_evidence');
+  assert.equal(result.capped, false, 'this is a stop, not a cap: the run got what it came for');
+});
+
+test('a Deep branch is not stopped by what its siblings have read', async () => {
+  // Branches share one ledger. Counting its total rather than this loop's own
+  // contribution would end a branch that had read nothing at all.
+  const ledger = ledgerWith({ sources: 5, candidates: 4 }); // siblings were busy
+  const model = scriptedModel([useTool('fetch_page', { url: 'https://a' }), say('done')]);
+  const result = await run({
+    complete: model,
+    ledger,
+    branch: 'q2',
+    budget: budget({ sufficientSources: 2 }),
+    executor: okTool, // this branch adds nothing to the ledger
+  });
+
+  assert.ok(model.calls.length > 1, 'the branch keeps working');
+  assert.equal(result.termination_reason, 'completed');
+});
+
+test('the early stop is off when no threshold is configured', async () => {
+  const ledger = ledgerWith({ sources: 0, candidates: 4 });
+  const model = scriptedModel([useTool('fetch_page', { url: 'https://a' }), say('done')]);
+  const result = await run({
+    complete: model,
+    ledger,
+    budget: budget({ sufficientSources: 0 }),
+    executor: async () => {
+      ledger.citable.push({ n: ledger.citable.length + 1 });
+      return { ok: true, content: 'page text' };
+    },
+  });
+  assert.equal(model.calls.length, 2, 'the model decides when it is finished');
+  assert.equal(result.termination_reason, 'completed');
+});

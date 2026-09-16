@@ -111,6 +111,15 @@ export const config = {
     fastModel: process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     maxRetries: num(process.env.LLM_MAX_RETRIES, 2),
     timeoutMs: num(process.env.LLM_TIMEOUT_MS, 120000),
+    /**
+     * The longest any single call may run, retries included.
+     *
+     * Separate from `timeoutMs` because that one is the SDK's, and the SDK's
+     * did not hold: a synthesis call ran for 864 seconds under it. This is the
+     * value the harness enforces itself, and it is sized for a person waiting
+     * on an answer rather than for the sum of every retry the SDK might make.
+     */
+    callCeilingMs: num(process.env.LLM_CALL_CEILING_MS, 180000),
     // Circuit breaker above the SDK's retries: consecutive provider faults
     // before calls fail fast, and how long to wait before probing once.
     breakerThreshold: num(process.env.LLM_BREAKER_THRESHOLD, 4),
@@ -151,6 +160,20 @@ export const config = {
        */
       researchMaxTokens: num(process.env.QUICK_RESEARCH_MAX_TOKENS, 1000),
       researchEffort: process.env.QUICK_RESEARCH_EFFORT || 'medium',
+      /**
+       * How many pages Quick mode reads before it answers.
+       *
+       * Without this the loop spends a whole model call on the model deciding
+       * it is finished: search, fetch, then a third turn that produces no tool
+       * call and no text anyone reads, costing three to five seconds of the
+       * time before the first answer token. Quick mode's premise is a bounded
+       * shallow pass, so how deep it goes is the harness's decision to make,
+       * the way every other limit here already is. The model still chooses what
+       * to search for and which pages are worth reading.
+       *
+       * Set to 0 to disable and let the model decide when to stop.
+       */
+      sufficientSources: num(process.env.QUICK_SUFFICIENT_SOURCES, 2),
     },
     deep: {
       maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
@@ -166,6 +189,9 @@ export const config = {
       // The effort level matches quick's for the same measured reason.
       researchMaxTokens: num(process.env.DEEP_RESEARCH_MAX_TOKENS, 1500),
       researchEffort: process.env.DEEP_RESEARCH_EFFORT || 'medium',
+      // Deep branches are where depth is the point, so a branch reads until its
+      // own budget says otherwise. 0 disables the early stop.
+      sufficientSources: num(process.env.DEEP_SUFFICIENT_SOURCES, 0),
     },
   },
 
