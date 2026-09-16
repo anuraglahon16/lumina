@@ -25,6 +25,7 @@ export async function synthesizeAnswer({
   maxTokens,
   effort,
   signal,
+  ceilingMs,
 }) {
   const sources = ledger.publicSources();
   emit?.('sources', {
@@ -64,6 +65,7 @@ export async function synthesizeAnswer({
       maxTokens,
       effort,
       signal,
+      ceilingMs,
       onText: (delta) => {
         if (!streamed) recorder?.markFirstToken();
         streamed += delta;

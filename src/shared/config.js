@@ -174,6 +174,10 @@ export const config = {
        * Set to 0 to disable and let the model decide when to stop.
        */
       sufficientSources: num(process.env.QUICK_SUFFICIENT_SOURCES, 2),
+      // A few hundred words does not take a minute and a half to write. The
+      // ceiling exists for a stalled connection, not for a slow answer, so it
+      // is sized just above what writing this much has ever taken.
+      synthesisCeilingMs: num(process.env.QUICK_SYNTHESIS_CEILING_MS, 90000),
     },
     deep: {
       maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
@@ -192,6 +196,9 @@ export const config = {
       // Deep branches are where depth is the point, so a branch reads until its
       // own budget says otherwise. 0 disables the early stop.
       sufficientSources: num(process.env.DEEP_SUFFICIENT_SOURCES, 0),
+      // Deep merges fifteen or more sources into a long answer, so it gets
+      // proportionally longer before a stall is assumed.
+      synthesisCeilingMs: num(process.env.DEEP_SYNTHESIS_CEILING_MS, 300000),
     },
   },
 

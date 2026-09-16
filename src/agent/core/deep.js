@@ -117,6 +117,7 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
       model: config.llm.model,
       maxTokens: limits.maxTokens,
       effort: limits.effort,
+      ceilingMs: limits.synthesisCeilingMs,
       signal,
     });
 

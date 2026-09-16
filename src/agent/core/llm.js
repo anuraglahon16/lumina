@@ -128,8 +128,8 @@ function normalizeError(err) {
  * A caller's own signal still composes with this, and a tighter deadline (a
  * run's wall clock) still wins, because whichever fires first aborts the call.
  */
-function boundedSignal(signal) {
-  return deadlineSignal(config.llm.callCeilingMs, signal);
+function boundedSignal(signal, ceilingMs) {
+  return deadlineSignal(ceilingMs || config.llm.callCeilingMs, signal);
 }
 
 /**
@@ -140,10 +140,10 @@ function boundedSignal(signal) {
  * It is what lets a caller's deadline bound the call itself — the SDK's own
  * `timeout` did not, in practice, stop a call that ran for twelve minutes.
  */
-export async function complete({ purpose, recorder, signal, ...opts }) {
+export async function complete({ purpose, recorder, signal, ceilingMs, ...opts }) {
   const started = performance.now();
   const params = baseParams(opts);
-  const bound = boundedSignal(signal);
+  const bound = boundedSignal(signal, ceilingMs);
   try {
     const message = await llmBreaker().run(() => anthropic().messages.create(params, { signal: bound.signal }));
     const durationMs = Math.round(performance.now() - started);
@@ -162,13 +162,13 @@ export async function complete({ purpose, recorder, signal, ...opts }) {
  * Streaming call. `onText` receives visible text deltas; `onThinking` receives
  * summarized reasoning when the caller opted into displaying it.
  */
-export async function streamComplete({ purpose, recorder, onText, onThinking, signal, display, ...opts }) {
+export async function streamComplete({ purpose, recorder, onText, onThinking, signal, display, ceilingMs, ...opts }) {
   const started = performance.now();
   const params = baseParams(opts);
   // Only ask for reasoning display on a model that accepts adaptive thinking;
   // re-adding it unconditionally would reintroduce the 400 baseParams avoids.
   if (display && params.thinking) params.thinking = { type: 'adaptive', display };
-  const bound = boundedSignal(signal);
+  const bound = boundedSignal(signal, ceilingMs);
   try {
     const message = await llmBreaker().run(async () => {
       const stream = anthropic().messages.stream(params, { signal: bound.signal });

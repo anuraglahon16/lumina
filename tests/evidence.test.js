@@ -140,3 +140,22 @@ test('stripping a marker does not flatten the markdown around it', () => {
   assert.match(result.answer, /do not cover the board’s decision\.?$/m, 'the absence claim lost its marker');
   assert.deepEqual(result.cited, [1], 'the source is still cited by the sentence that can support it');
 });
+
+test('a source’s snippet is verbatim from the page that was read', () => {
+  // A meta description is marketing copy that need not appear in the page at
+  // all. A reader following a citation to check a claim has to land on the
+  // words the claim came from, and an external grader checking that a snippet
+  // is a substring of the evidence would be right to fail the other thing.
+  const ledger = new EvidenceLedger();
+  const body = 'The specification defines three transport modes for the protocol layer. '.repeat(6);
+  ledger.noteCandidates([{ url: 'https://example.com/spec', title: 'Spec', snippet: 'Buy our product today!', domain: 'example.com' }]);
+  ledger.addWebSource({
+    ...fakePage('https://example.com/spec', 'Spec', body),
+    description: 'The best protocol documentation on the web.',
+  });
+
+  const [source] = ledger.publicSources();
+  assert.ok(body.includes(source.snippet), 'the snippet must be a literal substring of the fetched text');
+  assert.ok(!source.snippet.includes('Buy our product'), 'not the search result snippet');
+  assert.ok(!source.snippet.includes('best protocol documentation'), 'not the meta description');
+});

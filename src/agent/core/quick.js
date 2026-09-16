@@ -109,6 +109,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       model: config.llm.model,
       maxTokens: config.budgets.quick.maxTokens,
       effort: config.budgets.quick.effort,
+      ceilingMs: config.budgets.quick.synthesisCeilingMs,
       signal,
     });
 

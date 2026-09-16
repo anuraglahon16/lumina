@@ -123,7 +123,13 @@ export class EvidenceLedger {
       })(),
       published_at: page.published_at || candidate?.published_at || null,
       author: page.author || null,
-      snippet: (page.description || candidate?.snippet || page.text?.slice(0, 300) || '').slice(0, 400),
+      // Verbatim from the text this source was actually read from, never the
+      // page's own meta description or the search result's snippet. Those are
+      // written to sell a click, they are not always in the page at all, and a
+      // reader who follows a citation to check a claim must land on the words
+      // the claim was drawn from. Scoring already used the fetched passages;
+      // this makes what the reader is shown agree with what was measured.
+      snippet: (page.text || '').trim().slice(0, 400),
       passages: chunkPassages(page.text || '').slice(0, 8),
       fetched_at: page.fetched_at || new Date().toISOString(),
       from_cache: Boolean(page.cached),
