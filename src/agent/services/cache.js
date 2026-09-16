@@ -15,7 +15,17 @@ class Cache {
     this.dir = dir;
     this.mem = new Map(); // insertion order doubles as the LRU list
     this.stats = { hits: 0, misses: 0, writes: 0, evictions: 0, expired: 0 };
-    fs.mkdirSync(dir, { recursive: true });
+
+    // The disk tier is an optimisation, not a requirement, so a filesystem that
+    // refuses to be written to costs the tier rather than the service. A
+    // serverless bundle is read-only apart from /tmp, and creating this
+    // directory at import time took the whole function down on first request.
+    try {
+      fs.mkdirSync(dir, { recursive: true });
+      this.diskEnabled = true;
+    } catch {
+      this.diskEnabled = false;
+    }
   }
 
   #diskPath(key) {
@@ -48,7 +58,9 @@ class Cache {
       this.stats.expired += 1;
     }
     // Disk tier survives restarts, which matters for cost during development.
+    // Skipped where the filesystem refused to be written to at all.
     try {
+      if (!this.diskEnabled) throw new Error('disk tier disabled');
       const raw = await fsp.readFile(this.#diskPath(key), 'utf8');
       const entry = JSON.parse(raw);
       if (entry.expires_at > now) {
@@ -82,7 +94,7 @@ class Cache {
 
 export const cache = new Cache({
   maxEntries: config.cache.maxEntries,
-  dir: path.join(config.agent.dataDir, 'cache'),
+  dir: config.cache.dir || path.join(config.agent.dataDir, 'cache'),
 });
 
 /**

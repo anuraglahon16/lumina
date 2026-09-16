@@ -7,11 +7,28 @@ import { compact } from './filter.js';
 
 const runs = collection('runs');
 
+/**
+ * The append-only run log.
+ *
+ * A convenience for grepping history, not the record of truth: every run is
+ * also stored as a document. A filesystem that refuses to be written to
+ * therefore costs the convenience, not the run, which matters on a serverless
+ * bundle where everything outside /tmp is read-only.
+ */
 let appendStream = null;
+let appendDisabled = false;
+
 function ndjson() {
+  if (appendDisabled) return null;
   if (!appendStream) {
-    fs.mkdirSync(path.dirname(config.logging.runLogFile), { recursive: true });
-    appendStream = fs.createWriteStream(config.logging.runLogFile, { flags: 'a' });
+    try {
+      fs.mkdirSync(path.dirname(config.logging.runLogFile), { recursive: true });
+      appendStream = fs.createWriteStream(config.logging.runLogFile, { flags: 'a' });
+      appendStream.on('error', () => { appendDisabled = true; });
+    } catch {
+      appendDisabled = true;
+      return null;
+    }
   }
   return appendStream;
 }
@@ -167,7 +184,7 @@ export class RunRecorder {
     if (sources) this.run.sources = { ...this.run.sources, ...sources };
     for (const name of [...this.openPhases.keys()]) this.endPhase(name, { unterminated: true });
     void runs.put(this.run);
-    ndjson().write(`${JSON.stringify(this.run)}\n`);
+    ndjson()?.write(`${JSON.stringify(this.run)}\n`);
     return this.run;
   }
 

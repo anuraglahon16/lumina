@@ -3,4 +3,5 @@ data
 hf-space
 tests
 eval/results-*.json
+!eval/results-published.json
 .env

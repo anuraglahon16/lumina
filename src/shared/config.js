@@ -171,6 +171,9 @@ export const config = {
     fetchTtlMs: num(process.env.CACHE_FETCH_TTL_MS, 24 * 60 * 60 * 1000),
     embedTtlMs: num(process.env.CACHE_EMBED_TTL_MS, 30 * 24 * 60 * 60 * 1000),
     maxEntries: num(process.env.CACHE_MAX_ENTRIES, 2000),
+    // Only /tmp is writable in a serverless bundle; elsewhere the cache lives
+    // beside the rest of the data.
+    dir: process.env.CACHE_DIR || (process.env.VERCEL ? '/tmp/lumina-cache' : undefined),
   },
 
   embeddings: {

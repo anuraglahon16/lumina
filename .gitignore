@@ -11,6 +11,8 @@ data/
 
 # Generated evaluation reports.
 eval/results-*.json
+# except the one report published at /evals
+!eval/results-published.json
 
 # The Hugging Face Space is its own git repo, deployed separately.
 hf-space/
@@ -18,3 +20,5 @@ hf-space/
 # Local noise
 *.log
 .DS_Store
+.vercel
+.env*
