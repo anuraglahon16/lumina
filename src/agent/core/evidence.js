@@ -29,6 +29,52 @@ function splitSentences(text) {
 }
 
 /**
+ * Does this sentence make a claim about the *evidence* rather than about the
+ * world?
+ *
+ * "The sources do not say when the meeting took place" and "The report found no
+ * evidence of a breach [1]" look alike to a bag-of-words scorer, but only the
+ * second is a citable claim. The first describes a gap in what was read, and a
+ * citation attached to it points at a page that by construction cannot support
+ * it: the reader follows the marker expecting corroboration and finds a page
+ * about something else. That is exactly the failure citations exist to prevent,
+ * so it is removed from the answer rather than scored as a weak citation.
+ *
+ * The test is deliberately narrow. It fires only when the subject is the
+ * evidence itself, so a negative finding reported *by* a source keeps its
+ * citation.
+ */
+/**
+ * The patterns require the evidence term to be the *subject* of the negation,
+ * not merely present in the sentence. "The audit found no evidence of a breach"
+ * contains both an evidence word and a negation and is a perfectly citable
+ * claim; "the sources do not say" is the same words in the arrangement that
+ * makes the citation meaningless. Adjacency is what separates them.
+ */
+const ABSENCE_PATTERNS = [
+  // "none of the sources", "no page", "neither result"
+  /\b(?:no|none|neither)\s+(?:of\s+(?:the|these|those)\s+)?(?:sources?|pages?|results?|documents?|excerpts?)\b/i,
+  // "nothing in the material I read"
+  /\bnothing\s+(?:in|among|from|within)\s+(?:the\s+)?(?:sources?|results?|pages?|documents?|evidence|material)\b/i,
+  // "the search results do not cover", "the evidence I read is silent on"
+  new RegExp(
+    String.raw`\b(?:the\s+)?(?:sources?|search\s+results?|results?\s+returned|pages?(?:\s+(?:I|we)\s+(?:read|fetched|retrieved))?` +
+      String.raw`|documents?\s+(?:I|we)\s+(?:read|retrieved)|evidence(?:\s+(?:I|we)\s+(?:found|gathered|read|retrieved))?` +
+      String.raw`|material\s+(?:I|we)\s+(?:read|found)|available\s+(?:evidence|sources?|material|information|record))\s+` +
+      String.raw`(?:\w+\s+){0,3}?(?:do(?:es)?\s+not|did\s+not|don't|doesn't|didn't|are\s+silent|is\s+silent|contains?\s+no` +
+      String.raw`|includes?\s+no|provides?\s+no|offers?\s+no|lacks?|fails?\s+to|failed\s+to|cannot|can't|could\s+not)\b`,
+    'i',
+  ),
+  // "I could not find", "we were unable to locate"
+  /\b(?:I|we)\s+(?:was|were)?\s*(?:unable\s+to|could\s+not|couldn't|did\s+not|didn't)\s+(?:find|locate|retrieve|access|confirm)\b/i,
+];
+
+function isClaimAboutEvidence(sentence) {
+  const text = sentence.replace(/\[[\d,\s]+\]/g, ' ').replace(/\s+/g, ' ');
+  return ABSENCE_PATTERNS.some((re) => re.test(text));
+}
+
+/**
  * The evidence ledger is the single source of truth for citations.
  *
  * Rule enforced here: a web search result is a *candidate*, not evidence. It
@@ -187,6 +233,11 @@ export class EvidenceLedger {
 
     const sentences = splitSentences(cleaned);
 
+    // Citations on statements about the evidence's own gaps are removed before
+    // scoring: see isClaimAboutEvidence. `stripped` is reported so the trace
+    // shows it happened rather than the marker silently vanishing.
+    const strippedForAbsence = [];
+
     let citedSentences = 0;
     let supportedSentences = 0;
     const weak = [];
@@ -196,6 +247,10 @@ export class EvidenceLedger {
         m[1].split(',').map((x) => Number(x.trim())),
       );
       if (!refs.length) continue;
+      if (isClaimAboutEvidence(sentence)) {
+        strippedForAbsence.push({ sentence, refs });
+        continue;
+      }
       citedSentences += 1;
       const claimTerms = contentWords(sentence.replace(/\[[\d,\s]+\]/g, ''));
       if (claimTerms.size === 0) {
@@ -217,15 +272,34 @@ export class EvidenceLedger {
       else weak.push({ sentence: sentence.slice(0, 240), refs, support: Number(best.toFixed(2)) });
     }
 
+    // Each offending sentence is edited where it sits. Rebuilding the answer by
+    // rejoining the split would be simpler and wrong: splitSentences breaks on
+    // paragraph and list boundaries, so a rejoin flattens the markdown.
+    let output = cleaned;
+    for (const { sentence } of strippedForAbsence) {
+      const at = output.indexOf(sentence);
+      if (at === -1) continue; // truncated for reporting; leave it rather than guess
+      output = output.slice(0, at) + sentence.replace(/\s*\[\d+(?:\s*,\s*\d+)*\]/g, '') + output.slice(at + sentence.length);
+    }
+    if (strippedForAbsence.length) {
+      // `seen` still counts a source cited elsewhere in the answer; one that was
+      // cited *only* on a stripped sentence is no longer cited at all.
+      const survives = new Set(
+        [...output.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)].flatMap((m) => m[1].split(',').map((x) => Number(x.trim()))),
+      );
+      for (let i = seen.length - 1; i >= 0; i -= 1) if (!survives.has(seen[i])) seen.splice(i, 1);
+    }
+
     const uniqueCited = [...new Set(seen)].sort((a, b) => a - b);
     return {
-      answer: cleaned.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(),
+      answer: output.replace(/[ \t]+\n/g, '\n').replace(/\n{3,}/g, '\n\n').trim(),
       cited: uniqueCited,
       uncited_sources: this.sources.filter((s) => !uniqueCited.includes(s.n)).map((s) => s.n),
       invalid_citations: invalid,
       cited_sentences: citedSentences,
       supported_sentences: supportedSentences,
       weak_citations: weak,
+      stripped_for_absence: strippedForAbsence,
       groundedness: citedSentences ? Number((supportedSentences / citedSentences).toFixed(3)) : null,
     };
   }

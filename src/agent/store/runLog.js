@@ -188,6 +188,20 @@ export class RunRecorder {
     return this.run;
   }
 
+  /**
+   * Re-persist a run that has already finished.
+   *
+   * Memory extraction happens after the answer is delivered, so its model call
+   * lands on the recorder after finish() has written the record. Without this
+   * the stored cost would omit a call that genuinely happened, and the run log
+   * is the thing the evaluation reads. The latency and termination fields are
+   * not touched: those describe answering the question, which is over.
+   */
+  persist() {
+    void runs.put(this.run);
+    return this.run;
+  }
+
   snapshot() {
     return { ...this.run, latency_ms: this.elapsedMs() };
   }

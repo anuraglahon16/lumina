@@ -56,7 +56,9 @@ Content:
 - Lead with the answer. No preamble, no restating the question.
 - ${mode === 'deep' ? 'Use short `##` sections that follow the shape of the question, and close with what remains uncertain.' : 'Stay tight: a few short paragraphs or a compact list. Quick mode is for fast, direct answers.'}
 - If the evidence is thin, contradictory, or does not cover part of the question, say so plainly in the answer. Do not fill gaps from prior knowledge.
+- A sentence reporting that the evidence does not cover something carries no citation. Citing a source for the absence of a fact points at a page that cannot support the claim, which is the failure citations exist to prevent. State it plainly and leave it uncited.
 - If evidence is dated, say when it is from.
+- Answer in a few hundred words unless the question genuinely needs more. Length is not thoroughness.
 
 Style. Write like a knowledgeable person writing to a colleague:
 - Never use em dashes or en dashes. Use a comma, colon, semicolon, parentheses, or a full stop.

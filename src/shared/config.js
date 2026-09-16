@@ -126,9 +126,31 @@ export const config = {
       maxFetches: num(process.env.QUICK_MAX_FETCHES, 4),
       maxSearches: num(process.env.QUICK_MAX_SEARCHES, 3),
       wallClockMs: num(process.env.QUICK_WALL_CLOCK_MS, 60000),
-      maxTokens: num(process.env.QUICK_MAX_TOKENS, 8000),
+      // Quick answers were running to 1,800-2,400 output tokens, which is most
+      // of what a quick answer costs and much of what it takes to produce. A
+      // few hundred words is the mode's whole point.
+      //
+      // 1,500 was too tight: two of three comparison runs terminated as
+      // max_tokens, and a truncated answer is a worse outcome than a long one.
+      // The prompt asks for brevity and this is the ceiling that stops the
+      // answer running away, not the mechanism for keeping it short.
+      maxTokens: num(process.env.QUICK_MAX_TOKENS, 2000),
       maxRefunds: num(process.env.QUICK_MAX_REFUNDS, 3),
       effort: process.env.QUICK_EFFORT || 'medium',
+      /**
+       * The research loop is budgeted separately from synthesis because the two
+       * do different work: nothing the loop writes reaches the user, so a turn
+       * whose output is one tool call does not need a prose-sized allowance.
+       *
+       * The effort level is a different matter, and the eval settled it.
+       * Dropping the loop to 'low' looked free and was not: on the OWASP case it
+       * read one page instead of two, and groundedness fell from 1.00 to 0.28
+       * across three runs. A cheaper loop does not produce a shorter answer, it
+       * produces an answer with less evidence under it, and the model fills the
+       * gap from memory. Effort here buys evidence, so it stays.
+       */
+      researchMaxTokens: num(process.env.QUICK_RESEARCH_MAX_TOKENS, 1000),
+      researchEffort: process.env.QUICK_RESEARCH_EFFORT || 'medium',
     },
     deep: {
       maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
@@ -140,6 +162,10 @@ export const config = {
       maxTokens: num(process.env.DEEP_MAX_TOKENS, 16000),
       maxRefunds: num(process.env.DEEP_BRANCH_MAX_REFUNDS, 3),
       effort: process.env.DEEP_EFFORT || 'high',
+      // Same split as quick: a branch's loop picks tools, the synthesis writes.
+      // The effort level matches quick's for the same measured reason.
+      researchMaxTokens: num(process.env.DEEP_RESEARCH_MAX_TOKENS, 1500),
+      researchEffort: process.env.DEEP_RESEARCH_EFFORT || 'medium',
     },
   },
 

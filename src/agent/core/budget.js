@@ -6,6 +6,27 @@
 const REFUNDABLE_TOOLS = new Set(['fetch_page', 'web_search']);
 
 /**
+ * A cancellation that fires when `remainingMs` elapses, composed with a
+ * caller's own signal so whichever comes first wins.
+ *
+ * The timer is owned rather than borrowed from `AbortSignal.timeout`, whose
+ * handle is unref'd: it does not hold the event loop open, so a process with
+ * nothing else pending can settle before the deadline it is relying on.
+ * `release()` clears it, so a call that returns normally leaves nothing behind.
+ */
+export function deadlineSignal(remainingMs, outer, onExpire) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => {
+    onExpire?.();
+    controller.abort(new Error('wall_clock_exceeded'));
+  }, Math.max(0, remainingMs));
+  return {
+    signal: outer ? AbortSignal.any([outer, controller.signal]) : controller.signal,
+    release: () => clearTimeout(timer),
+  };
+}
+
+/**
  * Hard execution limits. The model is told about these, but it is the harness
  * that enforces them: every counter is checked before a tool runs and the loop
  * exits with a named termination reason the user is shown.
@@ -25,6 +46,24 @@ export class Budget {
 
   get remainingMs() {
     return Math.max(0, this.deadline - Date.now());
+  }
+
+  /**
+   * The run's wall clock, as a cancellation for one model call.
+   *
+   * The counters are checked between iterations, which bounds how many calls a
+   * run makes but not how long one of them takes. That gap was not theoretical:
+   * a single research call ran for 773 seconds inside a budget of 60, the loop
+   * had no opportunity to notice, and the run reported `completed`. A limit the
+   * harness only enforces between calls is not a limit on the run.
+   */
+  deadlineSignal(outer) {
+    return deadlineSignal(this.remainingMs, outer, () => this.#cap('wall_clock_exceeded'));
+  }
+
+  /** Did this budget's own wall clock cause the abort, rather than the caller? */
+  expired() {
+    return this.remainingMs === 0;
   }
 
   /** Why the run must stop, or null if it may continue. */

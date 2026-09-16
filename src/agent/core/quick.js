@@ -75,8 +75,8 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       threadId: thread.id,
       runId: recorder.id,
       model: config.llm.model,
-      maxTokens: config.budgets.quick.maxTokens,
-      effort: config.budgets.quick.effort,
+      maxTokens: config.budgets.quick.researchMaxTokens,
+      effort: config.budgets.quick.researchEffort,
       hasDocuments: docs.indexed > 0,
       signal,
     });
@@ -122,11 +122,6 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       capped: research.capped,
     });
 
-    // ---- long-term memory -------------------------------------------------
-    recorder.startPhase('memory_extraction');
-    await extractMemories({ userId, threadId: thread.id, runId: recorder.id, query, answer, recorder, emit });
-    recorder.endPhase('memory_extraction');
-
     const terminationReason = truncated ? 'max_tokens' : research.termination_reason;
     // Set before finish(): finish() is what persists the record.
     recorder.set({ budget: budget.snapshot() });
@@ -148,6 +143,25 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     });
 
     emit('done', summarizeRun(run, { capped: research.capped, capReason: research.cap_reason, budget: budget.snapshot() }));
+
+    // ---- long-term memory -------------------------------------------------
+    // Extraction is a cheap model call *about the user*, not part of answering
+    // them, so it runs after the answer is delivered rather than between the
+    // last token and `done`. It used to be awaited here, which added its
+    // latency to every single run for a call whose expected outcome is "no
+    // memories". Its cost is still recorded, hence the re-persist.
+    //
+    // Serverless is the exception: the process is frozen the moment it
+    // responds, so there the work has to finish before the response does or it
+    // never happens at all.
+    const extraction = (async () => {
+      recorder.startPhase('memory_extraction');
+      await extractMemories({ userId, threadId: thread.id, runId: recorder.id, query, answer, recorder, emit });
+      recorder.endPhase('memory_extraction');
+      recorder.persist();
+    })().catch((err) => log.warn('memory_extraction_failed', { run_id: recorder.id, err: err.message }));
+    if (config.runtime.serverless) await extraction;
+
     return { run, answer, sources: ledger.publicSources(), thread_id: thread.id };
   } catch (err) {
     log.error('quick_run_failed', { run_id: recorder.id, err: err.message });

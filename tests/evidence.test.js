@@ -90,3 +90,53 @@ test('paragraph breaks split sentences even when the next one starts with emphas
   assert.equal(result.cited_sentences, 2, 'two paragraphs are two sentences');
   assert.equal(result.weak_citations.length, 0, 'each claim is scored against its own source');
 });
+
+/* ------------------------------------ citing a source for what it cannot say */
+
+test('a citation on a statement about the evidence’s own gaps is removed', () => {
+  // The failure this prevents: asked an unanswerable question, the model
+  // correctly reports that it found nothing and then attaches [1] to that
+  // report. The marker invites the reader to check a page that, by
+  // construction, cannot corroborate an absence.
+  const ledger = new EvidenceLedger();
+  ledger.addWebSource(fakePage('https://example.com/a', 'A', 'Example Holdings BV is a private company registered in Amsterdam.'.repeat(4)));
+
+  const result = ledger.validate('The sources do not disclose what was decided at the meeting [1].');
+  assert.ok(!result.answer.includes('[1]'), 'the marker must not reach the reader');
+  assert.equal(result.cited_sentences, 0, 'it is not a cited claim, so it is not scored as one');
+  assert.deepEqual(result.cited, [], 'a source cited only there is not cited at all');
+  assert.equal(result.stripped_for_absence.length, 1, 'the trace records that it happened');
+});
+
+test('a negative finding reported by a source keeps its citation', () => {
+  // The distinction that matters: "the evidence does not say X" is about the
+  // ledger, "the audit found no breach" is a claim the page can support. A
+  // blanket negation rule would silently delete real citations.
+  const ledger = new EvidenceLedger();
+  const text = 'The audit found no evidence of a breach of customer records during the review period.'.repeat(4);
+  ledger.addWebSource(fakePage('https://example.com/a', 'A', text));
+
+  const result = ledger.validate('The audit found no evidence of a breach of customer records [1].');
+  assert.ok(result.answer.includes('[1]'), 'a citable negative finding keeps its marker');
+  assert.equal(result.cited_sentences, 1);
+  assert.equal(result.groundedness, 1);
+  assert.equal(result.stripped_for_absence.length, 0);
+});
+
+test('stripping a marker does not flatten the markdown around it', () => {
+  // Rebuilding the answer by rejoining split sentences would turn lists and
+  // paragraphs into one run-on line.
+  const ledger = new EvidenceLedger();
+  ledger.addWebSource(fakePage('https://example.com/a', 'A', 'Quarterly revenue rose to twelve million euros in the period.'.repeat(4)));
+
+  const answer = [
+    '- Quarterly revenue rose to twelve million euros [1].',
+    '- The search results do not cover the board’s decision [1].',
+  ].join('\n');
+
+  const result = ledger.validate(answer);
+  assert.ok(result.answer.includes('\n- '), 'the list survives');
+  assert.match(result.answer, /revenue rose to twelve million euros \[1\]/, 'the real citation is untouched');
+  assert.match(result.answer, /do not cover the board’s decision\.?$/m, 'the absence claim lost its marker');
+  assert.deepEqual(result.cited, [1], 'the source is still cited by the sentence that can support it');
+});

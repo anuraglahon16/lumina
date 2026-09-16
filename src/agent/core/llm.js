@@ -68,6 +68,8 @@ export function baseParams({ model, system, messages, tools, maxTokens, effort, 
  * it is persistent and provider-side, so it should stop the hammering.
  */
 function isProviderFault(err) {
+  // A deliberate cancellation says nothing about the provider's health.
+  if (err?.name === 'AbortError' || err instanceof Anthropic.APIUserAbortError) return false;
   if (err instanceof Anthropic.AuthenticationError) return true;
   if (err instanceof Anthropic.APIConnectionError || err instanceof Anthropic.APIConnectionTimeoutError) return true;
   if (err instanceof Anthropic.RateLimitError) return true;
@@ -101,18 +103,55 @@ function normalizeError(err) {
   if (err instanceof Anthropic.APIConnectionTimeoutError) {
     return new HttpError(504, 'llm_timeout', 'The model request timed out.');
   }
+  // An aborted call is the harness cancelling deliberately, not the provider
+  // failing. It must not count against the circuit breaker, and the caller
+  // decides what to call it: a spent wall clock or a client that went away.
+  if (err?.name === 'AbortError' || err instanceof Anthropic.APIUserAbortError) {
+    return Object.assign(new HttpError(499, 'llm_aborted', 'The model call was cancelled.'), { aborted: true });
+  }
   if (err instanceof Anthropic.APIError) {
     return new HttpError(err.status >= 500 ? 502 : 400, 'llm_error', err.message);
   }
   return err;
 }
 
-/** Non-streaming call, priced and recorded into the run log. */
-export async function complete({ purpose, recorder, ...opts }) {
+/**
+ * A ceiling on how long any single call may take, including the SDK's retries.
+ *
+ * The client is constructed with `timeout`, and that was believed to bound a
+ * call. It did not: a research call was observed running for 773 seconds
+ * against a 120-second timeout and two retries, which is not a duration that
+ * configuration can produce. Rather than work out which layer swallowed it, the
+ * bound is made explicit here, where an abort is unambiguous.
+ *
+ * A caller's own signal still composes with this, and a tighter deadline (a
+ * run's wall clock) still wins, because whichever fires first aborts the call.
+ */
+function boundedSignal(signal) {
+  const controller = new AbortController();
+  const timer = setTimeout(
+    () => controller.abort(new Error('llm_call_ceiling')),
+    config.llm.timeoutMs * (config.llm.maxRetries + 1) + 30_000,
+  );
+  // Owned rather than taken from AbortSignal.timeout, whose handle is unref'd
+  // and so does not hold the event loop open for the deadline it promises.
+  return { signal: signal ? AbortSignal.any([signal, controller.signal]) : controller.signal, release: () => clearTimeout(timer) };
+}
+
+/**
+ * Non-streaming call, priced and recorded into the run log.
+ *
+ * `signal` is destructured out rather than spread into the request body: it is
+ * a request option, not a parameter, and the provider rejects unknown fields.
+ * It is what lets a caller's deadline bound the call itself — the SDK's own
+ * `timeout` did not, in practice, stop a call that ran for twelve minutes.
+ */
+export async function complete({ purpose, recorder, signal, ...opts }) {
   const started = performance.now();
   const params = baseParams(opts);
+  const bound = boundedSignal(signal);
   try {
-    const message = await llmBreaker().run(() => anthropic().messages.create(params));
+    const message = await llmBreaker().run(() => anthropic().messages.create(params, { signal: bound.signal }));
     const durationMs = Math.round(performance.now() - started);
     recorder?.recordLlmCall({ model: params.model, purpose, usage: message.usage, durationMs, stopReason: message.stop_reason });
     return message;
@@ -120,6 +159,8 @@ export async function complete({ purpose, recorder, ...opts }) {
     recorder?.recordError(`llm:${purpose}`, err);
     log.error('llm_call_failed', { purpose, model: params.model, err: err.message });
     throw normalizeError(err);
+  } finally {
+    bound.release();
   }
 }
 
@@ -133,9 +174,10 @@ export async function streamComplete({ purpose, recorder, onText, onThinking, si
   // Only ask for reasoning display on a model that accepts adaptive thinking;
   // re-adding it unconditionally would reintroduce the 400 baseParams avoids.
   if (display && params.thinking) params.thinking = { type: 'adaptive', display };
+  const bound = boundedSignal(signal);
   try {
     const message = await llmBreaker().run(async () => {
-      const stream = anthropic().messages.stream(params, { signal });
+      const stream = anthropic().messages.stream(params, { signal: bound.signal });
       if (onText) stream.on('text', onText);
       if (onThinking) stream.on('thinking', (delta) => onThinking(delta));
       return stream.finalMessage();
@@ -147,6 +189,8 @@ export async function streamComplete({ purpose, recorder, onText, onThinking, si
     recorder?.recordError(`llm:${purpose}`, err);
     log.error('llm_stream_failed', { purpose, model: params.model, err: err.message });
     throw normalizeError(err);
+  } finally {
+    bound.release();
   }
 }
 

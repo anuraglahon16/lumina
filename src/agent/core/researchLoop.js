@@ -55,16 +55,31 @@ export async function runResearchLoop({
       break;
     }
 
-    const message = await completeFn({
-      purpose: branch ? `research:${branch}` : 'research',
-      recorder,
-      model,
-      system,
-      messages,
-      tools,
-      maxTokens,
-      effort,
-    });
+    // The wall clock bounds the call, not just the gap between calls.
+    const deadline = budget.deadlineSignal?.(signal) ?? { signal, release: () => {} };
+    let message;
+    try {
+      message = await completeFn({
+        purpose: branch ? `research:${branch}` : 'research',
+        recorder,
+        model,
+        system,
+        messages,
+        tools,
+        maxTokens,
+        effort,
+        signal: deadline.signal,
+      });
+    } catch (err) {
+      // A cancelled call is the harness stopping the run on purpose, so it ends
+      // the loop with a named reason instead of failing the request. Anything
+      // else is a real error and still propagates.
+      if (!err?.aborted && err?.name !== 'AbortError') throw err;
+      terminationReason = budget.expired?.() ? 'wall_clock_exceeded' : 'client_disconnected';
+      break;
+    } finally {
+      deadline.release();
+    }
 
     const text = textOf(message).trim();
     if (text) {

@@ -178,3 +178,58 @@ test('no nudge is issued when the fetch budget is already spent', async () => {
   await run({ complete: model, budget: spent, ledger: ledgerWith({ sources: 0, candidates: 5 }) });
   assert.equal(model.calls.length, 1);
 });
+
+/* --------------------------------- the wall clock bounds calls, not just gaps */
+
+test('a model call that outlives the wall clock ends the run as wall_clock_exceeded', async () => {
+  // The bug this pins: the budget was only consulted between iterations, so a
+  // single call that hung ran as long as it liked inside it. One research call
+  // took 773 seconds against a 60-second budget and the run still reported
+  // `completed`. A limit enforced only between calls is not a limit.
+  const hangs = async ({ signal }) => {
+    await new Promise((resolve, reject) => {
+      if (signal?.aborted) return reject(Object.assign(new Error('aborted'), { name: 'AbortError' }));
+      signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+      // Never resolves on its own: only the deadline can end this.
+    });
+  };
+
+  const started = Date.now();
+  const result = await run({ complete: hangs, budget: budget({ wallClockMs: 150 }) });
+  const elapsed = Date.now() - started;
+
+  assert.equal(result.termination_reason, 'wall_clock_exceeded');
+  assert.equal(result.capped, true);
+  assert.ok(elapsed < 3000, `the loop must not wait for a call that never returns (waited ${elapsed}ms)`);
+});
+
+test('the loop passes a signal to the model at all', async () => {
+  // Without this the deadline has nothing to act on, and the test above would
+  // pass for the wrong reason if the loop simply stopped calling the model.
+  const model = scriptedModel([say('done')]);
+  await run({ complete: model });
+  assert.ok(model.calls[0].signal, 'every research call carries a cancellation signal');
+});
+
+test('a client disconnect mid-call is not reported as a spent wall clock', async () => {
+  // Both arrive as an abort; the two are told apart by whether the budget's own
+  // clock ran out. Confusing them would tell the user the research was cut
+  // short when in fact they navigated away.
+  const controller = new AbortController();
+  const hangs = async ({ signal }) =>
+    new Promise((resolve, reject) => {
+      signal?.addEventListener('abort', () => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), { once: true });
+      setTimeout(() => controller.abort(), 20);
+    });
+
+  const result = await run({ complete: hangs, budget: budget({ wallClockMs: 60_000 }), signal: controller.signal });
+  assert.equal(result.termination_reason, 'client_disconnected');
+});
+
+test('an error that is not an abort still propagates', async () => {
+  // The abort handling must not become a catch-all that swallows real faults.
+  const boom = async () => {
+    throw new Error('provider exploded');
+  };
+  await assert.rejects(() => run({ complete: boom }), /provider exploded/);
+});

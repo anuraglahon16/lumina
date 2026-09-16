@@ -1,5 +1,5 @@
 import { config } from '../../shared/config.js';
-import { Budget, CAP_REASONS } from './budget.js';
+import { Budget, CAP_REASONS, deadlineSignal } from './budget.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
 import { runResearchLoop } from './researchLoop.js';
@@ -55,7 +55,7 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
 
     // ---- plan -------------------------------------------------------------
     recorder.startPhase('plan');
-    const plan = await buildPlan({ query, history, memories, recorder });
+    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal });
     recorder.endPhase('plan', { sub_questions: plan.sub_questions.length });
     emit('plan', plan);
 
@@ -130,9 +130,6 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
       capped,
     });
 
-    recorder.startPhase('memory_extraction');
-    await extractMemories({ userId, threadId: thread.id, runId: recorder.id, query, answer, recorder, emit });
-    recorder.endPhase('memory_extraction');
 
     // Set before finish(): finish() is what persists the record.
     recorder.set({
@@ -164,6 +161,25 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
       sub_questions: plan.sub_questions.length,
       branches: branchResults.map((b) => ({ id: b.id, question: b.question, sources: b.source_count, capped: b.capped })),
     }));
+
+    // ---- long-term memory -------------------------------------------------
+    // Extraction is a cheap model call *about the user*, not part of answering
+    // them, so it runs after the answer is delivered rather than between the
+    // last token and `done`. It used to be awaited here, which added its
+    // latency to every single run for a call whose expected outcome is "no
+    // memories". Its cost is still recorded, hence the re-persist.
+    //
+    // Serverless is the exception: the process is frozen the moment it
+    // responds, so there the work has to finish before the response does or it
+    // never happens at all.
+    const extraction = (async () => {
+      recorder.startPhase('memory_extraction');
+      await extractMemories({ userId, threadId: thread.id, runId: recorder.id, query, answer, recorder, emit });
+      recorder.endPhase('memory_extraction');
+      recorder.persist();
+    })().catch((err) => log.warn('memory_extraction_failed', { run_id: recorder.id, err: err.message }));
+    if (config.runtime.serverless) await extraction;
+
     return { run, answer, sources: ledger.publicSources(), thread_id: thread.id, plan };
   } catch (err) {
     log.error('deep_run_failed', { run_id: recorder.id, err: err.message });
@@ -175,10 +191,23 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
   }
 }
 
-async function buildPlan({ query, history, memories, recorder }) {
+async function buildPlan({ query, history, memories, recorder, deadline, signal }) {
+  // Planning is inside the run's wall clock like everything else. Deep mode
+  // tracks that clock as an absolute deadline rather than a Budget, because its
+  // limits are per branch; the bound is the same one either way.
+  const bound = deadlineSignal(deadline - Date.now(), signal);
+  try {
+    return await planCall({ query, history, memories, recorder, signal: bound.signal });
+  } finally {
+    bound.release();
+  }
+}
+
+async function planCall({ query, history, memories, recorder, signal }) {
   const message = await complete({
     purpose: 'plan',
     recorder,
+    signal,
     model: config.llm.model,
     system: plannerSystem({ maxSubQuestions: config.budgets.deep.maxSubQuestions }),
     messages: [
@@ -286,8 +315,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       // Branches are parallel workers with narrow scope and their own budgets,
       // so they are the one place routing trades capability for cost.
       model: config.llm.branchModel,
-      maxTokens: 4000,
-      effort: 'medium',
+      maxTokens: config.budgets.deep.researchMaxTokens,
+      effort: config.budgets.deep.researchEffort,
       hasDocuments,
       signal,
     });

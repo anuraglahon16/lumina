@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { Budget } from '../src/agent/core/budget.js';
+import { Budget, deadlineSignal } from '../src/agent/core/budget.js';
 
 test('budget refuses tool calls past its limits and names the reason', () => {
   const budget = new Budget({ maxIterations: 3, maxToolCalls: 2, maxFetches: 1, maxSearches: 2, wallClockMs: 60000 });
@@ -57,4 +57,40 @@ test('non-tool budget dimensions are not refundable', () => {
   budget.consume('search_documents');
   assert.equal(budget.refund('search_documents', 'no hits'), false);
   assert.equal(budget.counts.tool_calls, 1);
+});
+
+/* ------------------------------------------------- the wall clock as a signal */
+
+test('the deadline signal fires on its own, without anything else pending', async () => {
+  // AbortSignal.timeout's handle is unref'd, so a signal built on it can fail to
+  // fire in a process that has nothing else keeping the event loop open. The
+  // timer here is owned for exactly that reason.
+  const { signal } = deadlineSignal(30);
+  await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+  assert.equal(signal.aborted, true);
+});
+
+test('releasing the deadline leaves no timer behind', async () => {
+  let expired = false;
+  const { release } = deadlineSignal(20, undefined, () => {
+    expired = true;
+  });
+  release();
+  await new Promise((r) => setTimeout(r, 60));
+  assert.equal(expired, false, 'a call that returned must not later be reported as timed out');
+});
+
+test('a caller’s own signal still cancels, before the deadline', () => {
+  const outer = new AbortController();
+  const { signal } = deadlineSignal(60_000, outer.signal);
+  outer.abort();
+  assert.equal(signal.aborted, true, 'a disconnected client does not wait out the wall clock');
+});
+
+test('a budget’s deadline signal caps the budget when it fires', async () => {
+  const b = new Budget({ maxIterations: 4, maxToolCalls: 6, maxFetches: 4, maxSearches: 3, wallClockMs: 25 });
+  const { signal } = b.deadlineSignal();
+  await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+  assert.equal(b.capped, 'wall_clock_exceeded', 'the run knows why it stopped, not just that it did');
+  assert.equal(b.allows('web_search').ok, false, 'and nothing further is affordable');
 });
