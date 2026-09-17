@@ -72,35 +72,71 @@ async function openaiEmbed(texts) {
 }
 
 /**
- * Embed a batch of texts. Falls back to the local embedder if a remote
- * provider errors, so indexing never dies halfway through a document.
+ * Embed a batch of texts, reporting which embedder actually produced them.
+ *
+ * The fallback used to happen per slice, which kept indexing alive and quietly
+ * destroyed the index: a rate-limited document came back part remote vectors
+ * and part local ones, in different spaces and often different dimensions, and
+ * cosine similarity across that mixture is not a similarity. It did not error.
+ * It returned a number, the document looked indexed, and recall was zero.
+ *
+ * So the choice of embedder is made once for the whole batch. Vectors compared
+ * to each other are always from the same model, and `provider` tells the caller
+ * which one, because a query has to be embedded the same way as the chunks it
+ * is searched against.
  */
-export async function embedBatch(texts, { inputType = 'document', recorder } = {}) {
-  if (!texts.length) return { vectors: [], provider: resolveEmbeddingProvider(), dim: 0 };
-  const provider = resolveEmbeddingProvider();
+export async function embedBatch(texts, { inputType = 'document', recorder, provider: forced } = {}) {
+  if (!texts.length) return { vectors: [], provider: forced || resolveEmbeddingProvider(), dim: 0 };
+  // A query must be embedded by whatever embedded the chunks it will be
+  // compared against, which is not always the current default.
+  const provider = forced || resolveEmbeddingProvider();
 
   if (provider === 'local') {
     return { vectors: texts.map(localEmbed), provider: 'local', dim: config.embeddings.localDim };
   }
 
-  const vectors = [];
-  for (let i = 0; i < texts.length; i += config.embeddings.batchSize) {
-    const slice = texts.slice(i, i + config.embeddings.batchSize);
-    try {
+  try {
+    const vectors = [];
+    for (let i = 0; i < texts.length; i += config.embeddings.batchSize) {
+      const slice = texts.slice(i, i + config.embeddings.batchSize);
       const { value } = await cached(
         'embed',
         { provider, inputType, texts: slice },
         config.cache.embedTtlMs,
-        () => (provider === 'voyage' ? voyageEmbed(slice, inputType) : openaiEmbed(slice)),
+        () => withRetry(() => (provider === 'voyage' ? voyageEmbed(slice, inputType) : openaiEmbed(slice))),
         recorder,
       );
       vectors.push(...value);
+    }
+    return { vectors, provider, dim: vectors[0]?.length || 0 };
+  } catch (err) {
+    // All of it, or none of it.
+    log.warn('embedding_provider_failed_using_local', { provider, texts: texts.length, err: err.message });
+    return { vectors: texts.map(localEmbed), provider: 'local', dim: config.embeddings.localDim };
+  }
+}
+
+/**
+ * Retry a rate-limited embedding call before giving up on the provider.
+ *
+ * A free-tier key is a few requests a minute, and treating the first 429 as
+ * "this provider does not work" throws away the good embedder for a document
+ * that only needed to wait. Anything that is not a rate limit fails
+ * immediately, because retrying a bad key just makes the failure slower.
+ */
+async function withRetry(fn, attempts = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fn();
     } catch (err) {
-      log.warn('embedding_provider_failed_using_local', { provider, err: err.message });
-      vectors.push(...slice.map(localEmbed));
+      lastErr = err;
+      if (!/\b429\b|rate limit/i.test(err.message || '')) throw err;
+      if (attempt === attempts - 1) break;
+      await new Promise((r) => setTimeout(r, 2 ** attempt * 1500 + Math.random() * 500));
     }
   }
-  return { vectors, provider, dim: vectors[0]?.length || 0 };
+  throw lastErr;
 }
 
 export async function embedQuery(text, opts = {}) {

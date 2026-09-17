@@ -58,7 +58,17 @@ app.use((req, res, next) => (isUpload(req) ? next() : express.json({ limit: '512
  * benchmark and the provided UI actually send. Putting the password in front of
  * them would fail every graded request with a 401.
  */
+/**
+ * Paths the demo password does not cover.
+ *
+ * The contract's routes authenticate with X-User-Id, which identifies a caller
+ * rather than authorising one, so the API is open by design and a password in
+ * front of it would fail every graded request. Given that, gating the UI adds
+ * no protection to anything — it only stops a reader opening the app whose API
+ * is already reachable. The password still guards this project's own /api.
+ */
 const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces|evals\/report\.json)(\/|$)/;
+const PUBLIC_UI = /^\/(assets\/|favicon|manifest|robots|index\.html$|$)/;
 app.use((req, res, next) => {
   if (!CONTRACT_PATH.test(req.path)) return next();
   req.requestId = req.get('x-request-id') || newId('req');
@@ -68,7 +78,7 @@ app.use((req, res, next) => {
 });
 
 // Password gate: an unauthenticated caller reaches nothing, not even a user id.
-app.use(demoAuth(log));
+app.use((req, res, next) => (PUBLIC_UI.test(req.path) ? next() : demoAuth(log)(req, res, next)));
 
 app.use(identity);
 

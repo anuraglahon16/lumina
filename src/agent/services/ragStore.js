@@ -165,8 +165,29 @@ function normalizeScores(map) {
  * when the local (lexical) embedder is active. It keeps recall usable with no
  * embedding key configured.
  */
+/**
+ * Which embedder produced the vectors we are about to search.
+ *
+ * Taken from the documents themselves rather than from configuration, because
+ * configuration says what the next document will use, not what the last one
+ * did.
+ */
+async function corpusProvider(userId, docIds) {
+  const { items } = await documents.list({ user_id: userId }, { limit: 50 });
+  const relevant = items.filter((d) => d.embedding_provider && (!docIds?.length || docIds.includes(d.id)));
+  if (!relevant.length) return undefined;
+  const counts = new Map();
+  for (const d of relevant) counts.set(d.embedding_provider, (counts.get(d.embedding_provider) || 0) + 1);
+  return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
+}
+
 export async function searchChunks(query, { userId, docIds, topK = config.rag.topK, recorder } = {}) {
-  const { vector, provider } = await embedQuery(query, { recorder });
+  // Embed the question with the model that embedded the corpus. A document
+  // indexed by the local embedder after the remote one was rate limited is
+  // still perfectly searchable — but only by a query from the same model, and
+  // the current default is not necessarily it.
+  const indexedWith = await corpusProvider(userId, docIds);
+  const { vector, provider } = await embedQuery(query, { recorder, provider: indexedWith });
 
   // Dense retrieval happens where the chunks live: the index does it on Atlas,
   // a scan does it on a local mongod, and the in-process store does it here.

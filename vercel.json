@@ -4,7 +4,7 @@
     "api/index.js": {
       "maxDuration": 300,
       "memory": 1024,
-      "includeFiles": "{src/gateway/public/**,eval/results-published.json}"
+      "includeFiles": "{src/gateway/public/**,web/dist/**,eval/results-published.json,reports/*.json}"
     }
   },
   "rewrites": [
@@ -12,5 +12,6 @@
       "source": "/(.*)",
       "destination": "/api/index.js"
     }
-  ]
+  ],
+  "buildCommand": "npm run build:contract && npm run build -w @lumina/web"
 }
