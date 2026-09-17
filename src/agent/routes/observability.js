@@ -1,5 +1,5 @@
 import express from 'express';
-import { config, capabilities } from '../../shared/config.js';
+import { config, capabilities, modelRoles } from '../../shared/config.js';
 import { notFound } from '../../shared/errors.js';
 import { getRun, listRuns, runStats } from '../store/runLog.js';
 import { jobQueue } from '../services/jobs.js';
@@ -36,7 +36,10 @@ observabilityRouter.get('/health', async (req, res) => {
       // rather than leaving it to be inferred from errors.
       circuits: breakerReport(),
     },
+    // Legacy: the global `LUMINA_MODEL`, which is not the model that answers a
+    // Quick question. Kept so nothing reading it breaks; use `models` instead.
     model: config.llm.model,
+    models: modelRoles(),
     uptime_s: Math.round(process.uptime()),
   });
 });
@@ -50,11 +53,7 @@ observabilityRouter.get('/capabilities', async (req, res) => {
       model: config.llm.model,
       // The routing table is part of what a run cost, so it is reported rather
       // than left implicit in the environment.
-      models: {
-        answer: config.llm.model,
-        deep_branch: config.llm.branchModel,
-        mechanical: config.llm.fastModel,
-      },
+      models: modelRoles(),
     },
     budgets: config.budgets,
     cache: cache.summary(),

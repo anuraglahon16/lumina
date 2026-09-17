@@ -1,0 +1,1029 @@
+{
+  "_README": [
+    "One entry per question. Fill these in by reading the funnel in the run file.",
+    "relevant_urls: the results that could have answered the question. Judgement, not a score.",
+    "extracted_passages_contain_answer: did the text actually extracted carry the answer?",
+    "answer_addressed_question: did the answer address what was asked, whatever its citations say?",
+    "answer_complete: did it cover the question, or only part of it?",
+    "Leave a field null to say you have not decided; the outcome stays pending_review.",
+    "Each field is asked for only once the run reached the stage that needs it."
+  ],
+  "run_fingerprint": "sha256:edcbc53eb8457e3df78c927d09c8c022efacd642da0fa516ba966f08183b0e2e",
+  "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
+  "ran_at": "2026-09-17T14:25:29.887Z",
+  "questions": [
+    {
+      "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://arpitbhayani.me/blogs/bloom-filters",
+          "title": "Bloom Filters"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://algomaster.io/learn/system-design/bloom-filters",
+          "title": "Bloom Filters | System Design"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.infoq.com/articles/bloom-filters-practice-go-recommender",
+          "title": "Bloom Filters: Theory, Engineering Trade\u2011offs, and Implementation in Go - InfoQ"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://tech-lessons.in/en/blog/bloom_filter",
+          "title": "Bloom filter"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://designgurus.substack.com/p/system-design-fundamentals-the-magic",
+          "title": "Deconstructing Bloom Filters: Hash Functions, Bit Arrays, and False Positives"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://stackoverflow.com/questions/4282375/what-is-the-advantage-to-using-bloom-filters",
+          "title": "algorithm - What is the advantage to using Bloom filters? - Stack Overflow"
+        }
+      ],
+      "relevant_urls": [
+        "https://arpitbhayani.me/blogs/bloom-filters",
+        "https://algomaster.io/learn/system-design/bloom-filters",
+        "https://www.infoq.com/articles/bloom-filters-practice-go-recommender",
+        "https://tech-lessons.in/en/blog/bloom_filter",
+        "https://designgurus.substack.com/p/system-design-fundamentals-the-magic"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://docs.memset.com/cd/Linux's-OOM-Process-Killer.199066633.html",
+          "title": "Linux's OOM Process Killer"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://last9.io/blog/understanding-the-linux-oom-killer",
+          "title": "Linux OOM Killer: Scores, Logs, and Configuration | Last9"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://docs.cloudbees.com/docs/cloudbees-ci-kb/latest/client-and-managed-controllers/process-killed-by-oom-killer",
+          "title": "Memory Problem: Process killed by OOM Killer"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://www.youtube.com/watch?v=4yXl-7Zc-dU&vl=en-US",
+          "title": "How the Linux OOM Killer Works | Algorithm, Scoring, and How to Prevent OOM Events"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://blog.wesleyac.com/posts/linux-kernel-oom-killer",
+          "title": "Linux Kernel: Learning about the OOM killer - Wesley Aptekar-Cassels"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://sematext.com/glossary/linux-out-of-memory-killer",
+          "title": "What Is Out of Memory Killer (OOM Killer)"
+        }
+      ],
+      "relevant_urls": [
+        "https://docs.memset.com/cd/Linux's-OOM-Process-Killer.199066633.html",
+        "https://last9.io/blog/understanding-the-linux-oom-killer",
+        "https://blog.wesleyac.com/posts/linux-kernel-oom-killer",
+        "https://sematext.com/glossary/linux-out-of-memory-killer"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How does TCP slow start decide the initial congestion window?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://en.wikipedia.org/wiki/TCP_congestion_control",
+          "title": "TCP congestion control - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.youtube.com/watch?v=r9kbjAN2788",
+          "title": "Slow Start vs Congestion Avoidance in TCP"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.keycdn.com/support/tcp-slow-start",
+          "title": "What Is TCP Slow Start - KeyCDN Support"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://sirupsen.com/napkin/problem-15",
+          "title": "Increase HTTP Performance by Fitting In the Initial TCP Slow Start Window"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://book.systemsapproach.org/congestion/tcpcc.html",
+          "title": "6.3 TCP Congestion Control \u2014 Computer Networks: A Systems Approach Version 6.2-dev documentation"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.isi.edu/websites/nsnam/DIRECTED_RESEARCH/DR_HYUNAH/D-Research/slow-start-tcp.html",
+          "title": "Home Page"
+        }
+      ],
+      "relevant_urls": [
+        "https://en.wikipedia.org/wiki/TCP_congestion_control",
+        "https://www.keycdn.com/support/tcp-slow-start",
+        "https://book.systemsapproach.org/congestion/tcpcc.html"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What is the difference between a clustered and a non-clustered database index?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.solarwinds.com/database-optimization/clustered-vs-non-clustered-index",
+          "title": "Clustered vs. Nonclustered Index: Key Differences - Database Guide | SolarWinds"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.sqlshack.com/what-is-the-difference-between-clustered-and-non-clustered-indexes-in-sql-server",
+          "title": "What is the difference between Clustered and Non-Clustered Indexes in SQL Server?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://learn.microsoft.com/en-us/sql/relational-databases/indexes/clustered-and-nonclustered-indexes-described?view=sql-server-ver17",
+          "title": "Clustered and Nonclustered Indexes - SQL Server | Microsoft Learn"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://www.youtube.com/watch?v=BxAj3bl00-o&vl=en",
+          "title": "SQL Indexes (Visually Explained) | Clustered vs Nonclustered | #SQL Course 35"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.geeksforgeeks.org/sql/clustered-and-non-clustered-indexing",
+          "title": "Clustered and Non-Clustered Indexing - GeeksforGeeks"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.yelp.com/html/pdf/YelpDatasetChallengeWinner_WordCloud.pdf",
+          "title": "Clustered Layout Word Cloud for User Generated Review"
+        }
+      ],
+      "relevant_urls": [
+        "https://www.solarwinds.com/database-optimization/clustered-vs-non-clustered-index",
+        "https://www.sqlshack.com/what-is-the-difference-between-clustered-and-non-clustered-indexes-in-sql-server",
+        "https://learn.microsoft.com/en-us/sql/relational-databases/indexes/clustered-and-nonclustered-indexes-described?view=sql-server-ver17",
+        "https://www.geeksforgeeks.org/sql/clustered-and-non-clustered-indexing"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How does the DNS resolver decide when a cached record has expired?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.akamai.com/glossary/what-is-dns-caching",
+          "title": "What Is DNS Caching? | How Does DNS Caching Work? | Akamai"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.cloudns.net/blog/dns-cache-explained",
+          "title": "DNS cache explained\u00a0 - ClouDNS Blog"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://jvns.ca/blog/2021/12/06/dns-doesn-t-propagate",
+          "title": "DNS \"propagation\" is actually caches expiring"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://hosseinnejati.medium.com/dns-deep-dive-resolution-caching-and-failure-modes-be066bb0d66f",
+          "title": "Medium"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.captaindns.com/en/blog/dns-propagation-time",
+          "title": "DNS Propagation Time: How Long Does It Really Take?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://cryptorank.io/news/feed/f7800-which-dns-ip-should-i-use-for-cloudflare-default",
+          "title": "Which DNS IP Should I Use for Cloudflare Default?"
+        }
+      ],
+      "relevant_urls": [
+        "https://www.akamai.com/glossary/what-is-dns-caching",
+        "https://www.cloudns.net/blog/dns-cache-explained",
+        "https://jvns.ca/blog/2021/12/06/dns-doesn-t-propagate",
+        "https://hosseinnejati.medium.com/dns-deep-dive-resolution-caching-and-failure-modes-be066bb0d66f"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What does a Merkle tree let a distributed system verify cheaply?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.youtube.com/watch?v=3Lz6NRDgndU",
+          "title": "Merkle Trees Explained: Data Verification in Distributed Systems"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://pratikpandey.substack.com/p/merkle-trees-the-data-structure-for",
+          "title": "Merkle Trees: The Data Structure for Verifiable State"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://brilliant.org/wiki/merkle-tree",
+          "title": "Merkle Tree | Brilliant Math & Science Wiki"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://aleo.org/post/what-is-a-merkle-tree",
+          "title": "What is a Merkle tree?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://medium.com/coinmonks/merkle-trees-the-backbone-of-distributed-software-4fa0805132c6",
+          "title": "Merkle Trees: The Backbone of Distributed Software"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://cryptorank.io/news/feed/7e9f5-merkle-tree-efficiency-in-blockchain-explained",
+          "title": "Merkle Tree Efficiency in Blockchain: Essentials Explained | Adoption | CryptoRank.io"
+        }
+      ],
+      "relevant_urls": [
+        "https://pratikpandey.substack.com/p/merkle-trees-the-data-structure-for",
+        "https://brilliant.org/wiki/merkle-tree",
+        "https://aleo.org/post/what-is-a-merkle-tree",
+        "https://medium.com/coinmonks/merkle-trees-the-backbone-of-distributed-software-4fa0805132c6"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How does write amplification arise in solid state drives?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://finance.yahoo.com/news/solid-state-drives-ssd-market-104200221.html",
+          "title": "Solid State Drives (SSD) Market worth $143.55 Billion by 2029 - Exclusive Report by The Insight Partners"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://finance.yahoo.com/news/global-solid-state-drives-market-122300342.html",
+          "title": "Global Solid State Drives Market Forecast to 2029 - COVID-19 Impact and Analysis"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://tracxn.com/d/companies/solid-state-drives/__v_UK8Inj_Pjk3v92KUJ7uAs9LhbjScWKygHzNB3aExM",
+          "title": "Solid State Drives - 2026 Company Profile & Competitors - Tracxn"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://tracxn.com/d/trending-business-models/startups-in-solid-state-drives/__1svpK1Vs4JOVAfAne48J0J1zClRtrIlAC_KhG56Mlj0/companies",
+          "title": "Top Companies in Solid State Drives (Sep, 2026) - Tracxn"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.youtube.com/watch?v=XuoqKYxDHVc",
+          "title": "The full-length interview with Elon Musk | The Economist"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.youtube.com/watch?v=bBC-nXj3Ng4",
+          "title": "But how does bitcoin actually work?"
+        }
+      ],
+      "relevant_urls": [],
+      "extracted_passages_contain_answer": null,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "Every result is about the SSD market (Yahoo Finance, Tracxn company profiles), not the technology. Nothing returned could have answered this."
+    },
+    {
+      "question": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol",
+          "title": "Two-phase commit protocol - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://singhajit.com/distributed-systems/two-phase-commit/",
+          "title": "Two-Phase Commit: The Protocol That Keeps Distributed Transactions ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.geeksforgeeks.org/dbms/two-phase-commit-protocol-distributed-transaction-management/",
+          "title": "Two Phase Commit Protocol (Distributed Transaction Management)"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://knowledge.businesscompassllc.com/two-phase-commit-protocol-in-distributed-databases-how-it-works/",
+          "title": "Two-Phase Commit Protocol in Distributed Databases: How It Works"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.javacodegeeks.com/2026/07/the-real-cost-of-distributed-transactions-why-two-phase-commit-falls-apart-at-scale.html",
+          "title": "The Real Cost of Distributed Transactions: Why Two-Phase Commit Falls ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.algoroq.io/concepts/two-phase-commit/",
+          "title": "Two-Phase Commit Protocol Explained: Coordinating Distributed ..."
+        }
+      ],
+      "relevant_urls": [
+        "https://en.wikipedia.org/wiki/Two-phase_commit_protocol",
+        "https://singhajit.com/distributed-systems/two-phase-commit/",
+        "https://www.geeksforgeeks.org/dbms/two-phase-commit-protocol-distributed-transaction-management/",
+        "https://knowledge.businesscompassllc.com/two-phase-commit-protocol-in-distributed-databases-how-it-works/"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How does HTTP content negotiation choose a response representation?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation",
+          "title": "Content negotiation - HTTP | MDN"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://http.dev/content-negotiation",
+          "title": "HTTP Content Negotiation explained"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.w3.org/Protocols/rfc2616/rfc2616-sec12.html",
+          "title": "HTTP/1.1: Content Negotiation - World Wide Web Consortium (W3C)"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://en.wikipedia.org/wiki/Content_negotiation",
+          "title": "Content negotiation - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.scrapeless.com/en/wiki/what-is-content-negotiation",
+          "title": "What Is Content Negotiation? HTTP Representations Explained"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.tutorialspoint.com/http/http_content_negotiation.htm",
+          "title": "HTTP - Content Negotiation - Online Tutorials Library"
+        }
+      ],
+      "relevant_urls": [
+        "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation",
+        "https://http.dev/content-negotiation",
+        "https://www.w3.org/Protocols/rfc2616/rfc2616-sec12.html",
+        "https://en.wikipedia.org/wiki/Content_negotiation"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What does the borrow checker in Rust prevent at compile time?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://rustify.rs/glossary/borrow-checker",
+          "title": "Rust Borrow Checker: Rules & Common Errors Explained"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.rustfaq.org/en/how-does-the-borrow-checker-work-internally/",
+          "title": "How does the borrow checker work internally \u2014 Rust FAQ"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://blog.logrocket.com/introducing-rust-borrow-checker/",
+          "title": "Understanding the Rust borrow checker - LogRocket Blog"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://kindatechnical.com/rust/lesson-12-the-borrow-checker-understanding-rusts-compile-time-safety-guarantees.html",
+          "title": "The Borrow Checker: Understanding Rust's Compile-Time Safety Guarantees"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://reintech.io/blog/understanding-implementing-rust-borrow-checker",
+          "title": "Understanding and Implementing Rust's Borrow Checker - Reintech"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.rustfaq.org/en/understanding-the-borrow-checker-a-mental-model/",
+          "title": "Understanding the Borrow Checker: A Mental Model \u2014 Rust FAQ"
+        }
+      ],
+      "relevant_urls": [
+        "https://rustify.rs/glossary/borrow-checker",
+        "https://blog.logrocket.com/introducing-rust-borrow-checker/",
+        "https://kindatechnical.com/rust/lesson-12-the-borrow-checker-understanding-rusts-compile-time-safety-guarantees.html"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": false,
+      "notes": ""
+    },
+    {
+      "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot",
+          "title": "How does the JVM decided to JIT-compile a method (categorize a method ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://codingtechroom.com/question/jvm-jit-compile-hot-methods",
+          "title": "How Does the JVM Determine When to JIT-Compile a Method as 'Hot'?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://tutorialq.com/dev/java/jit-compiler",
+          "title": "Java JIT Compiler \u2014 How the JVM Turns Bytecode into Blazing-Fast ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://www.javacodegeeks.com/2026/07/how-the-jvm-decides-what-to-compile-inside-the-jit-tier-system-and-profiling-pipeline.html",
+          "title": "How the JVM Decides What to Compile: Inside the JIT Tier System and ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://prgrmmng.com/how-the-jvm-interprets-and-jit-compiles-code",
+          "title": "How the JVM Interprets and JIT-Compiles Code - prgrmmng.com"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.w3computing.com/articles/jvm-jit-compiler-deep-dive-c1-c2-tiered-compilation/",
+          "title": "JVM JIT Compiler Deep Dive: C1, C2, and Tiered Compilation Explained"
+        }
+      ],
+      "relevant_urls": [
+        "https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot",
+        "https://codingtechroom.com/question/jvm-jit-compile-hot-methods",
+        "https://tutorialq.com/dev/java/jit-compiler",
+        "https://www.javacodegeeks.com/2026/07/how-the-jvm-decides-what-to-compile-inside-the-jit-tier-system-and-profiling-pipeline.html"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What is the purpose of a write-ahead log in database crash recovery?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://en.wikipedia.org/wiki/Write-ahead_logging",
+          "title": "Write-ahead logging - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://theruntimetheory.com/articles/write-ahead-logging-and-crash-recovery",
+          "title": "Write-Ahead Logging and Crash Recovery - The Runtime Theory"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://martinuke0.github.io/posts/2026-05-13-why-write-ahead-logging-prevents-database-corruption-during-crashes/",
+          "title": "Why Write-Ahead Logging Prevents Database Corruption During Crashes"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://letsbuildsolutions.com/blog/system-design/write-ahead-logs-how-databases-guarantee-durability-and-crash-recovery/",
+          "title": "Write-Ahead Logs: How Databases Guarantee Durability and Crash Recovery"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.mysimulator.uk/articles/write-ahead-log/",
+          "title": "Write-Ahead Logging: How Databases Survive a Crash |\u2026"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://primitives.pub/databases/monographs/wal-and-recovery",
+          "title": "Write-Ahead Logging and Crash Recovery - primitives.pub"
+        }
+      ],
+      "relevant_urls": [
+        "https://en.wikipedia.org/wiki/Write-ahead_logging",
+        "https://theruntimetheory.com/articles/write-ahead-logging-and-crash-recovery",
+        "https://martinuke0.github.io/posts/2026-05-13-why-write-ahead-logging-prevents-database-corruption-during-crashes/",
+        "https://letsbuildsolutions.com/blog/system-design/write-ahead-logs-how-databases-guarantee-durability-and-crash-recovery/"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How does consistent hashing limit the keys that move when a node leaves?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.geeksforgeeks.org/system-design/consistent-hashing/",
+          "title": "Consistent Hashing - System Design - GeeksforGeeks"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.systemforces.com/blog/consistent-hashing-explained-for-system-design",
+          "title": "Consistent Hashing Explained: How It Works in Distributed Systems"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://thecodeforge.io/system-design/consistent-hashing/",
+          "title": "Consistent Hashing \u2014 Why One Node Broke 75% of Keys"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://en.wikipedia.org/wiki/Consistent_hashing",
+          "title": "Consistent hashing - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://hld.handbook.academy/curriculum/distributed-systems-theory/consistent-hashing/",
+          "title": "Consistent Hashing: Keys to Nodes Without Global Reshuffles"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://algobase.dev/learn/system-design/consistent-hashing",
+          "title": "Consistent Hashing | System Design Fundamentals | Algobase"
+        }
+      ],
+      "relevant_urls": [
+        "https://www.geeksforgeeks.org/system-design/consistent-hashing/",
+        "https://www.systemforces.com/blog/consistent-hashing-explained-for-system-design",
+        "https://thecodeforge.io/system-design/consistent-hashing/",
+        "https://en.wikipedia.org/wiki/Consistent_hashing"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it break?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+          "title": "What Is Certificate Pinning? Benefits, Risks & Best Practices"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://jimber.io/blog/certificate-pinning-explained/",
+          "title": "Certificate Pinning Explained: How It Works in 2026 | Jimber"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.ssldragon.com/blog/certificate-pinning/",
+          "title": "What Is Certificate Pinning and How It Works? - SSL Dragon"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://sslinsights.com/what-is-ssl-pinning/",
+          "title": "SSL Pinning: Everything You Need to Know About It"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning",
+          "title": "Certificate and Public Key Pinning - OWASP Foundation"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://learn.versa-networks.com/docs/certificate-pinning",
+          "title": "Certificate Pinning | Versa Learn"
+        }
+      ],
+      "relevant_urls": [
+        "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+        "https://jimber.io/blog/certificate-pinning-explained/",
+        "https://www.ssldragon.com/blog/certificate-pinning/",
+        "https://sslinsights.com/what-is-ssl-pinning/"
+      ],
+      "extracted_passages_contain_answer": false,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "The Palo Alto page is the right page and read 19,911 characters, but what was extracted is its table of contents and section headings. The answer says so explicitly and cites nothing."
+    },
+    {
+      "question": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://codelucky.com/copy-on-write-filesystem-zfs-btrfs/",
+          "title": "Copy-on-Write File System: Complete Guide to ZFS and Btrfs ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.sys_arch/topic/fsys_COW_filesystem.html",
+          "title": "Copy-on-write filesystem - QNX"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://www.centron.de/en/tutorials/cloud-snapshot-misuse-costs-copy-on-write-and-prevention",
+          "title": "Cloud Snapshot Misuse: Costs, Copy-on-Write - centron"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://www.opensourceforu.com/2026/04/data-deduplication-done-the-right-way/",
+          "title": "Data Deduplication Done The Right Way - Open Source For You"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://www.fosslinux.com/158163/bcachefs-linux-next-gen-cow-filesystem.htm",
+          "title": "BCachefs on Linux: The Next-Gen Copy-on-Write Filesystem (2026)"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://en.wikipedia.org/wiki/Copy-on-write",
+          "title": "Copy-on-write - Wikipedia"
+        }
+      ],
+      "relevant_urls": [
+        "https://codelucky.com/copy-on-write-filesystem-zfs-btrfs/",
+        "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.sys_arch/topic/fsys_COW_filesystem.html",
+        "https://www.centron.de/en/tutorials/cloud-snapshot-misuse-costs-copy-on-write-and-prevention"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+          "title": "The Latency Cost of HTTP/2 Head-of-Line Blocking"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+          "title": "Mitigating Head-of-Line Blocking in HTTP/2 and HTTP/3"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+          "title": "Head-of-Line Blocking: TCP vs QUIC / HTTP/3 - tinycto.tv"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking",
+          "title": "Head-of-Line Blocking Explained (HTTP/1.1, HTTP/2, HTTP/3)"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://systemdr.systemdrd.com/p/understanding-head-of-line-blocking",
+          "title": "Understanding Head-of-Line Blocking: HTTP/2 vs. HTTP/3 (QUIC) in Production"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://stackoverflow.com/questions/67773211/why-do-tcp-selective-acks-not-prevent-hol-blocking-in-http-2",
+          "title": "Why do TCP selective ACKs not prevent HOL blocking in HTTP/2?"
+        }
+      ],
+      "relevant_urls": [
+        "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+        "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+        "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+        "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking"
+      ],
+      "extracted_passages_contain_answer": false,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "Result 1 covers HTTP/2 only and satisfied coverage, which cancelled results 2 and 3 \u2014 both of which compare HTTP/2 with HTTP/3. The extracted evidence cannot answer the half of the question about HTTP/3."
+    },
+    {
+      "question": "How does a vector clock differ from a Lamport timestamp?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://cs.stackexchange.com/questions/101496/difference-between-lamport-timestamps-and-vector-clocks",
+          "title": "Difference between Lamport timestamps and Vector clocks"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.designgurus.io/answers/detail/when-to-use-vector-clocks-vs-lamport-timestamps",
+          "title": "When to use vector clocks vs Lamport timestamps?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://systemdesigntutorial.com/m23-time-order-clocks.html",
+          "title": "Lamport Clocks and Vector Clocks \u2014 Time and Order in Distributed ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://dipach.github.io/vector-clocks-vs-lamport-clocks/",
+          "title": "vector clocks Vs lamport clocks: event ordering in distributed systems ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://scalablesystem.dev/learn/lamport-vector-clocks/",
+          "title": "Lamport and Vector Clocks: Ordering Events Without a Global Clock"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://hld.handbook.academy/curriculum/distributed-systems-theory/clocks-and-ordering/",
+          "title": "Clocks and Ordering: Lamport, Vector, and Hybrid Logical Clocks"
+        }
+      ],
+      "relevant_urls": [
+        "https://cs.stackexchange.com/questions/101496/difference-between-lamport-timestamps-and-vector-clocks",
+        "https://www.designgurus.io/answers/detail/when-to-use-vector-clocks-vs-lamport-timestamps",
+        "https://systemdesigntutorial.com/m23-time-order-clocks.html",
+        "https://dipach.github.io/vector-clocks-vs-lamport-clocks/"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://www.freecodecamp.org/news/understanding-the-cap-theorem-consistency-availability-and-partition-tolerance-in-system-design/",
+          "title": "Understanding the CAP Theorem: Consistency, Availability, and Partition ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.scaler.com/topics/cap-theorem/",
+          "title": "CAP Theorem Explained - Consistency, Availability & Partition Tolerance"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://en.wikipedia.org/wiki/CAP_theorem",
+          "title": "CAP theorem - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://syssimulator.com/learn/cap-theorem-explained",
+          "title": "CAP Theorem Explained \u2014 Interview Guide | SysSimulator"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://devwithtools.org/blog/cap-theorem-explained",
+          "title": "CAP Theorem Explained Simply: Consistency, Availability & Partition ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://www.techinterview.org/post/3233459954/cap-theorem/",
+          "title": "CAP Theorem: Consistency, Availability, and Partition Tolerance"
+        }
+      ],
+      "relevant_urls": [
+        "https://www.freecodecamp.org/news/understanding-the-cap-theorem-consistency-availability-and-partition-tolerance-in-system-design/",
+        "https://www.scaler.com/topics/cap-theorem/",
+        "https://en.wikipedia.org/wiki/CAP_theorem",
+        "https://syssimulator.com/learn/cap-theorem-explained"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://moderndataengineering.dev/docs/storage-formats/row-vs-columnar",
+          "title": "Data layout on disk: rows vs columns | Modern Data Engineering Guide"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://www.systemoverflow.com/learn/data-storage-formats/row-vs-columnar/how-row-and-columnar-formats-actually-work",
+          "title": "How Row and Columnar Formats Actually Work"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://clickhouse.com/resources/engineering/what-is-columnar-storage",
+          "title": "How columnar storage works - clickhouse.com"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://oneuptime.com/blog/post/2026-02-13-columnar-storage-explained/view",
+          "title": "Columnar Storage Explained - Why It Matters for Analytics"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://learnlyai.co.uk/en/course-hub/data-science/data-engineering-infrastructure/distributed-storage-and-batch-processing/columnar-storage-formats",
+          "title": "Columnar Storage Formats \u2014 Distributed Storage & Batch Processing ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://airbyte.com/data-engineering-resources/columnar-storage",
+          "title": "Columnar Storage - A Complete Guide - Airbyte"
+        }
+      ],
+      "relevant_urls": [
+        "https://moderndataengineering.dev/docs/storage-formats/row-vs-columnar",
+        "https://www.systemoverflow.com/learn/data-storage-formats/row-vs-columnar/how-row-and-columnar-formats-actually-work",
+        "https://clickhouse.com/resources/engineering/what-is-columnar-storage",
+        "https://oneuptime.com/blog/post/2026-02-13-columnar-storage-explained/view"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "candidates": [
+        {
+          "search_attempt": 1,
+          "rank": 1,
+          "url": "https://en.wikipedia.org/wiki/False_sharing",
+          "title": "False sharing - Wikipedia"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 2,
+          "url": "https://levelup.gitconnected.com/mastering-false-sharing-the-hidden-performance-killer-in-multi-core-embedded-systems-b8bbf294cab3",
+          "title": "Mastering False Sharing: The Hidden Performance Killer in Multi-Core ..."
+        },
+        {
+          "search_attempt": 1,
+          "rank": 3,
+          "url": "https://medium.com/@khaled.smq/the-silent-killer-of-multi-threaded-performance-false-sharing-5a6b7439a0aa",
+          "title": "The Silent Killer of Multi-Threaded Performance: False Sharing"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 4,
+          "url": "https://awesome-embedded-learning-studio.github.io/Tutorial_AwesomeModernCPP/en/vol6-performance/ch05-multicore-performance/05-01-false-sharing",
+          "title": "False sharing: one cacheline dragging many cores back to single-core"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 5,
+          "url": "https://stackoverflow.com/questions/22766191/what-is-false-sharing-how-to-reproduce-avoid-it",
+          "title": "What is \"false sharing\"? How to reproduce / avoid it?"
+        },
+        {
+          "search_attempt": 1,
+          "rank": 6,
+          "url": "https://dev.to/urvvil/understanding-false-sharing-and-how-to-mitigate-it-in-java-2oh1",
+          "title": "Understanding False Sharing and How to Mitigate It in Java"
+        }
+      ],
+      "relevant_urls": [
+        "https://en.wikipedia.org/wiki/False_sharing",
+        "https://levelup.gitconnected.com/mastering-false-sharing-the-hidden-performance-killer-in-multi-core-embedded-systems-b8bbf294cab3",
+        "https://medium.com/@khaled.smq/the-silent-killer-of-multi-threaded-performance-false-sharing-5a6b7439a0aa",
+        "https://awesome-embedded-learning-studio.github.io/Tutorial_AwesomeModernCPP/en/vol6-performance/ch05-multicore-performance/05-01-false-sharing"
+      ],
+      "extracted_passages_contain_answer": true,
+      "answer_addressed_question": true,
+      "answer_complete": true,
+      "notes": ""
+    }
+  ]
+}

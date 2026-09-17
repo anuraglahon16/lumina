@@ -216,6 +216,46 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
   let usable = 0;
   let coverage = assessCoverage(query, ledger.citable);
 
+  /**
+   * How an attempt ended, written where the attempt ends.
+   *
+   * This used to be recorded in the consumption loop below, which sees only the
+   * fetches the loop gets to. Once coverage is met the loop breaks, its losers
+   * are aborted, and nothing ever records what became of them: a twenty-question
+   * run left thirty of sixty-eight events frozen at `attempted`. That is not a
+   * cosmetic gap — a status that never arrives is indistinguishable from a fetch
+   * that never returned, it makes the fetch-success denominator a guess, and it
+   * left the `cancelled` branch of retrieval classification unreachable, because
+   * nothing was ever recorded as cancelled.
+   *
+   * Settlement is the only place that sees every attempt, so it is where the
+   * terminal status is written.
+   */
+  const recordOutcome = (candidate, traced, page, waited) => {
+    const readable = page?.ok && (page.text?.length ?? 0) >= config.budgets.quick.minPageChars;
+    funnel?.fetched({ eventId: traced?.event_id, candidateId: candidate.candidate_id ?? null, url: candidate.url }, {
+      // A cancellation is not a failure. The pool aborts its losers on every
+      // successful run, and counting those would make a healthy system look
+      // like one whose fetches mostly fail.
+      status: page?.aborted ? 'cancelled' : readable ? 'usable' : page?.ok ? 'too_thin' : 'failed',
+      httpStatus: page?.status ?? null,
+      durationMs: page?.duration_ms ?? waited,
+      chars: page?.text?.length ?? 0,
+      admitted: Boolean(readable),
+      reason: readable ? 'usable_text' : page?.aborted ? 'cancelled' : page?.error || 'insufficient text',
+      // The text that was actually extracted, for every page that read —
+      // including ones nothing ends up citing. That is exactly the set a
+      // reviewer needs to tell an irrelevant page from a relevant one whose
+      // extraction missed the answer, and it cannot be recovered afterwards.
+      passages: readable ? chunkPassages(page.text).slice(0, 8) : undefined,
+      // A page that read and gave too little keeps its text too. Ninety
+      // characters of navigation, a paywall notice and a partly useful
+      // extraction are identical as a number and want different answers.
+      excerpt: !readable && page?.ok && page.text ? page.text.slice(0, 1000) : undefined,
+    });
+    return readable;
+  };
+
   const start = (candidate, rank) => {
     if (!candidate || attempted.has(candidate.url)) return;
     if (!budget.allows('fetch_page').ok) return;
@@ -226,7 +266,13 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     const began = performance.now();
     const promise = fetchFn(candidate.url, { recorder, signal: pool.signal })
       .catch((err) => ({ ok: false, url: candidate.url, error: err.message, aborted: err?.name === 'AbortError' }))
-      .then((page) => ({ page, candidate, rank, traced, waited: Math.round(performance.now() - began) }));
+      .then((page) => {
+        const waited = Math.round(performance.now() - began);
+        // Recorded here rather than by the caller, so a loser nobody awaits is
+        // still accounted for.
+        const readable = recordOutcome(candidate, traced, page, waited);
+        return { page, candidate, rank, traced, waited, readable };
+      });
     inFlight.set(candidate.url, promise);
   };
 
@@ -238,30 +284,8 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
 
   try {
     while (inFlight.size) {
-      const { page, candidate, rank, traced, waited } = await Promise.race(inFlight.values());
+      const { page, candidate, rank, waited, readable } = await Promise.race(inFlight.values());
       inFlight.delete(candidate.url);
-
-      const readable = page?.ok && (page.text?.length ?? 0) >= config.budgets.quick.minPageChars;
-      funnel?.fetched({ eventId: traced?.event_id, candidateId: candidate.candidate_id ?? null, url: candidate.url }, {
-        // A cancellation is not a failure. The pool aborts its losers on every
-        // successful run, and counting those would make a healthy system look
-        // like one whose fetches mostly fail.
-        status: page?.aborted ? 'cancelled' : readable ? 'usable' : page?.ok ? 'too_thin' : 'failed',
-        httpStatus: page?.status ?? null,
-        durationMs: page?.duration_ms ?? waited,
-        chars: page?.text?.length ?? 0,
-        admitted: Boolean(readable),
-        reason: readable ? 'usable_text' : page?.aborted ? 'cancelled' : page?.error || 'insufficient text',
-        // The text that was actually extracted, for every page that read —
-        // including ones nothing ends up citing. That is exactly the set a
-        // reviewer needs to tell an irrelevant page from a relevant one whose
-        // extraction missed the answer, and it cannot be recovered afterwards.
-        passages: readable ? chunkPassages(page.text).slice(0, 8) : undefined,
-        // A page that read and gave too little keeps its text too. Ninety
-        // characters of navigation, a paywall notice and a partly useful
-        // extraction are identical as a number and want different answers.
-        excerpt: !readable && page?.ok && page.text ? page.text.slice(0, 1000) : undefined,
-      });
 
       if (readable) {
         ledger.addWebSource(page, { query: searchQuery });
@@ -310,6 +334,24 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     bound.release();
     await Promise.allSettled([...inFlight.values()]);
     inFlight.clear();
+  }
+
+  // Every attempt has settled, so every attempt has a terminal status. A funnel
+  // that still says `attempted` here is a fetch whose outcome was lost rather
+  // than one still running, and the difference is invisible in the file
+  // afterwards — which is precisely how thirty of them went unnoticed.
+  //
+  // Checked after the cleanup rather than inside it: a throw from a `finally`
+  // replaces whatever exception was already propagating, so putting it there
+  // would hide the real failure behind a complaint about bookkeeping. Checked
+  // only under tracing, where it costs nothing and where the data is about to
+  // be used to draw conclusions.
+  const unfinished = (funnel?.fetch_events ?? []).filter((e) => e.status === 'attempted');
+  if (unfinished.length) {
+    throw new Error(
+      `${unfinished.length} fetch event(s) never reached a terminal status: ${unfinished.slice(0, 3).map((e) => e.url).join(', ')}. ` +
+        'Every started fetch must end as usable, too_thin, failed or cancelled.',
+    );
   }
 
   return assessCoverage(query, ledger.citable);

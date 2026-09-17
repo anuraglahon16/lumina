@@ -389,8 +389,16 @@ async function collectAll(commit) {
  */
 export function normaliseHealth(health) {
   const checks = health?.checks ?? {};
+  const roles = health?.models ?? null;
   return {
-    model: health?.model ?? null,
+    // The model that actually answers a Quick question. The top-level `model`
+    // field is the legacy global `LUMINA_MODEL`; a run recorded under it was
+    // attributed to Sonnet while Haiku wrote every answer. Recorded as null
+    // rather than guessed when the agent is too old to report its roles, since
+    // a wrong attribution is worse than a missing one.
+    quick_model: roles?.quick ?? null,
+    models: roles,
+    legacy_model_field: health?.model ?? null,
     search_provider: checks.search_provider ?? null,
     search_degraded: checks.search_degraded ?? null,
     store: checks.store ?? null,

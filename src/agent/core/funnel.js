@@ -3,13 +3,14 @@ import { config } from '../../shared/config.js';
 /**
  * What happened to every candidate, from the query to the citation.
  *
- * A run that answers badly can fail in seven different places: the query found
+ * A run that answers badly can fail in eight different places: the query found
  * nothing relevant, something relevant ranked below what was tried, a good
- * candidate was never attempted, a good page would not load, the page loaded
- * but what was extracted did not carry the answer, the evidence arrived and the
- * answer ignored it, or the answer used it and cited it wrongly. The end state
- * looks alike in most of those — a thin answer, or an honest refusal — and the
- * repairs are completely different.
+ * candidate was never attempted, a good page would not load, coverage declared
+ * itself satisfied and cancelled the pages carrying the rest of the answer, the
+ * page loaded but what was extracted did not carry the answer, the evidence
+ * arrived and the answer ignored it, or the answer used it and cited it
+ * wrongly. The end state looks alike in most of those — a thin answer, or an
+ * honest refusal — and the repairs are completely different.
  *
  * This records the path. It is observation only: off by default, and with it on
  * nothing is searched, fetched or asked of a model that the run was not already
@@ -36,6 +37,7 @@ export const RETRIEVAL_OUTCOME = {
   RANKING_MISS: 'ranking_miss',
   SELECTION_MISS: 'selection_miss',
   FETCH_FAILURE: 'fetch_failure',
+  COVERAGE_MISS: 'coverage_miss',
   PASSAGE_MISS: 'passage_miss',
   SYNTHESIS_OMISSION: 'synthesis_omission',
   CITATION_FAILURE: 'citation_failure',
@@ -266,6 +268,29 @@ export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentenc
     return pending('a relevant page was read; whether its extracted passages carry the answer has not been decided');
   }
   if (review.extracted_passages_contain_answer === false) {
+    // Two very different failures reach this point, and the repairs share
+    // nothing.
+    //
+    // One is extraction: the right page was read in full and what came out of
+    // it was a table of contents. Query-aware passage selection fixes that.
+    //
+    // The other is the coverage rule stopping too early. A page answering half
+    // the question satisfied it, and the pool aborted the pages carrying the
+    // other half while they were still in flight. Passage selection cannot fix
+    // that, because the text it would select from was never read — the
+    // component at fault is the one that declared the evidence sufficient.
+    //
+    // They are told apart by what happened to the *other* relevant candidates:
+    // relevant pages cancelled under a coverage stop mean the run had the
+    // evidence in its hands and let go of it.
+    const cancelledRelevant = relevant.filter((c) => attemptsFor(c.url).some((e) => e.status === 'cancelled'));
+    const stoppedOnCoverage = funnel.stop_reason === 'coverage_sufficient';
+    if (cancelledRelevant.length && stoppedOnCoverage) {
+      return done(
+        RETRIEVAL_OUTCOME.COVERAGE_MISS,
+        `coverage was declared sufficient and cancelled ${cancelledRelevant.length} relevant page(s) still in flight`,
+      );
+    }
     return done(RETRIEVAL_OUTCOME.PASSAGE_MISS, 'the page was read and the extracted passages did not carry the answer');
   }
 

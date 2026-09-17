@@ -336,7 +336,8 @@ test('health is read out of the shape the agent actually returns', () => {
   const agentResponse = {
     status: 'ok',
     service: 'agent',
-    model: 'claude-haiku-4-5',
+    model: 'claude-sonnet-5',
+    models: { quick: 'claude-haiku-4-5', deep_synthesis: 'claude-sonnet-5' },
     checks: {
       llm: 'configured',
       search_provider: 'tavily',
@@ -348,7 +349,6 @@ test('health is read out of the shape the agent actually returns', () => {
   };
 
   const h = normaliseHealth(agentResponse);
-  assert.equal(h.model, 'claude-haiku-4-5');
   assert.equal(h.search_provider, 'tavily', 'named, not "unknown"');
   assert.equal(h.search_degraded, false);
   assert.equal(h.store, 'mongodb');
@@ -356,15 +356,38 @@ test('health is read out of the shape the agent actually returns', () => {
   assert.equal(h.embedding_provider, 'voyage');
 });
 
+test('the model recorded for a run is the one that answered it', () => {
+  // The top-level `model` field is the legacy global LUMINA_MODEL. A run
+  // recorded under it was attributed to Sonnet while Haiku wrote every one of
+  // its twenty answers, and nothing in the file contradicted the attribution.
+  const h = normaliseHealth({
+    model: 'claude-sonnet-5',
+    models: { quick: 'claude-haiku-4-5', deep_synthesis: 'claude-sonnet-5' },
+    checks: { search_provider: 'tavily' },
+  });
+
+  assert.equal(h.quick_model, 'claude-haiku-4-5', 'the model that serves Quick');
+  assert.notEqual(h.quick_model, 'claude-sonnet-5', 'and never the legacy global');
+  assert.equal(h.legacy_model_field, 'claude-sonnet-5', 'the legacy value is kept, named as legacy');
+  assert.equal(h.models.deep_synthesis, 'claude-sonnet-5', 'the whole role map is recorded');
+});
+
+test('an agent too old to report roles records no model rather than the wrong one', () => {
+  const h = normaliseHealth({ model: 'claude-sonnet-5', checks: {} });
+  assert.equal(h.quick_model, null, 'a missing attribution beats a wrong one');
+  assert.equal(h.models, null);
+  assert.equal(h.legacy_model_field, 'claude-sonnet-5');
+});
+
 test('a health response missing its checks degrades to nulls rather than throwing', () => {
   const h = normaliseHealth({ model: 'm' });
-  assert.equal(h.model, 'm');
+  assert.equal(h.legacy_model_field, 'm');
   assert.equal(h.search_provider, null, 'absent is recorded as absent, not as a wrong value');
 });
 
 test('the camel-case fields the old code read are genuinely not there', () => {
   // Stated as a fixture so the mapping cannot quietly regress to them.
-  const agentResponse = { model: 'm', checks: { search_provider: 'tavily' } };
+  const agentResponse = { model: 'm', models: { quick: 'q' }, checks: { search_provider: 'tavily' } };
   assert.equal(agentResponse.searchProvider, undefined);
   assert.equal(agentResponse.vectorStore, undefined);
   assert.equal(normaliseHealth(agentResponse).search_provider, 'tavily');

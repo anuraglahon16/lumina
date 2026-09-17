@@ -269,11 +269,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -281,7 +279,21 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+        "relevant_urls": [
+          "https://arpitbhayani.me/blogs/bloom-filters",
+          "https://algomaster.io/learn/system-design/bloom-filters",
+          "https://www.infoq.com/articles/bloom-filters-practice-go-recommender",
+          "https://tech-lessons.in/en/blog/bloom_filter",
+          "https://designgurus.substack.com/p/system-design-fundamentals-the-magic"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -510,11 +522,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "citation_failure",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "1 of 3 cited sentences unsupported"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -522,7 +534,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What does the Linux OOM killer use to score which process to terminate?",
+        "relevant_urls": [
+          "https://docs.memset.com/cd/Linux's-OOM-Process-Killer.199066633.html",
+          "https://last9.io/blog/understanding-the-linux-oom-killer",
+          "https://blog.wesleyac.com/posts/linux-kernel-oom-killer",
+          "https://sematext.com/glossary/linux-out-of-memory-killer"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -731,11 +756,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -743,7 +766,19 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does TCP slow start decide the initial congestion window?",
+        "relevant_urls": [
+          "https://en.wikipedia.org/wiki/TCP_congestion_control",
+          "https://www.keycdn.com/support/tcp-slow-start",
+          "https://book.systemsapproach.org/congestion/tcpcc.html"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -1098,11 +1133,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -1110,7 +1143,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What is the difference between a clustered and a non-clustered database index?",
+        "relevant_urls": [
+          "https://www.solarwinds.com/database-optimization/clustered-vs-non-clustered-index",
+          "https://www.sqlshack.com/what-is-the-difference-between-clustered-and-non-clustered-indexes-in-sql-server",
+          "https://learn.microsoft.com/en-us/sql/relational-databases/indexes/clustered-and-nonclustered-indexes-described?view=sql-server-ver17",
+          "https://www.geeksforgeeks.org/sql/clustered-and-non-clustered-indexing"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -1333,11 +1379,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -1345,7 +1389,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does the DNS resolver decide when a cached record has expired?",
+        "relevant_urls": [
+          "https://www.akamai.com/glossary/what-is-dns-caching",
+          "https://www.cloudns.net/blog/dns-cache-explained",
+          "https://jvns.ca/blog/2021/12/06/dns-doesn-t-propagate",
+          "https://hosseinnejati.medium.com/dns-deep-dive-resolution-caching-and-failure-modes-be066bb0d66f"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -1628,11 +1685,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -1640,7 +1695,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What does a Merkle tree let a distributed system verify cheaply?",
+        "relevant_urls": [
+          "https://pratikpandey.substack.com/p/merkle-trees-the-data-structure-for",
+          "https://brilliant.org/wiki/merkle-tree",
+          "https://aleo.org/post/what-is-a-merkle-tree",
+          "https://medium.com/coinmonks/merkle-trees-the-backbone-of-distributed-software-4fa0805132c6"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -1808,11 +1876,11 @@
         "stop_reason": "candidates_exhausted"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "query_miss",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "no relevant url among the results"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [
@@ -1823,7 +1891,15 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does write amplification arise in solid state drives?",
+        "relevant_urls": [],
+        "extracted_passages_contain_answer": null,
+        "answer_addressed_question": null,
+        "answer_complete": null,
+        "notes": "Every result is about the SSD market (Yahoo Finance, Tracxn company profiles), not the technology. Nothing returned could have answered this."
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -2176,11 +2252,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -2188,7 +2262,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What problem does the two-phase commit protocol solve, and what does it cost?",
+        "relevant_urls": [
+          "https://en.wikipedia.org/wiki/Two-phase_commit_protocol",
+          "https://singhajit.com/distributed-systems/two-phase-commit/",
+          "https://www.geeksforgeeks.org/dbms/two-phase-commit-protocol-distributed-transaction-management/",
+          "https://knowledge.businesscompassllc.com/two-phase-commit-protocol-in-distributed-databases-how-it-works/"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -2542,11 +2629,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -2554,7 +2639,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does HTTP content negotiation choose a response representation?",
+        "relevant_urls": [
+          "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation",
+          "https://http.dev/content-negotiation",
+          "https://www.w3.org/Protocols/rfc2616/rfc2616-sec12.html",
+          "https://en.wikipedia.org/wiki/Content_negotiation"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -2738,11 +2836,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "synthesis_omission",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "the answer addressed the question but omitted a required part"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -2750,7 +2848,19 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What does the borrow checker in Rust prevent at compile time?",
+        "relevant_urls": [
+          "https://rustify.rs/glossary/borrow-checker",
+          "https://blog.logrocket.com/introducing-rust-borrow-checker/",
+          "https://kindatechnical.com/rust/lesson-12-the-borrow-checker-understanding-rusts-compile-time-safety-guarantees.html"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": false,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -2992,11 +3102,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -3004,7 +3112,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+        "relevant_urls": [
+          "https://stackoverflow.com/questions/35601841/how-does-the-jvm-decided-to-jit-compile-a-method-categorize-a-method-as-hot",
+          "https://codingtechroom.com/question/jvm-jit-compile-hot-methods",
+          "https://tutorialq.com/dev/java/jit-compiler",
+          "https://www.javacodegeeks.com/2026/07/how-the-jvm-decides-what-to-compile-inside-the-jit-tier-system-and-profiling-pipeline.html"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -3279,11 +3400,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -3291,7 +3410,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What is the purpose of a write-ahead log in database crash recovery?",
+        "relevant_urls": [
+          "https://en.wikipedia.org/wiki/Write-ahead_logging",
+          "https://theruntimetheory.com/articles/write-ahead-logging-and-crash-recovery",
+          "https://martinuke0.github.io/posts/2026-05-13-why-write-ahead-logging-prevents-database-corruption-during-crashes/",
+          "https://letsbuildsolutions.com/blog/system-design/write-ahead-logs-how-databases-guarantee-durability-and-crash-recovery/"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -3557,11 +3689,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "citation_failure",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "1 of 5 cited sentences unsupported"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -3569,7 +3701,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does consistent hashing limit the keys that move when a node leaves?",
+        "relevant_urls": [
+          "https://www.geeksforgeeks.org/system-design/consistent-hashing/",
+          "https://www.systemforces.com/blog/consistent-hashing-explained-for-system-design",
+          "https://thecodeforge.io/system-design/consistent-hashing/",
+          "https://en.wikipedia.org/wiki/Consistent_hashing"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -3706,11 +3851,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "passage_miss",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "the page was read and the extracted passages did not carry the answer"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [
@@ -3720,7 +3865,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What does TLS certificate pinning protect against, and what does it break?",
+        "relevant_urls": [
+          "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+          "https://jimber.io/blog/certificate-pinning-explained/",
+          "https://www.ssldragon.com/blog/certificate-pinning/",
+          "https://sslinsights.com/what-is-ssl-pinning/"
+        ],
+        "extracted_passages_contain_answer": false,
+        "answer_addressed_question": null,
+        "answer_complete": null,
+        "notes": "The Palo Alto page is the right page and read 19,911 characters, but what was extracted is its table of contents and section headings. The answer says so explicitly and cites nothing."
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -4026,11 +4184,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -4038,7 +4194,19 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+        "relevant_urls": [
+          "https://codelucky.com/copy-on-write-filesystem-zfs-btrfs/",
+          "https://www.qnx.com/developers/docs/8.0/com.qnx.doc.neutrino.sys_arch/topic/fsys_COW_filesystem.html",
+          "https://www.centron.de/en/tutorials/cloud-snapshot-misuse-costs-copy-on-write-and-prevention"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -4217,11 +4385,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "passage_miss",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "the page was read and the extracted passages did not carry the answer"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -4229,7 +4397,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+        "relevant_urls": [
+          "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+          "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+          "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+          "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking"
+        ],
+        "extracted_passages_contain_answer": false,
+        "answer_addressed_question": null,
+        "answer_complete": null,
+        "notes": "Result 1 covers HTTP/2 only and satisfied coverage, which cancelled results 2 and 3 \u2014 both of which compare HTTP/2 with HTTP/3. The extracted evidence cannot answer the half of the question about HTTP/3."
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -4719,11 +4900,11 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
+        "primary": "citation_failure",
         "flags": [
-          "apply tools/apply-review.js"
-        ]
+          "2 of 12 cited sentences unsupported"
+        ],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -4731,7 +4912,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How does a vector clock differ from a Lamport timestamp?",
+        "relevant_urls": [
+          "https://cs.stackexchange.com/questions/101496/difference-between-lamport-timestamps-and-vector-clocks",
+          "https://www.designgurus.io/answers/detail/when-to-use-vector-clocks-vs-lamport-timestamps",
+          "https://systemdesigntutorial.com/m23-time-order-clocks.html",
+          "https://dipach.github.io/vector-clocks-vs-lamport-clocks/"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -4994,11 +5188,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -5006,7 +5198,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What does the CAP theorem actually claim about partition tolerance?",
+        "relevant_urls": [
+          "https://www.freecodecamp.org/news/understanding-the-cap-theorem-consistency-availability-and-partition-tolerance-in-system-design/",
+          "https://www.scaler.com/topics/cap-theorem/",
+          "https://en.wikipedia.org/wiki/CAP_theorem",
+          "https://syssimulator.com/learn/cap-theorem-explained"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -5142,11 +5347,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 1,
       "warnings": [],
@@ -5154,7 +5357,20 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "How do columnar storage formats achieve better compression than row formats?",
+        "relevant_urls": [
+          "https://moderndataengineering.dev/docs/storage-formats/row-vs-columnar",
+          "https://www.systemoverflow.com/learn/data-storage-formats/row-vs-columnar/how-row-and-columnar-formats-actually-work",
+          "https://clickhouse.com/resources/engineering/what-is-columnar-storage",
+          "https://oneuptime.com/blog/post/2026-02-13-columnar-storage-explained/view"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     },
     {
       "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
@@ -5500,11 +5716,9 @@
         "stop_reason": "coverage_sufficient"
       },
       "retrieval_outcome": {
-        "primary": "pending_review",
-        "reviewed": false,
-        "flags": [
-          "apply tools/apply-review.js"
-        ]
+        "primary": "successful_retrieval",
+        "flags": [],
+        "reviewed": true
       },
       "sources_fetched": 2,
       "warnings": [],
@@ -5512,7 +5726,21 @@
       "latency_ms": null,
       "cost_usd": null,
       "terminated": null,
-      "search_cached": null
+      "search_cached": null,
+      "review": {
+        "question": "What is false sharing, and why does it slow down multicore code?",
+        "relevant_urls": [
+          "https://en.wikipedia.org/wiki/False_sharing",
+          "https://levelup.gitconnected.com/mastering-false-sharing-the-hidden-performance-killer-in-multi-core-embedded-systems-b8bbf294cab3",
+          "https://medium.com/@khaled.smq/the-silent-killer-of-multi-threaded-performance-false-sharing-5a6b7439a0aa",
+          "https://awesome-embedded-learning-studio.github.io/Tutorial_AwesomeModernCPP/en/vol6-performance/ch05-multicore-performance/05-01-false-sharing"
+        ],
+        "extracted_passages_contain_answer": true,
+        "answer_addressed_question": true,
+        "answer_complete": true,
+        "notes": ""
+      }
     }
-  ]
+  ],
+  "reviewed_at": "2026-09-17T14:27:50.883Z"
 }

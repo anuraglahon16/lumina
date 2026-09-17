@@ -114,6 +114,11 @@ export function applyReview(run, review) {
       ? {
           candidates: (r.funnel.searches ?? []).flatMap((s) => s.results.map((x) => ({ ...x, search_attempt: s.attempt }))),
           fetch_events: r.funnel.fetch_events ?? [],
+          // Why the pool stopped. Without it a coverage_miss — relevant pages
+          // cancelled because a partial page satisfied coverage — is
+          // indistinguishable from an extraction failure on the page that did
+          // get read, and the two want opposite repairs.
+          stop_reason: r.funnel.stop_reason ?? null,
         }
       : null;
 

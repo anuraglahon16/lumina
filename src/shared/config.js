@@ -371,3 +371,29 @@ export function capabilities() {
     },
   };
 }
+
+/**
+ * Which model actually serves each role.
+ *
+ * `/v1/health` reported `config.llm.model` under the name `model`, and a
+ * diagnostic recorded that as the model under test. It was wrong in the way
+ * that matters: `LUMINA_MODEL` is the legacy global, it said `claude-sonnet-5`,
+ * and every Quick answer in the run was written by Haiku. Twenty questions were
+ * attributed to a model that answered none of them, and nothing in the file
+ * contradicted it.
+ *
+ * So the roles are reported as roles. `model` stays where it is for anything
+ * already reading it, but it is the legacy field and nothing should reason
+ * about which model answered from it.
+ */
+export function modelRoles() {
+  return {
+    quick: config.llm.quickModel,
+    deep_planner: config.llm.plannerModel,
+    deep_branch: config.llm.branchModel,
+    deep_synthesis: config.llm.deepSynthesisModel,
+    query_rewrite: config.llm.queryRewriteModel,
+    memory: config.llm.memoryModel,
+    mechanical: config.llm.fastModel,
+  };
+}
