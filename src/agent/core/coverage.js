@@ -115,9 +115,11 @@ export function assessCoverage(query, sources, { minPublishers = 2, minTermCover
   let freshEnough = true;
   if (timeSensitive) {
     const cutoff = Date.now() - freshnessDays * 24 * 3600 * 1000;
-    const dates = usable
-      .map((s) => Date.parse(s.published_at || s.fetched_at || ''))
-      .filter((t) => Number.isFinite(t));
+    // Publication dates only. `fetched_at` is when this system downloaded the
+    // page, which is today for everything, so admitting it as a fallback made
+    // every undated page fresh and undid the check entirely. A page with no
+    // date stays undated.
+    const dates = usable.map((s) => Date.parse(s.published_at || '')).filter((t) => Number.isFinite(t));
     freshEnough = dates.some((t) => t >= cutoff);
     if (!freshEnough) {
       reasons.push(

@@ -15,6 +15,8 @@ export async function synthesizeAnswer({
   mode,
   capped,
   capReason,
+  evidenceLimited = false,
+  evidenceGaps = null,
   memories,
   threadContext,
   researchNotes,
@@ -42,6 +44,8 @@ export async function synthesizeAnswer({
     mode,
     capped,
     capReason,
+    evidenceLimited,
+    evidenceGaps,
     memories,
     evidenceCount: sources.length,
   });

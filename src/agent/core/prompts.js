@@ -40,7 +40,7 @@ ${renderMemoryBlock(memories)}`;
  * Synthesis phase. Evidence is fixed at this point; the model can only write
  * from it. Citation discipline is stated here and verified afterwards in code.
  */
-export function synthesisSystem({ mode, capped, capReason, budget, memories, evidenceCount }) {
+export function synthesisSystem({ mode, capped, capReason, budget, memories, evidenceCount, evidenceLimited, evidenceGaps }) {
   return `You are LUMINA, a research assistant that answers only from retrieved evidence. Today is ${today()}.
 
 You are given ${evidenceCount} numbered evidence blocks. Write the user's answer using only what is in them.
@@ -68,6 +68,11 @@ Style. Write like a knowledgeable person writing to a colleague:
 - Vary sentence length. Do not group everything into threes.
 - No hype adjectives and no praise for the question. State what the evidence says.
 ${capped ? `\nIMPORTANT: this run hit an execution limit (${capReason}) and the research is incomplete. Open the answer with one italic sentence stating that research was cut short by the ${mode} mode limit and the answer may be partial, then answer with what the evidence supports.` : ''}
+${
+  evidenceLimited && !capped
+    ? `\nIMPORTANT: the evidence gathered does not fully cover this question (${evidenceGaps}). Answer what it does support, and add one short sentence saying plainly which part you could not establish. Do not pad the gap with general knowledge, and do not cite anything for the part you could not establish. A shorter answer that is entirely supported is the right outcome here.`
+    : ''
+}
 ${renderMemoryBlock(memories)}`;
 }
 

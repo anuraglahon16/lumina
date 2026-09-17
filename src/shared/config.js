@@ -202,6 +202,9 @@ export const config = {
        * Set to 0 to disable and let the model decide when to stop.
        */
       sufficientSources: num(process.env.QUICK_SUFFICIENT_SOURCES, 2),
+      // One more deterministic attempt when the first found nothing at all,
+      // bounded so that a rescue cannot cost more than the answer it rescues.
+      rescueCeilingMs: num(process.env.QUICK_RESCUE_CEILING_MS, 6000),
       // A few hundred words does not take a minute and a half to write. The
       // ceiling exists for a stalled connection, not for a slow answer, so it
       // is sized just above what writing this much has ever taken.

@@ -2,13 +2,11 @@ import { config } from '../../shared/config.js';
 import { Budget, CAP_REASONS } from './budget.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
-import { runResearchLoop } from './researchLoop.js';
 import { classifyQuestion, QUESTION_KIND } from './router.js';
-import { gatherFromWeb, gatherFromDocuments, QUICK_PAGES } from './retrieve.js';
+import { gatherFromWeb, gatherFromDocuments, rescueRetrieval, QUICK_PAGES } from './retrieve.js';
 import { rewriteFollowUp } from './rewrite.js';
 import { synthesizeAnswer } from './synthesize.js';
 import { extractMemories } from './memoryExtractor.js';
-import { researchSystem, buildResearchUserMessage } from './prompts.js';
 import { searchMemories } from '../services/memoryStore.js';
 import { ensureThread, appendMessage, threadContext } from '../services/threads.js';
 import { documentStats } from '../services/ragStore.js';
@@ -119,43 +117,74 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       coverage_reasons: gathered.coverage.reasons,
     });
 
-    // Enough in hand: the loop would spend a turn agreeing.
-    const deterministicSufficed = gathered.coverage.ok;
+    /**
+     * Quick is one pass, and stays one pass.
+     *
+     * Incomplete evidence used to hand the question to the iterative research
+     * loop, which added eight to ten seconds and turned a quick answer into a
+     * slow one — for a mode whose entire premise is that most questions do not
+     * need that. Deep Search is the iterative one; that is what the two gears
+     * are for, and quietly escalating between them is the spend failure their
+     * separation exists to prevent.
+     *
+     * So an incomplete result is answered as incomplete. The evidence that was
+     * found is used, the answer says what it could not establish, and the run
+     * is marked evidence-limited rather than failed: a partial answer with
+     * honest limits is a real outcome, not an error.
+     *
+     * Nothing found at all is different, because there is nothing to answer
+     * from. That gets exactly one more deterministic attempt — a broader search
+     * on the same question, no model call in front of it — and then answers
+     * with whatever that produced.
+     */
+    let coverage = gathered.coverage;
+    let rescued = false;
 
-    // ---- research ---------------------------------------------------------
-    // Only when the harness's own retrieval fell short. The loop starts from
-    // the evidence already gathered rather than from nothing, so a shortfall
-    // costs the turns it needs and not the ones already paid for.
-    recorder.startPhase('research');
-    const research = deterministicSufficed
-      ? { notes: [], termination_reason: 'sufficient_evidence', capped: false, cap_reason: null, budget: budget.snapshot() }
-      : await runResearchLoop({
-      system: researchSystem({
-        mode: 'quick',
-        budget: config.budgets.quick,
-        memories,
-        hasDocuments: docs.indexed > 0,
-        searchDegraded: resolveProviders()[0] === 'duckduckgo',
-      }),
-      userMessage: buildResearchUserMessage({ query, threadContext: history, documentCount: docs.indexed }),
-      ledger,
-      budget,
-      recorder,
-      emit,
-      userId,
-      threadId: thread.id,
-      runId: recorder.id,
-      model: config.llm.quickModel,
-      maxTokens: config.budgets.quick.researchMaxTokens,
-      effort: config.budgets.quick.researchEffort,
-      hasDocuments: docs.indexed > 0,
-      retrievalMode,
-      spaceId,
-      signal,
-        });
-    recorder.endPhase('research', {
+    if (!coverage.ok && ledger.citable.length === 0 && route.kind !== QUESTION_KIND.MEMORY_INSTRUCTION) {
+      recorder.startPhase('rescue');
+      const rescue = await rescueRetrieval({
+        query: searchQuery,
+        route: route.kind,
+        ledger,
+        budget,
+        recorder,
+        emit,
+        userId,
+        spaceId,
+        signal,
+      });
+      coverage = rescue.coverage;
+      rescued = true;
+      recorder.endPhase('rescue', { sources: ledger.citable.length, coverage_ok: coverage.ok });
+    }
+
+    const evidenceLimited = !coverage.ok;
+    if (evidenceLimited) {
+      recorder.recordWarning('retrieval', 'evidence_limited', coverage.reasons.join('; '));
+      emit('evidence_limited', {
+        reasons: coverage.reasons,
+        sources: ledger.citable.length,
+        // The honest next step, offered rather than taken: escalating a quick
+        // run into a deep one on the server's own initiative is an unbounded
+        // bill the user never agreed to.
+        suggestion: 'Deep Search researches each part of a question separately and reads more sources.',
+      });
+    }
+
+    const research = {
+      notes: [],
+      termination_reason: evidenceLimited ? 'evidence_limited' : 'sufficient_evidence',
+      capped: false,
+      cap_reason: null,
+      budget: budget.snapshot(),
+    };
+    recorder.endPhase('retrieval_outcome', {
+      route: route.kind,
+      rescued,
       tool_calls: budget.counts.tool_calls,
       sources_fetched: ledger.sources.length,
+      coverage_ok: coverage.ok,
+      coverage_reasons: coverage.reasons,
       termination_reason: research.termination_reason,
     });
 
@@ -174,6 +203,8 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       mode: 'quick',
       capped: research.capped,
       capReason: research.cap_reason,
+      evidenceLimited,
+      evidenceGaps: coverage.reasons.join('; ') || null,
       memories,
       threadContext: history,
       researchNotes: null,

@@ -148,8 +148,8 @@ test('two independent publishers covering the question is sufficient', () => {
   assert.equal(c.publishers, 2);
 });
 
-test('one thorough primary source can be enough on its own', () => {
-  // Demanding a second publisher regardless sends the loop hunting
+test('one thorough source covering the question can be enough on its own', () => {
+  // Demanding a second publisher regardless sends retrieval hunting
   // corroboration for something already well covered, and it usually finds the
   // same press release on another site.
   const c = assessCoverage('postgresql 17 vacuum', [
@@ -167,7 +167,7 @@ test('evidence that does not touch the question is not sufficient', () => {
   assert.match(c.reasons.join(' '), /touches/);
 });
 
-test('aggregators alone are not first-hand evidence', () => {
+test('aggregators alone do not satisfy coverage', () => {
   const c = assessCoverage('postgresql 17 release vacuum improvements', [
     webSource({ url: 'https://en.wikipedia.org/wiki/PostgreSQL' }),
     webSource({ url: 'https://www.reddit.com/r/postgres/x' }),
@@ -285,4 +285,51 @@ test('coverage reports aggregator status, and does not claim to judge authority'
   ]);
   assert.equal(typeof c.nonAggregators, 'number');
   assert.equal(c.primaries, undefined, 'nothing here claims to have found a primary source');
+});
+
+/* ------------------------------------------------- freshness, precisely */
+
+test('a recently fetched page is not a recently published one', () => {
+  // The bug this pins: admitting fetched_at as a date made every undated page
+  // fresh, because this system downloaded all of them today. It undid the
+  // check entirely while looking like it enforced it.
+  const c = assessCoverage('what is the latest postgresql release right now', [
+    webSource({ url: 'https://one.example/a', fetched_at: new Date().toISOString() }),
+    webSource({ url: 'https://two.example/b', fetched_at: new Date().toISOString() }),
+  ]);
+  assert.equal(c.freshEnough, false);
+  assert.equal(c.ok, false);
+});
+
+test('an old publication date is not rescued by a recent download', () => {
+  const old = new Date(Date.now() - 5 * 365 * 24 * 3600 * 1000).toISOString();
+  const c = assessCoverage('what is the latest postgresql release right now', [
+    webSource({ url: 'https://one.example/a', published_at: old, fetched_at: new Date().toISOString() }),
+  ]);
+  assert.equal(c.freshEnough, false);
+  assert.match(c.reasons.join(' '), /predate/);
+});
+
+test('a recent publication date satisfies freshness', () => {
+  const recent = new Date(Date.now() - 10 * 24 * 3600 * 1000).toISOString();
+  const covering = {
+    snippet: 'PostgreSQL vacuum throughput improvements shipped in the newest release.',
+    passages: ['PostgreSQL vacuum throughput improvements shipped in the newest release. '.repeat(6)],
+  };
+  const c = assessCoverage('what is the newest postgresql vacuum throughput improvement', [
+    webSource({ url: 'https://one.example/a', published_at: recent, ...covering }),
+    webSource({ url: 'https://two.example/b', ...covering }),
+  ]);
+  assert.equal(c.freshEnough, true);
+  assert.equal(c.ok, true, c.reasons.join('; '));
+});
+
+test('a question with no time pressure never asks for a date', () => {
+  const c = assessCoverage('postgresql vacuum improvements release', [
+    webSource({ url: 'https://one.example/a' }),
+    webSource({ url: 'https://two.example/b' }),
+  ]);
+  assert.equal(c.timeSensitive, false);
+  assert.equal(c.freshEnough, true);
+  assert.equal(c.ok, true, c.reasons.join('; '));
 });

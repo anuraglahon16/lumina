@@ -4,6 +4,7 @@ import { webSearch } from '../services/search/index.js';
 import { fetchPages } from '../services/fetcher.js';
 import { searchChunks } from '../services/ragStore.js';
 import { assessCoverage } from './coverage.js';
+import { deadlineSignal } from './budget.js';
 
 const log = createLogger('retrieve');
 
@@ -192,3 +193,37 @@ export async function gatherFromDocuments({ query, ledger, budget, recorder, emi
 }
 
 export const QUICK_PAGES = () => config.budgets.quick.deterministicPages ?? 2;
+
+/**
+ * One more attempt, when the first found nothing at all.
+ *
+ * Not a research loop and not a model call: a question that returned nothing
+ * usually returned nothing because the phrasing was unlucky, so this searches
+ * the question's content words instead of its sentence. It runs once, inside a
+ * strict deadline, and whatever it finds is what the answer is written from.
+ *
+ * The distinction from "incomplete" matters. Incomplete evidence can still be
+ * answered honestly. No evidence cannot be answered at all, which is the one
+ * case worth spending another round trip on.
+ */
+export async function rescueRetrieval({ query, route, ledger, budget, recorder, emit, userId, spaceId, signal }) {
+  const bound = deadlineSignal(config.budgets.quick.rescueCeilingMs, signal);
+  const terms = searchQueryFor(query)
+    .replace(/[?!.]/g, '')
+    .split(/\s+/)
+    .filter((w) => w.length > 2)
+    .slice(0, 8)
+    .join(' ');
+
+  try {
+    if (route === 'documents') {
+      return await gatherFromDocuments({ query: terms, ledger, budget, recorder, emit, userId, spaceId, signal: bound.signal });
+    }
+    return await gatherFromWeb({ query: terms, ledger, budget, recorder, emit, signal: bound.signal, pages: 2 });
+  } catch (err) {
+    log.warn('rescue_failed', { err: err.message });
+    return { searched: true, coverage: assessCoverage(query, ledger.citable) };
+  } finally {
+    bound.release();
+  }
+}
