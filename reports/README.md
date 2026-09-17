@@ -30,13 +30,21 @@ completeness down at the same time.
 number. The originals are kept because they are what was published, and deleting
 the record of a wrong measurement makes the correction unverifiable.
 
-**`retrieval-outcomes.md` also predates the `coverage_miss` category.** The
-HTTP/2-versus-HTTP/3 question is filed there as `passage_miss`; it is not one. A
-page covering only HTTP/2 satisfied the coverage rule, which stopped the pool
+**The HTTP/2-versus-HTTP/3 question is filed as `passage_miss` and is not one.**
+A page covering only HTTP/2 satisfied the coverage rule, which stopped the pool
 and cancelled the two pages that compared HTTP/2 with HTTP/3 while they were
 still in flight. Query-aware passage selection — the repair `passage_miss`
 points at — would do nothing for it, because the text it would select from was
 never read.
+
+The `coverage_miss` category now exists for exactly this, but **it cannot be
+applied to this run retroactively.** Deciding it requires knowing that a
+relevant page was *cancelled*, and in this run no fetch event carries that
+status: the thirty aborted losers are frozen at `attempted`, which is the
+instrumentation gap described below. The category is reachable only in runs made
+after fetch outcomes moved to the settlement path. Both files therefore still
+say `passage_miss` for that question, and the classification is wrong in a way
+the saved data cannot fix — it is recorded here instead.
 
 **Retrieval outcomes that depend on citation counts are provisional.**
 `citation_failure` is decided by cited and supported sentence totals, so every
