@@ -2,6 +2,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { acquireLock } from './diagnostic-lock.js';
 
@@ -357,12 +358,34 @@ async function collectAll(commit) {
     ran_at: new Date().toISOString(),
     base: BASE,
     node: process.version,
-    health: { model: health.model, searchProvider: health.searchProvider, vectorStore: health.vectorStore, models: health.models },
+    health: normaliseHealth(health),
     runs,
   };
   fs.writeFileSync(path.join(OUT, 'grounding-diagnostic.json'), `${JSON.stringify(raw, null, 2)}\n`);
   fs.writeFileSync(path.join(OUT, 'grounding-diagnostic.md'), render(raw));
   console.log(`\nwrote ${OUT}/grounding-diagnostic.json and .md`);
+}
+
+/**
+ * The agent's health, in the shape this report stores.
+ *
+ * The endpoint nests everything worth knowing under `checks`, and the earlier
+ * version read `health.searchProvider` and `health.vectorStore` — fields that do
+ * not exist on it. The fetch was right and the reading was wrong, so the report
+ * described the provider as "unknown" while querying a process that knew
+ * perfectly well. A run whose configuration is unrecorded cannot be compared
+ * with another.
+ */
+export function normaliseHealth(health) {
+  const checks = health?.checks ?? {};
+  return {
+    model: health?.model ?? null,
+    search_provider: checks.search_provider ?? null,
+    search_degraded: checks.search_degraded ?? null,
+    store: checks.store ?? null,
+    vector_backend: checks.vector_backend ?? null,
+    embedding_provider: checks.embedding_provider ?? null,
+  };
 }
 
 /** The summary, computed from the JSON rather than typed alongside it. */
@@ -389,7 +412,8 @@ function render({ commit, ran_at, node, health, runs }) {
   A(`- ran at: ${ran_at}`);
   A(`- node: ${node}`);
   A(`- answer model: ${health?.model ?? 'unknown'}`);
-  A(`- search provider: ${health?.checks?.search_provider ?? health?.searchProvider ?? 'unknown'}`);
+  A(`- store: ${health?.store ?? 'unknown'} · vectors: ${health?.vector_backend ?? 'unknown'} · embeddings: ${health?.embedding_provider ?? 'unknown'}`);
+  A(`- search provider: ${health?.search_provider ?? 'unknown'}${health?.search_degraded ? ' (degraded)' : ''}`);
   A(`- questions: ${ok.length} answered, ${runs.length - ok.length} failed\n`);
   A('Nothing was changed to produce this: no prompt, no threshold, no passage');
   A('selection, no model. It measures the state at the commit named above.\n');
@@ -449,7 +473,12 @@ function render({ commit, ran_at, node, health, runs }) {
   return `${L.join('\n')}\n`;
 }
 
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+// Only when run, not when imported. Its helpers are worth testing, and a module
+// that starts a twenty question measurement on import cannot be.
+const invokedDirectly = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+if (invokedDirectly) {
+  main().catch((err) => {
+    console.error(err);
+    process.exit(1);
+  });
+}

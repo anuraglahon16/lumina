@@ -75,18 +75,25 @@ function recoverStaleLock(lockFile, tryCreate) {
   } catch (err) {
     if (err.code !== 'EEXIST') throw err;
     const holder = readLock(recoveryFile);
+    // Deliberately not recovered automatically.
+    //
+    // Clearing a stale recovery mutex means reading it, removing it, and
+    // creating a new one — which is the exact check-then-act race this mutex
+    // exists to prevent, moved one level down. Guarding it would need a third
+    // lock, and that one would need a fourth.
+    //
+    // It is held for a few filesystem operations, so finding it stale means a
+    // process died inside a window measured in milliseconds. That is rare
+    // enough to be worth a person looking at, and refusing is the safe
+    // direction: the cost is a manual deletion, where the cost of guessing
+    // wrong is two diagnostics writing over each other again.
     if (holder && isAlive(holder.pid)) {
-      throw new Error(`another diagnostic is recovering the lock (pid ${holder.pid})`);
+      throw new Error(`another diagnostic is recovering the lock (pid ${holder.pid}, since ${holder.started})`);
     }
-    // The recovery mutex is itself stale. Clear it and try once; whoever wins
-    // the create proceeds and everyone else is told to stop.
-    fs.rmSync(recoveryFile, { force: true });
-    try {
-      fs.writeFileSync(recoveryFile, mine, { flag: 'wx' });
-    } catch (retryErr) {
-      if (retryErr.code !== 'EEXIST') throw retryErr;
-      throw new Error('another diagnostic is recovering the lock');
-    }
+    throw new Error(
+      `a stale recovery mutex is present at ${recoveryFile} (pid ${holder?.pid ?? 'unknown'}, since ${holder?.started ?? 'unknown'}). ` +
+        'Its owner is gone. Remove the file by hand once you are satisfied no diagnostic is running.',
+    );
   }
 
   try {

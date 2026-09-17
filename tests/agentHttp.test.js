@@ -79,6 +79,15 @@ test.before(async () => {
 
 test.after(() => {
   agent?.kill();
+  if (!hasKey) {
+    // Loud, because a skipped test that protects a real boundary is
+    // indistinguishable from a passing one in a summary line, and this is the
+    // only coverage of the whole authenticated run-lookup path.
+    process.stderr.write(
+      '\n  !! DIAGNOSTIC HTTP INTEGRATION DID NOT RUN: ANTHROPIC_API_KEY is not set.\n' +
+        '     The authenticated run-lookup path is unverified in this run.\n\n',
+    );
+  }
 });
 
 test('a request without the internal token is refused', async () => {

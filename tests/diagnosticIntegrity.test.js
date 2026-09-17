@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { acquireLock } from '../tools/diagnostic-lock.js';
+import { normaliseHealth } from '../tools/grounding-diagnostic.js';
 
 /**
  * Whether the measurements can be believed.
@@ -323,4 +324,87 @@ test('support beyond 1,200 characters of a passage is preserved', () => {
   const kept = v.sentence_results[0].scored_against[0].passages.join(' ');
   assert.ok(kept.length > 1200, `the record keeps more than a truncated window (${kept.length} chars)`);
   assert.ok(kept.includes('triggers an immediate repair from the mirror'), 'including the supporting sentence');
+});
+
+/* ------------------------------------------------- the configuration record */
+
+test('health is read out of the shape the agent actually returns', () => {
+  // The endpoint nests everything under `checks`. Reading health.searchProvider
+  // and health.vectorStore — which do not exist on it — made the report say
+  // "unknown" while querying a process that knew perfectly well, and a run whose
+  // configuration went unrecorded cannot be compared with another.
+  const agentResponse = {
+    status: 'ok',
+    service: 'agent',
+    model: 'claude-haiku-4-5',
+    checks: {
+      llm: 'configured',
+      search_provider: 'tavily',
+      search_degraded: false,
+      embedding_provider: 'voyage',
+      store: 'mongodb',
+      vector_backend: 'atlas-vector-search',
+    },
+  };
+
+  const h = normaliseHealth(agentResponse);
+  assert.equal(h.model, 'claude-haiku-4-5');
+  assert.equal(h.search_provider, 'tavily', 'named, not "unknown"');
+  assert.equal(h.search_degraded, false);
+  assert.equal(h.store, 'mongodb');
+  assert.equal(h.vector_backend, 'atlas-vector-search');
+  assert.equal(h.embedding_provider, 'voyage');
+});
+
+test('a health response missing its checks degrades to nulls rather than throwing', () => {
+  const h = normaliseHealth({ model: 'm' });
+  assert.equal(h.model, 'm');
+  assert.equal(h.search_provider, null, 'absent is recorded as absent, not as a wrong value');
+});
+
+test('the camel-case fields the old code read are genuinely not there', () => {
+  // Stated as a fixture so the mapping cannot quietly regress to them.
+  const agentResponse = { model: 'm', checks: { search_provider: 'tavily' } };
+  assert.equal(agentResponse.searchProvider, undefined);
+  assert.equal(agentResponse.vectorStore, undefined);
+  assert.equal(normaliseHealth(agentResponse).search_provider, 'tavily');
+});
+
+/* ----------------------------------------- the recovery mutex fails closed */
+
+test('a stale recovery mutex stops every process rather than being taken', async () => {
+  // Clearing it would mean read, remove, create — the very check-then-act race
+  // the mutex exists to prevent, one level down. Guarding that would need a
+  // third lock. It is held for a few filesystem operations, so finding it stale
+  // means someone died inside a window of milliseconds: rare enough to be worth
+  // a person looking at.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-recmutex-'));
+  fs.writeFileSync(path.join(dir, '.diagnostic.lock'), JSON.stringify({ pid: 999999, token: 'stale', started: 'earlier' }));
+  fs.writeFileSync(path.join(dir, '.diagnostic.lock.recovery'), JSON.stringify({ pid: 999998, started: 'earlier' }));
+
+  const helper = path.resolve('tools/diagnostic-lock.js');
+  const results = await Promise.all(
+    Array.from({ length: 4 }, () =>
+      new Promise((resolve) => {
+        let out = '';
+        const child = spawn(
+          process.execPath,
+          [
+            '--input-type=module',
+            '-e',
+            `import { acquireLock } from ${JSON.stringify(helper)};
+             try { acquireLock(${JSON.stringify(dir)}); console.log('ENTERED'); }
+             catch (err) { console.log('REFUSED:' + err.message.slice(0, 40)); }`,
+          ],
+          { stdio: ['ignore', 'pipe', 'ignore'] },
+        );
+        child.stdout.on('data', (d) => (out += d));
+        child.on('close', () => resolve(out.trim()));
+      }),
+    ),
+  );
+
+  assert.equal(results.filter((r) => r.startsWith('ENTERED')).length, 0, `no process entered recovery: ${results.join(' | ')}`);
+  assert.ok(results.every((r) => r.startsWith('REFUSED')), 'and each was told why');
+  assert.ok(results.some((r) => /stale recovery mutex/.test(r)), 'naming the stale mutex so it can be removed');
 });
