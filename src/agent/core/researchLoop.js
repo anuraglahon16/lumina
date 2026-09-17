@@ -82,7 +82,12 @@ export async function runResearchLoop({
       // the loop with a named reason instead of failing the request. Anything
       // else is a real error and still propagates.
       if (!err?.aborted && err?.name !== 'AbortError') throw err;
-      terminationReason = budget.expired?.() ? 'wall_clock_exceeded' : 'client_disconnected';
+      // What the budget says it did beats re-deriving it from the clock. The
+      // deadline timer records its cause when it fires; asking `Date.now()`
+      // again a moment later can land just before the deadline and report a
+      // client disconnect for a run the wall clock ended.
+      terminationReason =
+        budget.capped === 'wall_clock_exceeded' || budget.expired?.() ? 'wall_clock_exceeded' : 'client_disconnected';
       break;
     } finally {
       deadline.release();

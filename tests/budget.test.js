@@ -94,3 +94,39 @@ test('a budget’s deadline signal caps the budget when it fires', async () => {
   assert.equal(b.capped, 'wall_clock_exceeded', 'the run knows why it stopped, not just that it did');
   assert.equal(b.allows('web_search').ok, false, 'and nothing further is affordable');
 });
+
+/* ------------------------------- a cap decided is a cap, not a clock reading */
+
+test('a capped budget refuses every tool, without re-reading the clock', () => {
+  // The race this closes: the deadline timer fires and records its cause, and
+  // for a moment `Date.now()` is still a hair before the deadline it fired for.
+  // A budget that re-derives the answer from the clock then reports a capped
+  // run as having room for another search. It showed up as a test that passed
+  // alone and failed under load, which is what that shape of bug looks like.
+  const b = new Budget({ maxIterations: 4, maxToolCalls: 6, maxFetches: 4, maxSearches: 3, wallClockMs: 60_000 });
+  assert.equal(b.allows('web_search').ok, true, 'plenty of room by every counter');
+
+  // Exactly what the deadline callback does, while the clock still says there
+  // is time left.
+  b.capped = 'wall_clock_exceeded';
+  assert.ok(b.remainingMs > 0, 'the clock has not caught up yet');
+
+  const verdict = b.allows('web_search');
+  assert.equal(verdict.ok, false, 'and the budget refuses anyway');
+  assert.equal(verdict.reason, 'wall_clock_exceeded', 'naming the cause it recorded');
+  assert.equal(b.allows('fetch_page').ok, false, 'for every tool, not just the one that capped it');
+});
+
+test('a cap recorded by the deadline signal is what the run reports', async () => {
+  // The signal knows why it fired. Asking the clock again a moment later can
+  // land just before the deadline and call a wall-clock stop a disconnection.
+  const b = new Budget({ maxIterations: 4, maxToolCalls: 6, maxFetches: 4, maxSearches: 3, wallClockMs: 30 });
+  const { signal, release } = b.deadlineSignal();
+  try {
+    await new Promise((resolve) => signal.addEventListener('abort', resolve, { once: true }));
+    assert.equal(b.capped, 'wall_clock_exceeded', 'the cause is recorded at the moment it happens');
+    assert.equal(b.allows('web_search').reason, 'wall_clock_exceeded');
+  } finally {
+    release();
+  }
+});

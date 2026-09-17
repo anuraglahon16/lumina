@@ -24,7 +24,7 @@ const { createFunnel, classifyRetrieval, RETRIEVAL_OUTCOME } = await import('../
 const { applyReview, summarise, fingerprint: fp } = await import('../tools/apply-review.js');
 const { EvidenceLedger } = await import('../src/agent/core/evidence.js');
 const { Budget } = await import('../src/agent/core/budget.js');
-const { gatherFromWeb } = await import('../src/agent/core/retrieve.js');
+const { gatherFromWeb, rescueRetrieval } = await import('../src/agent/core/retrieve.js');
 
 const QUERY = 'what does a write ahead log record before a change is applied for recovery replay';
 
@@ -165,11 +165,24 @@ test('a relevant page read in full whose passages lacked the answer is a passage
   assert.equal(c.primary, RETRIEVAL_OUTCOME.PASSAGE_MISS);
 });
 
-test('evidence that reached the ledger and went unused is a synthesis omission', () => {
+test('a complete answer that cites nothing is a citation failure, not a synthesis one', () => {
+  // The answer was written, addressed the question and covered it. What is
+  // missing is the citing. Calling that a synthesis failure would send work at
+  // the part that did its job — and citation coverage is the remaining target.
   const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
   const c = classifyRetrieval(f, {
     citedSentences: 0,
     review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true }),
+  });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.CITATION_FAILURE);
+  assert.match(c.flags.join(' '), /no cited sentences/);
+});
+
+test('an answer that did not address the question is still a synthesis omission', () => {
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  const c = classifyRetrieval(f, {
+    citedSentences: 0,
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: false, answer_complete: false }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION);
 });
@@ -670,4 +683,85 @@ test('a page that read but gave too little keeps its text', async () => {
   assert.ok(thin.extracted_excerpt, 'and the text it did return');
   assert.match(thin.extracted_excerpt, /Sign in to continue/, 'so a reviewer can see it was a paywall');
   assert.equal(thin.admitted_as_evidence, false, 'while still not being evidence');
+});
+
+/* -------------------------------------- a review must describe this run */
+
+test('a relevant url this run never returned is refused, not read as a query miss', () => {
+  // A mistyped or carried-over url matches nothing, and "nothing relevant was
+  // returned" is exactly what a query miss looks like — so a typo would be
+  // filed as a search failure and counted against the search.
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  assert.throws(
+    () => classifyRetrieval(f, { review: { relevant_urls: ['https://typo.example/p'] } }),
+    /never returned/,
+  );
+});
+
+test('a mixture of known and unknown urls is refused too', () => {
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  assert.throws(
+    () => classifyRetrieval(f, { review: { relevant_urls: ['https://site1.example/p', 'https://typo.example/p'] } }),
+    /never returned/,
+  );
+});
+
+test('an empty relevant_urls list is a judgement, not an error', () => {
+  // "None of these were relevant" is the whole point of query_miss.
+  const f = funnelWith(leads(4));
+  assert.equal(classifyRetrieval(f, { review: { relevant_urls: [] } }).primary, RETRIEVAL_OUTCOME.QUERY_MISS);
+});
+
+/* ------------------------------- identity survives a rescue reusing a lead */
+
+test('a rescue reusing an untried lead keeps the search and rank that supplied it', async () => {
+  // The real path, not a hand-assembled funnel: gatherFromWeb used to return
+  // the provider's rows, which carry no identity, so every rescue fetch was
+  // recorded with a null candidate_id and no rank.
+  const funnel = createFunnel({ question: QUERY, enabled: true });
+  const ledger = new EvidenceLedger();
+  const searchQueries = [];
+
+  const first = await gatherFromWeb({
+    query: QUERY,
+    ledger,
+    budget: budget({ maxFetches: 2, maxRefunds: 0 }),
+    emit: () => {},
+    pages: 2,
+    webSearch: async (q) => {
+      searchQueries.push(q);
+      return { results: leads(6), cached: false, provider: 'tavily' };
+    },
+    // The first two leads fail, so nothing citable comes of the first pass.
+    fetchPage: async (url) => (/site[12]\./.test(url) ? dead(url) : page(url)),
+    funnel,
+  });
+  assert.equal(ledger.citable.length, 0, 'the first pass found nothing');
+  assert.ok(first.candidates.every((c) => c.candidate_id), 'the returned leads carry their identity');
+
+  await rescueRetrieval({
+    query: QUERY,
+    route: 'standalone_web',
+    ledger,
+    budget: budget(),
+    emit: () => {},
+    candidates: first.candidates,
+    webSearch: async (q) => {
+      searchQueries.push(q);
+      return { results: leads(6), cached: false, provider: 'tavily' };
+    },
+    fetchPage: async (url) => page(url),
+    funnel,
+  });
+
+  assert.equal(searchQueries.length, 1, 'the rescue reused leads rather than searching again');
+  assert.ok(ledger.citable.length > 0, 'and found evidence among them');
+
+  const rescueFetches = funnel.fetch_events.filter((e) => /site[3-6]\./.test(e.url));
+  assert.ok(rescueFetches.length > 0, 'the rescue attempted untried leads');
+  for (const e of rescueFetches) {
+    assert.ok(e.candidate_id, `the rescue fetch of ${e.url} kept its candidate id`);
+    assert.equal(e.search_attempt, 1, 'from the search that actually supplied it');
+    assert.equal(typeof e.rank, 'number', 'at the rank it held there');
+  }
 });

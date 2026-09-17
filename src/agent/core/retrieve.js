@@ -121,13 +121,18 @@ export async function gatherFromWeb({
   if (!allowed.ok) return { searched: false, coverage: assessCoverage(query, ledger.citable), reason: allowed.reason };
 
   let results = [];
+  let recorded = null;
   const t0 = performance.now();
   try {
     budget.consume('web_search');
     const found = await searchFn(searchQuery, { recorder, signal });
     results = found.results || [];
     ledger.noteCandidates(results);
-    funnel?.search({
+    // The funnel's own occurrences carry identity; the provider's rows do not.
+    // Everything downstream — selection, the queue, the fetch events and the
+    // leads a rescue reuses — works from these, so a candidate keeps the search
+    // and rank that produced it however late it is picked up.
+    recorded = funnel?.search({
       query: searchQuery,
       provider: found.provider ?? null,
       cached: Boolean(found.cached),
@@ -149,14 +154,14 @@ export async function gatherFromWeb({
     return { searched: true, coverage: assessCoverage(query, ledger.citable), reason: err.message };
   }
 
+  const retrievalCandidates = recorded?.results ?? results;
+
   const coverage = await fetchUntilCovered({
     funnel,
     fetchPage: fetchFn,
     query,
     searchQuery,
-    // The funnel's own occurrences, so a fetch names the search and rank that
-    // supplied it rather than being matched back by url later.
-    candidates: choosePages(funnel ? funnel.searches.at(-1).results : results, { limit: 8, funnel }),
+    candidates: choosePages(retrievalCandidates, { limit: 8, funnel }),
     ledger,
     budget,
     recorder,
@@ -166,7 +171,10 @@ export async function gatherFromWeb({
     deadlineMs: deadlineMs ?? config.budgets.quick.retrievalCeilingMs,
   });
 
-  return { searched: true, coverage, candidates: results };
+  // The same occurrences the pool worked from, so a rescue reusing an untried
+  // lead still knows which search and rank supplied it. Returning the provider's
+  // rows here was where that identity was being dropped.
+  return { searched: true, coverage, candidates: retrievalCandidates };
 }
 
 /**

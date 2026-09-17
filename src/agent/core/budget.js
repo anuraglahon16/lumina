@@ -139,6 +139,13 @@ export class Budget {
 
   /** Whether one specific tool call is still affordable. */
   allows(toolName) {
+    // A budget that has already stopped stays stopped. Re-deriving the answer
+    // from the clock lets a call through in the moment between the deadline
+    // timer firing and `Date.now()` passing the deadline it fired for: the run
+    // is capped, and a tool call is nonetheless affordable. Rare, real, and
+    // exactly the sort of thing that shows up as a test that passes alone and
+    // fails under load.
+    if (this.capped) return { ok: false, reason: this.capped };
     if (this.counts.tool_calls >= this.limits.maxToolCalls) return { ok: false, reason: 'max_tool_calls_reached' };
     if (Date.now() >= this.deadline) return { ok: false, reason: 'wall_clock_exceeded' };
     if (toolName === 'web_search' && this.limits.maxSearches !== undefined && this.counts.searches >= this.limits.maxSearches) {

@@ -218,6 +218,20 @@ export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentenc
 
   const candidates = funnel.candidates ?? [];
   const events = funnel.fetch_events ?? [];
+
+  // A url in the review that is not in the results is not evidence that the
+  // search failed; it is evidence that the review is wrong about this run. A
+  // mistyped or carried-over url would otherwise match nothing and be reported
+  // as a query miss, manufacturing a search failure out of a typo.
+  const known = new Set(candidates.map((c) => c.url));
+  const unknown = review.relevant_urls.filter((u) => !known.has(u));
+  if (unknown.length) {
+    throw new Error(
+      `the review names ${unknown.length} url(s) that this run never returned: ${unknown.slice(0, 3).join(', ')}. ` +
+        'A url absent from the results cannot be judged relevant to them.',
+    );
+  }
+
   const relevant = candidates.filter((c) => review.relevant_urls.includes(c.url));
 
   if (!relevant.length) {
@@ -271,7 +285,10 @@ export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentenc
   }
 
   if (citedSentences === 0) {
-    return done(RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, 'evidence was available and nothing was cited');
+    // The answer was written, addressed the question and covered it. What is
+    // missing is the citing, and calling that a synthesis failure would send
+    // work at the part that did its job.
+    return done(RETRIEVAL_OUTCOME.CITATION_FAILURE, 'the complete answer contains no cited sentences');
   }
 
   if (supportedSentences < citedSentences) {
