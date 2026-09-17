@@ -271,7 +271,10 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
           refs: r.refs,
           supported: r.supported,
           best_score: r.best_score,
-          scored_against: r.scored_against.map((s) => ({ n: s.n, chars: s.chars, passages: s.passages.map((p) => p.slice(0, 1200)) })),
+          // Not truncated. Trimming a passage to twelve hundred characters can
+          // drop the sentence that produced the score, which makes the record
+          // unable to explain its own number.
+          scored_against: r.scored_against,
         })),
       },
       sources: {

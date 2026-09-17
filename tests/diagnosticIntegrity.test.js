@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
+import { acquireLock } from '../tools/diagnostic-lock.js';
 
 /**
  * Whether the measurements can be believed.
@@ -172,37 +173,103 @@ test('an in-process reader never sees a run another process wrote, which is why 
 
 /* --------------------------------------------------------------- the lock */
 
-test('a second diagnostic refuses to start while the first holds the lock', () => {
-  // Four of these once ran at once against one gateway and one run log. The
-  // report stalled and the rows it did produce described no single run.
+test('a second diagnostic cannot take a lock the first still holds', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-lock-'));
-  const lockFile = path.join(dir, '.grounding-diagnostic.lock');
-  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
-
-  assert.throws(
-    () => {
-      const fd = fs.openSync(lockFile, 'wx');
-      fs.closeSync(fd);
-    },
-    (err) => err.code === 'EEXIST',
-    'the second attempt cannot take a lock the first still holds',
-  );
+  const first = acquireLock(dir);
+  assert.throws(() => acquireLock(dir), /holds the lock/);
+  assert.equal(first.release(), true);
+  // And once released, the next one may have it.
+  const second = acquireLock(dir);
+  assert.ok(second.token);
+  second.release();
 });
 
-test('a lock left by a process that is gone does not block forever', () => {
-  // A crashed run must not require someone to find and delete a file.
+test('a lock left by a process that is gone is recovered', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-lock2-'));
-  const lockFile = path.join(dir, '.grounding-diagnostic.lock');
-  const deadPid = 999999;
-  fs.writeFileSync(lockFile, JSON.stringify({ pid: deadPid, started: new Date().toISOString() }));
+  fs.writeFileSync(path.join(dir, '.diagnostic.lock'), JSON.stringify({ pid: 999999, token: 'stale', started: 'earlier' }));
+  const lock = acquireLock(dir);
+  assert.ok(lock.token, 'a crashed run does not require someone to find and delete a file');
+  lock.release();
+});
 
-  let alive = true;
-  try {
-    process.kill(deadPid, 0);
-  } catch {
-    alive = false;
-  }
-  assert.equal(alive, false, 'the holder is gone');
-  fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
-  assert.equal(JSON.parse(fs.readFileSync(lockFile, 'utf8')).pid, process.pid, 'so the lock can be taken');
+test('only one of several processes recovers the same stale lock', async () => {
+  // The version this replaces checked for staleness and then overwrote, which
+  // is two steps with a gap: everyone finds the same dead lock, everyone
+  // decides to take it, everyone writes, and everyone believes they hold it.
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-lock3-'));
+  fs.writeFileSync(path.join(dir, '.diagnostic.lock'), JSON.stringify({ pid: 999999, token: 'stale', started: 'earlier' }));
+
+  const helper = path.resolve('tools/diagnostic-lock.js');
+  const contenders = await Promise.all(
+    Array.from({ length: 5 }, () =>
+      new Promise((resolve) => {
+        const child = spawn(
+          process.execPath,
+          ['--input-type=module', '-e', `import { acquireLock } from ${JSON.stringify(helper)};
+             try { const l = acquireLock(${JSON.stringify(dir)}); console.log('WON'); await new Promise(r => setTimeout(r, 150)); l.release(); }
+             catch { console.log('LOST'); }`],
+          { encoding: 'utf8' },
+        );
+        let out = '';
+        child.stdout.on('data', (d) => (out += d));
+        child.on('close', () => resolve(out.trim()));
+      }),
+    ),
+  );
+
+  assert.equal(contenders.filter((r) => r === 'WON').length, 1, `exactly one winner, got: ${contenders.join(', ')}`);
+});
+
+test('a late finisher does not delete a lock someone else now holds', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-lock4-'));
+  const first = acquireLock(dir);
+  first.release();
+  const second = acquireLock(dir);
+
+  // The first process, finishing late, tries to release again.
+  assert.equal(first.release(), false, 'it reports that the lock was not its to release');
+  assert.ok(fs.existsSync(path.join(dir, '.diagnostic.lock')), 'and the current holder still has it');
+  second.release();
+});
+
+/* ------------------------------------- the evidence behind a support score */
+
+test('supporting text in a later passage is preserved in the record', () => {
+  // The score is computed from the source's whole term set, so keeping only
+  // the first few passages can omit the very text that produced the number.
+  const filler = Array.from({ length: 5 }, (_, i) => `Section ${i} discusses unrelated preliminaries in some detail. `.repeat(12));
+  const buried = 'The reclaim daemon compacts partially filled extents once utilisation drops below the configured floor. '.repeat(6);
+  const ledger = ledgerWith([source(1, `${filler.join('\n\n')}\n\n${buried}`)]);
+
+  // publicSources deliberately carries a snippet rather than the full text;
+  // the passages are what scoring uses and what the record must keep.
+  const passages = ledger.sources[0].passages;
+  assert.ok(passages.length >= 3, `the source split into several passages (${passages.length})`);
+  assert.ok(
+    !passages.slice(0, 2).join(' ').includes('reclaim daemon compacts'),
+    'and the supporting text is not in the first couple of them',
+  );
+
+  const v = ledger.validate(
+    'The reclaim daemon compacts partially filled extents once utilisation drops below the configured floor [1].',
+  );
+  assert.equal(v.supported_sentences, 1, 'the sentence is supported by text late in the page');
+
+  const kept = v.sentence_results[0].scored_against[0].passages.join(' ');
+  assert.ok(kept.includes('reclaim daemon compacts partially filled extents'), 'and the supporting text is in the record');
+});
+
+test('support beyond 1,200 characters of a passage is preserved', () => {
+  // Truncating a passage for storage drops the sentence that produced the
+  // score, leaving a record that cannot explain its own number.
+  const lead = 'Preamble about configuration defaults and historical context. '.repeat(30);
+  const answerText = 'Checksums are verified on every read and a mismatch triggers an immediate repair from the mirror. ';
+  const ledger = ledgerWith([source(1, lead + answerText.repeat(4))]);
+
+  const v = ledger.validate('Checksums are verified on every read and a mismatch triggers an immediate repair from the mirror [1].');
+  assert.equal(v.supported_sentences, 1);
+
+  const kept = v.sentence_results[0].scored_against[0].passages.join(' ');
+  assert.ok(kept.length > 1200, `the record keeps more than a truncated window (${kept.length} chars)`);
+  assert.ok(kept.includes('triggers an immediate repair from the mirror'), 'including the supporting sentence');
 });

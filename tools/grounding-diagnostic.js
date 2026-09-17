@@ -3,6 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import dotenv from 'dotenv';
+import { acquireLock } from './diagnostic-lock.js';
 
 dotenv.config();
 
@@ -88,16 +89,42 @@ async function post(pathname, body, headers = {}) {
   return res.json();
 }
 
-/** Run one question and keep every frame that carries evidence. */
-async function ask(userId, query) {
-  const { threadId } = await post('/threads', {}, { 'x-user-id': userId });
-  const res = await fetch(new URL(`/threads/${threadId}/ask`, BASE), {
-    method: 'POST',
-    headers: { 'content-type': 'application/json', 'x-user-id': userId },
-    body: JSON.stringify({ query, depth: 'quick' }),
-  });
+/** Headers the agent expects when it is reached directly rather than through the gateway. */
+function agentHeaders(userId) {
+  return {
+    'content-type': 'application/json',
+    'x-user-id': userId,
+    ...(process.env.INTERNAL_TOKEN ? { 'x-internal-token': process.env.INTERNAL_TOKEN } : {}),
+  };
+}
 
-  const out = { query, answer: '', sources: [], citations: null, done: null, ttftMs: null };
+/**
+ * Ask through the agent's own API rather than the assignment's contract.
+ *
+ * The engine is the same one; what differs is the stream's vocabulary. The
+ * contract's six events carry no run identifier — its `answerId` must match
+ * `ans_…`, so a run id cannot travel there — while this one opens with
+ * `run_start`, which names the run. That matters because selecting "the latest
+ * run" is a guess, and a diagnostic that guesses which row it is explaining is
+ * not evidence of anything.
+ */
+async function ask(userId, query) {
+  const thread = await fetch(new URL('/v1/threads', AGENT), {
+    method: 'POST',
+    headers: agentHeaders(userId),
+    body: JSON.stringify({ title: query.slice(0, 60) }),
+  });
+  if (!thread.ok) throw new Error(`POST /v1/threads -> ${thread.status}`);
+  const { id: threadId } = await thread.json();
+
+  const res = await fetch(new URL('/v1/query', AGENT), {
+    method: 'POST',
+    headers: agentHeaders(userId),
+    body: JSON.stringify({ query, mode: 'quick', thread_id: threadId }),
+  });
+  if (!res.ok) throw new Error(`POST /v1/query -> ${res.status}`);
+
+  const out = { query, answer: '', sources: [], runId: null, ttftMs: null, done: null };
   const started = Date.now();
   let event = null;
   let buffer = '';
@@ -113,16 +140,37 @@ async function ask(userId, query) {
     for (const line of lines) {
       if (line.startsWith('event: ')) event = line.slice(7).trim();
       else if (line.startsWith('data: ')) {
-        const data = JSON.parse(line.slice(6));
-        if (event === 'sources') out.sources = data;
+        let data;
+        try {
+          data = JSON.parse(line.slice(6));
+        } catch {
+          continue;
+        }
+        if (event === 'run_start') out.runId = data.run_id ?? null;
+        else if (event === 'sources') out.sources = data.sources ?? [];
         else if (event === 'token') {
           if (out.ttftMs === null) out.ttftMs = Date.now() - started;
           out.answer += data.text ?? '';
-        } else if (event === 'done') out.done = data;
+        } else if (event === 'answer') out.answer = data.text ?? out.answer;
+        else if (event === 'done') out.done = data;
       }
     }
   }
+  if (!out.runId) throw new Error('the stream never named its run');
   return out;
+}
+
+/** The exact run, by id, with the identity that owns it. */
+async function fetchRun(userId, runId) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const res = await fetch(new URL(`/v1/runs/${encodeURIComponent(runId)}`, AGENT), { headers: agentHeaders(userId) });
+    if (res.ok) return res.json();
+    if (res.status !== 404) throw new Error(`GET /v1/runs/${runId} -> ${res.status}`);
+    // 404 while the write is still in flight; it is not awaited on the request
+    // path, deliberately, so that a reader is not kept waiting on bookkeeping.
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`run ${runId} was never persisted, after three seconds of waiting`);
 }
 
 /**
@@ -208,38 +256,6 @@ function factualSentences(answer) {
     .filter((s) => !/^\*?_?(?:research was cut short|the answer was cut short)/i.test(s));
 }
 
-/**
- * One diagnostic at a time.
- *
- * Four of these once ran concurrently against the same gateway and the same run
- * log, because each new attempt was started without stopping the last. They
- * interleaved, the report stalled, and the numbers it did produce described no
- * single run of anything. A lock is cheaper than working out afterwards which
- * process wrote which row.
- */
-function acquireLock(dir) {
-  const lockFile = path.join(dir, '.grounding-diagnostic.lock');
-  fs.mkdirSync(dir, { recursive: true });
-  try {
-    const fd = fs.openSync(lockFile, 'wx');
-    fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
-    fs.closeSync(fd);
-  } catch (err) {
-    if (err.code !== 'EEXIST') throw err;
-    const held = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
-    // A lock left behind by a process that is gone is not a lock.
-    let alive = true;
-    try {
-      process.kill(held.pid, 0);
-    } catch {
-      alive = false;
-    }
-    if (alive) throw new Error(`another diagnostic is running (pid ${held.pid}, since ${held.started})`);
-    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
-  }
-  return () => fs.rmSync(lockFile, { force: true });
-}
-
 async function main() {
   const commit = sha();
   if (dirty()) {
@@ -247,11 +263,11 @@ async function main() {
     process.exit(1);
   }
 
-  const release = acquireLock(OUT);
+  const lock = acquireLock(OUT, { name: '.grounding-diagnostic.lock' });
   try {
     await collectAll(commit);
   } finally {
-    release();
+    lock.release();
   }
 }
 
@@ -278,31 +294,7 @@ async function collectAll(commit) {
        * computes its own version of the number it is diagnosing can only
        * disagree with the system for reasons of its own making.
        */
-      /**
-       * Read the run over HTTP, from the process that wrote it.
-       *
-       * Importing the store into this process looked equivalent and is not: the
-       * JSON collection reads its file once at construction and holds the
-       * result, so a reader in another process sees the snapshot it started
-       * with and never anything written afterwards. Polling it harder cannot
-       * help. It happened to work here only because MONGODB_URI is set and
-       * Mongo is genuinely shared — which means the defect would have appeared
-       * the first time anyone ran this without a database, as a silent zero.
-       *
-       * The user id is fresh per question, so "the newest run for this user" is
-       * exactly this run rather than whichever finished last.
-       */
-      let record = null;
-      for (let attempt = 0; attempt < 12 && !record; attempt += 1) {
-        const res = await fetch(new URL(`/v1/runs?user_id=${encodeURIComponent(userId)}&limit=1`, AGENT));
-        if (res.ok) {
-          const body = await res.json();
-          record = body.items?.[0] ?? null;
-        }
-        if (!record) await new Promise((r) => setTimeout(r, 250));
-      }
-      if (!record) throw new Error('the run was never persisted, after three seconds of waiting');
-
+      const record = await fetchRun(userId, result.runId);
       const citations = record.citations ?? {};
 
       const factual = factualSentences(answer);

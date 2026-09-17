@@ -1,3 +1,17 @@
+> **SUPERSEDED — do not cite these numbers.**
+>
+> This report was produced by a diagnostic with four defects since repaired: it
+> scored against truncated snippets, it raced the run's persistence, four copies
+> ran concurrently against one store, and it divided supported sentences by a
+> count of distinct sources rather than of sentences.
+>
+> The pooled figure it printed is arithmetic on the wrong denominator and is
+> withdrawn. The only value here that came from the validator itself, and may be
+> quoted as *historical*, is a mean run grounding of **0.870** — measured before
+> the fetch-pool and cancellation work, and not a current result.
+>
+> Superseded by a run yet to be taken against a repaired diagnostic.
+
 # Grounding diagnostic
 
 - commit: `b77f77187c009d20149e8e2a46066fb14b4aedd5`

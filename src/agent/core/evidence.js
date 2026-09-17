@@ -292,10 +292,15 @@ export class EvidenceLedger {
         refs,
         supported,
         best_score: Number(best.toFixed(3)),
+        // Every passage, whole. The score is computed from the source's full
+        // term set, so keeping four of eight — or truncating one — can omit the
+        // very text that produced the number, and a classifier reading the
+        // remainder concludes the claim was unsupported when it was not.
+        // Bounded already: the chunker caps a source at eight passages.
         scored_against: refs
           .map((n) => this.sources.find((s) => s.n === n))
           .filter(Boolean)
-          .map((s) => ({ n: s.n, chars: s.passages.join(' ').length, passages: s.passages.slice(0, 4) })),
+          .map((s) => ({ n: s.n, chars: s.passages.join(' ').length, passages: s.passages })),
       });
     }
 
