@@ -39,8 +39,49 @@ ${renderMemoryBlock(memories)}`;
 /**
  * Synthesis phase. Evidence is fixed at this point; the model can only write
  * from it. Citation discipline is stated here and verified afterwards in code.
+ *
+ * The citation rules say two things this prompt did not used to say, and both
+ * came out of measuring a run rather than from taste.
+ *
+ * Granularity. "Every factual claim needs a citation" was read as "cite the
+ * paragraph": the opening sentence carried a marker and the three sentences
+ * continuing the same point carried none. Forty of the sixty-four uncited
+ * factual sentences in the e2e0e46 run were that shape, and every one of them
+ * was supported by a block the answer already had. So the rule now says
+ * explicitly that a citation does not carry over to the next sentence, and says
+ * it again for list items, which was the other half of the pattern.
+ *
+ * Placement. The prompt asked for bracketed numbers and never said where to put
+ * them, so answers differed: one trailed every marker after the full stop,
+ * another led every one. Both are readable and neither is wrong, but a measured
+ * system needs one canonical form — and the form to canonicalise is the one no
+ * parser can take apart. "Claim [1]." keeps the marker inside the sentence;
+ * "Claim. [1]" puts it outside, where a sentence splitter can and did detach it
+ * into a citation belonging to nothing.
+ *
+ * The rule that matters most is the one that resists the other three: do not
+ * add a marker merely to satisfy the rule. A prompt that demands a citation per
+ * sentence and stops there buys completeness with unsupported citations, which
+ * is a worse answer measuring better.
+ *
+ * Quick only for now. Deep keeps the prompt it was measured with, so the next
+ * comparison has one variable in it.
  */
-export function synthesisSystem({ mode, capped, capReason, budget, memories, evidenceCount, evidenceLimited, evidenceGaps }) {
+export function synthesisSystem({
+  mode,
+  capped,
+  capReason,
+  budget,
+  memories,
+  evidenceCount,
+  evidenceLimited,
+  evidenceGaps,
+  // Which citation contract to state. Not a feature flag: it exists so the
+  // change can be measured against the prompt it replaced, on the same saved
+  // evidence, instead of against a memory of how the old one behaved. Default
+  // is the contract in force.
+  contract = 'granular',
+}) {
   return `You are LUMINA, a research assistant that answers only from retrieved evidence. Today is ${today()}.
 
 You are given ${evidenceCount} numbered evidence blocks. Write the user's answer using only what is in them.
@@ -52,7 +93,15 @@ ${
 
 Citations:
 - Cite with bracketed numbers matching the evidence blocks: [1], [3], or [2, 5].
-- Every factual claim, number, date, name, and quotation needs a citation.
+- Every factual claim, number, date, name, and quotation needs a citation.${
+    mode === 'deep' || contract === 'legacy'
+      ? ''
+      : `
+- Put the marker inside the sentence it supports, just before the full stop: "Columnar formats compress better than row formats [1]." Never leave a marker standing on its own, and never start a sentence with one.
+- One marker per sentence. Every sentence stating a verifiable fact carries its own, including when the sentence before it cited the same block. A citation never carries over from one sentence to the next.
+- The same inside lists: each item carries its own marker. A cited line introducing a list does not cover the items under it.
+- Do not add a marker to a sentence merely to satisfy this rule. If no block supports the sentence, do not write the sentence.`
+  }
 - An answer drawn from evidence and carrying no bracketed number at all is wrong, whatever it says. If you used a block, cite it; if no block supports a sentence, do not write that sentence.
 - Cite the block you actually took the claim from. A citation that does not support its sentence is a failure, worse than no citation.
 - Never invent a citation number that is not in the evidence.

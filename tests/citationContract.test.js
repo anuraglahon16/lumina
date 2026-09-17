@@ -1,0 +1,206 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+
+/**
+ * The citation contract, stated in the prompt and measured in the validator.
+ *
+ * Two halves, and both have to hold or the change is not worth making. The
+ * prompt has to *say* the rule — that a citation does not carry over to the
+ * next sentence, and where the marker goes — because the previous prompt said
+ * neither, and forty of sixty-four uncited factual sentences in the e2e0e46 run
+ * were continuation sentences under a cited opener, every one of them supported
+ * by evidence the answer already had.
+ *
+ * And the validator has to *measure* an answer written that way as complete. A
+ * contract the measurement cannot see is a contract that cannot be verified,
+ * and asking a model to follow one is then just hoping.
+ *
+ * The shapes below are what answers actually look like: two sentences sharing a
+ * source, claims drawn from different sources, list stems and their items,
+ * paragraph boundaries, and the evidence-gap sentence that is supposed to carry
+ * no citation at all.
+ */
+
+process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-contract-'));
+process.env.MONGODB_URI = '';
+process.env.EMBEDDING_PROVIDER = 'local';
+
+const { synthesisSystem } = await import('../src/agent/core/prompts.js');
+const { EvidenceLedger, locateSentences } = await import('../src/agent/core/evidence.js');
+const { factualAudit } = await import('../tools/rescore-run.js');
+
+const quickPrompt = () =>
+  synthesisSystem({ mode: 'quick', capped: false, capReason: null, budget: {}, memories: [], evidenceCount: 2, evidenceLimited: false, evidenceGaps: '' });
+
+/* ------------------------------------------------------- the prompt says it */
+
+test('the prompt forbids a citation carrying over to the next sentence', () => {
+  const prompt = quickPrompt();
+  assert.match(prompt, /never carries over from one sentence to the next/i);
+  assert.match(prompt, /including when the sentence before it cited the same block/i);
+});
+
+test('the prompt names one canonical marker placement', () => {
+  const prompt = quickPrompt();
+  assert.match(prompt, /just before the full stop/i, 'it says where the marker goes');
+  assert.match(prompt, /row formats \[1\]\./, 'and shows the form rather than only describing it');
+  assert.match(prompt, /never leave a marker standing on its own/i);
+  assert.match(prompt, /never start a sentence with one/i);
+});
+
+test('the prompt extends the rule to list items', () => {
+  // The other half of the pattern: a cited stem followed by uncited bullets.
+  assert.match(quickPrompt(), /each item carries its own marker/i);
+  assert.match(quickPrompt(), /does not cover the items under it/i);
+});
+
+test('the prompt refuses citations added merely to satisfy the rule', () => {
+  // Without this, a per-sentence rule buys completeness with unsupported
+  // citations: a worse answer that measures better.
+  assert.match(quickPrompt(), /do not add a marker to a sentence merely to satisfy this rule/i);
+});
+
+test('the prompt still exempts evidence-gap disclosures', () => {
+  assert.match(quickPrompt(), /reporting that the evidence does not cover something carries no citation/i);
+});
+
+test('Deep keeps the prompt it was measured with', () => {
+  // One variable at a time. Deep's numbers came from the old contract, and
+  // changing both at once makes the next comparison uninterpretable.
+  const deep = synthesisSystem({ mode: 'deep', capped: false, capReason: null, budget: {}, memories: [], evidenceCount: 2, evidenceLimited: false, evidenceGaps: '' });
+  assert.ok(!/never carries over from one sentence to the next/i.test(deep), 'Deep does not get the granularity rule yet');
+  assert.match(deep, /Every factual claim, number, date, name, and quotation needs a citation/, 'but keeps the rule it had');
+});
+
+/* --------------------------------------------- the validator measures it */
+
+const page = (url, title, text) => ({ ok: true, url, title, text, fetched_at: new Date().toISOString() });
+
+function ledger() {
+  const l = new EvidenceLedger();
+  l.addWebSource(
+    page('https://a.test/columnar', 'Columnar', 'Columnar formats compress better than row formats because a column holds values of one type that repeat or change gradually. '.repeat(4)),
+  );
+  l.addWebSource(
+    page('https://b.test/rows', 'Rows', 'A row mixes different data types together and this heterogeneity means rows compress poorly in practice. '.repeat(4)),
+  );
+  return l;
+}
+
+const COL_A = 'Columnar formats compress better than row formats because a column holds values of one type';
+const COL_B = 'A column holds values of one type that repeat or change gradually';
+const ROW_A = 'A row mixes different data types together and this heterogeneity means rows compress poorly';
+
+/** Grounding and completeness for one answer, measured the way the run is. */
+function measure(answer) {
+  const l = ledger();
+  const validation = l.validate(answer);
+  const audit = factualAudit(answer, validation, l);
+  return {
+    cited: validation.cited_sentences,
+    supported: validation.supported_sentences,
+    orphans: validation.orphan_citations.length,
+    factual: audit.factual_sentences,
+    factualCited: audit.factual_sentences_cited,
+    completeness: audit.factual_sentences ? audit.factual_sentences_cited / audit.factual_sentences : null,
+  };
+}
+
+test('two factual sentences in one paragraph from the same source both count as cited', () => {
+  // The exact shape the old prompt produced half of. Under the contract both
+  // sentences carry the marker, and completeness has to see both.
+  const contract = measure(`${COL_A} [1]. ${COL_B} [1].`);
+  assert.equal(contract.factual, 2);
+  assert.equal(contract.factualCited, 2, 'both sentences are cited');
+  assert.equal(contract.completeness, 1);
+  assert.equal(contract.cited, 2, 'and both are scored');
+  assert.equal(contract.orphans, 0);
+
+  // What the old prompt produced instead, measured the same way.
+  const inherited = measure(`${COL_A} [1]. ${COL_B}.`);
+  assert.equal(inherited.factualCited, 1, 'the continuation sentence reads as uncited');
+  assert.equal(inherited.completeness, 0.5);
+});
+
+test('claims from different sources keep their own markers', () => {
+  const m = measure(`${COL_A} [1]. ${ROW_A} [2].`);
+  assert.equal(m.cited, 2);
+  assert.equal(m.supported, 2, 'each is scored against the source it names');
+  assert.equal(m.completeness, 1);
+
+  // And a marker pointing at the wrong source is still caught. This is the
+  // guard that stops the granularity rule being satisfied by guessing.
+  const wrong = ledger().validate(`${ROW_A} [1].`);
+  assert.equal(wrong.supported_sentences, 0, 'the row claim is not supported by the columnar source');
+});
+
+test('a list stem and its items each carry their own citation', () => {
+  const answer = `The evidence gives two reasons [1].\n- ${COL_B} [1].\n- ${ROW_A} [2].`;
+  const m = measure(answer);
+  assert.equal(m.orphans, 0);
+  assert.equal(m.factualCited, m.factual, 'no item is left uncited');
+
+  // The old shape: a cited stem covering uncited items.
+  const inherited = measure(`The evidence gives two reasons [1].\n- ${COL_B}.\n- ${ROW_A}.`);
+  assert.ok(inherited.factualCited < inherited.factual, 'the items read as uncited, which is the pattern being removed');
+});
+
+test('a citation at a paragraph boundary belongs to its own sentence', () => {
+  const m = measure(`${COL_A} [1].\n\n${ROW_A} [2].`);
+  assert.equal(m.orphans, 0, 'the canonical form cannot produce an orphan at a boundary');
+  assert.equal(m.cited, 2);
+  assert.equal(m.completeness, 1);
+
+  const sentences = locateSentences(`${COL_A} [1].\n\n${ROW_A} [2].`);
+  assert.equal(sentences.length, 2);
+  assert.ok(sentences.every((s) => !s.orphan));
+});
+
+test('an evidence-gap disclosure is uncited by design and not counted against completeness', () => {
+  // The prompt requires these to carry no citation. Counting them as uncited
+  // factual sentences marks the answer down for obeying its instructions.
+  const answer = `${COL_A} [1]. The sources do not say how the encoding is chosen.`;
+  const l = ledger();
+  const validation = l.validate(answer);
+  const audit = factualAudit(answer, validation, l);
+
+  const disclosure = audit.uncited_factual_sentences.find((s) => /do not say/.test(s.sentence));
+  assert.ok(disclosure, 'the disclosure is preserved');
+  assert.equal(disclosure.is_absence_disclosure, true, 'and recognised as one');
+  assert.equal(audit.factual_sentences_excluding_disclosures, audit.factual_sentences - 1, 'so it can leave the denominator');
+});
+
+test('the canonical form produces no standalone markers in any shape', () => {
+  const shapes = [
+    `${COL_A} [1].`,
+    `${COL_A} [1]. ${COL_B} [1].`,
+    `${COL_A} [1].\n\n${ROW_A} [2].`,
+    `- ${COL_B} [1].\n- ${ROW_A} [2].`,
+    `1. ${COL_B} [1].\n2. ${ROW_A} [2].`,
+    `## Heading\n\n${COL_A} [1, 2].`,
+    `${COL_A} [1]. The sources do not cover the encoding.`,
+  ];
+  for (const answer of shapes) {
+    const validation = ledger().validate(answer);
+    assert.equal(validation.orphan_citations.length, 0, `no orphan for: ${JSON.stringify(answer)}`);
+    assert.equal(validation.unscoreable_citations.length, 0, `nothing unscoreable for: ${JSON.stringify(answer)}`);
+    assert.equal(
+      validation.sentence_results.length,
+      validation.cited_sentences,
+      `every counted sentence recorded for: ${JSON.stringify(answer)}`,
+    );
+  }
+});
+
+test('a citation on a sentence the cited block does not support still fails', () => {
+  // The rule the granularity push must not be allowed to break. Completeness
+  // bought with unsupported citations is a worse answer measuring better.
+  const answer = `${COL_A} [1]. Columnar formats were first standardised by the international committee in 1994 [1].`;
+  const m = measure(answer);
+  assert.equal(m.cited, 2, 'both sentences are cited');
+  assert.equal(m.completeness, 1, 'and completeness is satisfied');
+  assert.equal(m.supported, 1, 'but grounding catches the invented one');
+});

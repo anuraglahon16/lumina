@@ -30,6 +30,9 @@ export async function synthesizeAnswer({
   ceilingMs,
   // Injected so an orchestration test can run without a provider.
   streamComplete: streamFn = streamComplete,
+  // Which citation contract the prompt states. Threaded through so the A/B
+  // harness can drive both on identical evidence; production never sets it.
+  contract,
 }) {
   const sources = ledger.publicSources();
   emit?.('sources', {
@@ -48,6 +51,7 @@ export async function synthesizeAnswer({
     evidenceGaps,
     memories,
     evidenceCount: sources.length,
+    ...(contract ? { contract } : {}),
   });
 
   const userMessage = buildSynthesisUserMessage({
