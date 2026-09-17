@@ -25,7 +25,22 @@ const log = createLogger('deep');
  * its own prompts, and its own phases; Quick can never turn into it and it can
  * never silently degrade into Quick.
  */
-export async function runDeepQuery({ query, userId, threadId, requestId, emit, signal }) {
+export async function runDeepQuery({
+  query,
+  userId,
+  threadId,
+  requestId,
+  emit,
+  signal,
+  // Injected the way the research loop's are, and for the same reason: the
+  // orchestration here — does it plan before retrieving, does every branch get
+  // its own budget, is one branch's failure survivable — is the part that broke
+  // in practice, and none of it is about what a model actually says. Without a
+  // seam the only way to exercise this function is a live run, which is how a
+  // `budget is not defined` reached a benchmark with the suite green.
+  complete: completeFn = complete,
+  executor,
+} = {}) {
   const limits = config.budgets.deep;
   const deadline = Date.now() + limits.wallClockMs;
   const ledger = new EvidenceLedger();
@@ -55,13 +70,15 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
 
     // ---- plan -------------------------------------------------------------
     recorder.startPhase('plan');
-    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal });
+    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn });
     recorder.endPhase('plan', { sub_questions: plan.sub_questions.length });
     emit('plan', plan);
 
     // ---- parallel branch research ----------------------------------------
     recorder.startPhase('research');
     const branchResults = await runBranches({
+      complete: completeFn,
+      executor,
       plan,
       ledger,
       recorder,
@@ -119,6 +136,7 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
       effort: limits.effort,
       ceilingMs: limits.synthesisCeilingMs,
       signal,
+      ...(completeFn ? { streamComplete: completeFn } : {}),
     });
 
     await appendMessage(thread.id, {
@@ -192,20 +210,20 @@ export async function runDeepQuery({ query, userId, threadId, requestId, emit, s
   }
 }
 
-async function buildPlan({ query, history, memories, recorder, deadline, signal }) {
+async function buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn = complete }) {
   // Planning is inside the run's wall clock like everything else. Deep mode
   // tracks that clock as an absolute deadline rather than a Budget, because its
   // limits are per branch; the bound is the same one either way.
   const bound = deadlineSignal(deadline - Date.now(), signal);
   try {
-    return await planCall({ query, history, memories, recorder, signal: bound.signal });
+    return await planCall({ query, history, memories, recorder, signal: bound.signal, complete: completeFn });
   } finally {
     bound.release();
   }
 }
 
-async function planCall({ query, history, memories, recorder, signal }) {
-  const message = await complete({
+async function planCall({ query, history, memories, recorder, signal, complete: completeFn = complete }) {
+  const message = await completeFn({
     purpose: 'plan',
     recorder,
     signal,
@@ -253,7 +271,7 @@ async function planCall({ query, history, memories, recorder, signal }) {
 }
 
 /** Research every sub-question, at most `branchConcurrency` at a time. */
-async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal }) {
+async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor }) {
   const queue = [...plan.sub_questions];
   const results = [];
 
@@ -276,7 +294,28 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
         return;
       }
       const sub = queue.shift();
-      results.push(await runBranch(sub));
+      // A branch is one sub-question, researched against the live web by a
+      // model that can fail. Three of them run at once, so one failing is the
+      // ordinary case rather than the exceptional one, and letting it reject
+      // would throw away everything the other branches had already found and
+      // paid for. The failure is recorded as this branch's result, the merged
+      // answer is written from what survived, and the run says which part it
+      // could not cover.
+      try {
+        results.push(await runBranch(sub));
+      } catch (err) {
+        log.warn('branch_failed', { run_id: runId, branch: sub.id, err: err.message });
+        recorder.recordError(`branch:${sub.id}`, err);
+        emit('branch_done', { id: sub.id, question: sub.question, sources: 0, capped: true, termination_reason: 'error', summary: `Not researched: ${err.message}`, budget: null });
+        results.push({
+          id: sub.id,
+          question: sub.question,
+          summary: `Not researched: this sub-question failed (${err.message}).`,
+          capped: true,
+          source_count: 0,
+          budget: { capped: 'error', used: {}, limits: {} },
+        });
+      }
     }
   };
 
@@ -297,6 +336,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
     emit('branch_start', { id: sub.id, question: sub.question, why: sub.why, budget: branchBudget.snapshot() });
 
     const result = await runResearchLoop({
+      ...(completeFn ? { complete: completeFn } : {}),
+      ...(executor ? { executor } : {}),
       system: branchSystem({ subQuestion: sub.question, budget: limits, hasDocuments }),
       userMessage: [
         `<sub_question>${sub.question}</sub_question>`,
