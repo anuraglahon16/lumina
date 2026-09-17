@@ -26,10 +26,19 @@ const log = createLogger('retrieve');
  * fetched and read, exactly as before; search results are still leads.
  */
 
-/** Emit a trace step in the shape the contract expects of a tool call. */
-function trace(emit, { tool, input, ok, ms, reason, error }) {
+/**
+ * Record a retrieval step, to the stream and to the run log both.
+ *
+ * Retrieval performed by the harness is still retrieval: it has to appear in
+ * the trace the reader sees and in the log the evaluation reads. Emitting only
+ * to the stream left run records showing an answer with no tool calls at all,
+ * which reads as a model answering from memory — the precise thing this system
+ * exists to make impossible.
+ */
+function trace(emit, recorder, { tool, input, ok, ms, reason, error, cached = false }) {
   emit?.('tool_call', { tool, input });
-  emit?.('tool_result', { tool, ok, duration_ms: ms, summary: reason, detail: error, cached: false });
+  emit?.('tool_result', { tool, ok, duration_ms: ms, summary: reason, detail: error, cached });
+  recorder?.recordToolCall({ name: tool, input, durationMs: ms, ok, summary: reason, error, cached });
 }
 
 /**
@@ -94,7 +103,7 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
     const found = await webSearch(searchQuery, { recorder, signal });
     results = found.results || [];
     ledger.noteCandidates(results);
-    trace(emit, {
+    trace(emit, recorder, {
       tool: 'web_search',
       input: { query: searchQuery },
       ok: true,
@@ -102,7 +111,7 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
       reason: `${results.length} results`,
     });
   } catch (err) {
-    trace(emit, { tool: 'web_search', input: { query: searchQuery }, ok: false, ms: Math.round(performance.now() - t0), error: err.message });
+    trace(emit, recorder, { tool: 'web_search', input: { query: searchQuery }, ok: false, ms: Math.round(performance.now() - t0), error: err.message });
     log.warn('deterministic_search_failed', { err: err.message });
     return { searched: true, coverage: assessCoverage(query, ledger.citable), reason: err.message };
   }
@@ -124,11 +133,11 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
     const ms = Math.round(performance.now() - started);
     if (page?.ok && page.text) {
       ledger.addWebSource(page, { query: searchQuery });
-      trace(emit, { tool: 'fetch_page', input: { url: pick.url }, ok: true, ms, reason: `read ${page.text.length} characters` });
+      trace(emit, recorder, { tool: 'fetch_page', input: { url: pick.url }, ok: true, ms, reason: `read ${page.text.length} characters` });
     } else {
       // A fetch that yielded nothing bought no evidence, so it returns its slot.
       budget.refund?.('fetch_page', page?.error || 'no readable text');
-      trace(emit, { tool: 'fetch_page', input: { url: pick.url }, ok: false, ms, error: page?.error || 'no readable text' });
+      trace(emit, recorder, { tool: 'fetch_page', input: { url: pick.url }, ok: false, ms, error: page?.error || 'no readable text' });
     }
   }
 
@@ -152,7 +161,7 @@ export async function gatherFromDocuments({ query, ledger, budget, recorder, emi
     try {
       const { results } = await searchChunks(q, { userId, spaceId, recorder, signal });
       for (const chunk of results) ledger.addDocumentSource(chunk);
-      trace(emit, {
+      trace(emit, recorder, {
         tool: 'search_documents',
         input: { query: q },
         ok: true,
@@ -161,7 +170,7 @@ export async function gatherFromDocuments({ query, ledger, budget, recorder, emi
       });
       return results;
     } catch (err) {
-      trace(emit, { tool: 'search_documents', input: { query: q }, ok: false, ms: Math.round(performance.now() - t0), error: err.message });
+      trace(emit, recorder, { tool: 'search_documents', input: { query: q }, ok: false, ms: Math.round(performance.now() - t0), error: err.message });
       return [];
     }
   };

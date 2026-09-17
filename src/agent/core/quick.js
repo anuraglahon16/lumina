@@ -90,6 +90,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     let rewritten = false;
 
     if (route.kind === QUESTION_KIND.CONTEXTUAL_FOLLOW_UP) {
+      recorder.startPhase('rewrite');
       // "why?" cannot be searched. One small model call turns it back into a
       // question that can be, which is the only place in this path where a
       // model is needed before retrieval — and it is needed, because the
@@ -100,6 +101,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         rewritten = true;
         emit('query_rewritten', { from: query, to: standalone });
       }
+      recorder.endPhase('rewrite', { rewritten: Boolean(standalone && standalone !== query) });
     }
 
     const gathered =

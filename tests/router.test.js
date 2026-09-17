@@ -187,14 +187,39 @@ test('a question about now is not answered from years ago', () => {
   assert.match(c.reasons.join(' '), /predate/);
 });
 
-test('undated evidence does not fail a time-sensitive question on its own', () => {
-  // Most pages carry no date. Treating undated as stale would send every
-  // current-events question into an extra research round for nothing.
+test('undated evidence does not satisfy a question about now', () => {
+  // Absence of a date is absence of evidence about recency, not evidence of
+  // recency. Two undated pages could settle "the latest release" while being
+  // years old, and nothing in the answer would say so.
   const c = assessCoverage('what is the latest postgresql release right now', [
     webSource({ url: 'https://one.example/a' }),
     webSource({ url: 'https://two.example/b' }),
   ]);
-  assert.equal(c.freshEnough, true);
+  assert.equal(c.timeSensitive, true);
+  assert.equal(c.freshEnough, false);
+  assert.equal(c.ok, false, 'so the loop goes looking for something dated');
+  assert.match(c.reasons.join(' '), /carries a date/);
+});
+
+test('one dated recent source satisfies a question about now', () => {
+  const fresh = new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString();
+  const covering = { snippet: 'PostgreSQL vacuum throughput improvements shipped in the newest release.', passages: ['PostgreSQL vacuum throughput improvements shipped in the newest release. '.repeat(6)] };
+  const c = assessCoverage('what is the newest postgresql vacuum throughput improvement', [
+    webSource({ url: 'https://one.example/a', published_at: fresh, ...covering }),
+    webSource({ url: 'https://two.example/b', ...covering }),
+  ]);
+  assert.equal(c.timeSensitive, true);
+  assert.equal(c.freshEnough, true, 'one dated source inside the window is enough');
+  assert.equal(c.ok, true, c.reasons.join('; '));
+});
+
+test('a question with no time pressure is not asked for dates at all', () => {
+  const c = assessCoverage('postgresql vacuum improvements release', [
+    webSource({ url: 'https://one.example/a' }),
+    webSource({ url: 'https://two.example/b' }),
+  ]);
+  assert.equal(c.timeSensitive, false);
+  assert.equal(c.ok, true, c.reasons.join('; '));
 });
 
 test('a source with almost no text does not count as read', () => {
@@ -210,5 +235,54 @@ test('a document source counts as its own publisher', () => {
     { type: 'doc', doc_id: 'd1', title: 'ledger.pdf', snippet: 'The append only ledger is reconciled against the settlement file. '.repeat(4), passages: [] },
   ]);
   assert.ok(c.publishers >= 1);
-  assert.equal(c.primaries, 1, 'an uploaded document is first-hand');
+  assert.equal(c.nonAggregators, 1, 'an uploaded document is not an aggregator');
+});
+
+/* ------------------------------------------------- short, but self-contained */
+
+test('a short question that names its subject is not a follow-up', () => {
+  // Shortness alone is not a continuation. These need nothing from the
+  // conversation, and routing them through a rewrite costs a model call to
+  // reproduce the question that was already asked.
+  for (const q of ['PostgreSQL 18 release date?', 'Claude pricing today?', 'Vercel timeout limits?', 'HTTP/3 vs QUIC?']) {
+    assert.equal(classify(q, { threadTurns: 8 }), QUESTION_KIND.STANDALONE_WEB, q);
+  }
+});
+
+test('a short question naming nothing is still a follow-up', () => {
+  for (const q of ['why?', 'and the cost?', 'how much', 'what about that']) {
+    assert.equal(classify(q, { threadTurns: 8 }), QUESTION_KIND.CONTEXTUAL_FOLLOW_UP, q);
+  }
+});
+
+/* ----------------------------------------------- publishers and public suffixes */
+
+test('unrelated sites under a multi-part suffix are separate publishers', () => {
+  // The hostname shortcut reduced both of these to "co.uk" and counted two
+  // unrelated newspapers as one witness — understating corroboration exactly
+  // where a question is most likely to be contested.
+  const c = assessCoverage('postgresql 17 release vacuum improvements', [
+    webSource({ url: 'https://www.bbc.co.uk/news/one' }),
+    webSource({ url: 'https://www.theguardian.co.uk/tech/two' }),
+  ]);
+  assert.equal(c.publishers, 2);
+});
+
+test('subdomains of one site under a multi-part suffix are still one publisher', () => {
+  const c = assessCoverage('postgresql 17 release vacuum improvements', [
+    webSource({ url: 'https://www.bbc.co.uk/news/one' }),
+    webSource({ url: 'https://news.bbc.co.uk/tech/two' }),
+  ]);
+  assert.equal(c.publishers, 1);
+});
+
+test('coverage reports aggregator status, and does not claim to judge authority', () => {
+  // The field is named for what the check measures. An SEO blog passes it, and
+  // calling that "primary evidence" would be a claim the check cannot support.
+  const c = assessCoverage('postgresql 17 release vacuum improvements', [
+    webSource({ url: 'https://one.example/a' }),
+    webSource({ url: 'https://two.example/b' }),
+  ]);
+  assert.equal(typeof c.nonAggregators, 'number');
+  assert.equal(c.primaries, undefined, 'nothing here claims to have found a primary source');
 });

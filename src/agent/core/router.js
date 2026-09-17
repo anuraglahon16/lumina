@@ -57,14 +57,24 @@ const words = (text) => String(text ?? '').trim().split(/\s+/).filter(Boolean);
  * rewrite would otherwise have to supply.
  */
 function namesItsOwnSubject(query) {
-  const rest = words(query).slice(1).join(' ');
+  const all = words(query);
+  // The first word is skipped only when it is the sort of word that gets
+  // capitalised for being first. A question opening with a real name — which
+  // is most short standalone questions — still names its subject.
+  const rest = all.slice(1).join(' ');
+  const firstIsName = all.length > 0 && /^[A-Z][a-zA-Z]{2,}/.test(all[0]) && !OPENER_WORD.test(all[0]);
   return (
+    firstIsName ||
     /[A-Z][a-zA-Z]{2,}/.test(rest) ||
     /\d/.test(query) ||
     /[a-z]+[-.][a-z]+/i.test(query) ||
     /["'][^"']{4,}["']/.test(query)
   );
 }
+
+/** Words that begin a sentence without naming anything. */
+const OPENER_WORD =
+  /^(?:what|why|how|when|where|who|which|is|are|was|were|do|does|did|can|could|should|would|will|and|but|so|also|then|ok|okay|yes|no|the|a|an|tell|give|explain|compare|list|show|any|more|about)$/i;
 
 /**
  * Classify a request.
@@ -94,9 +104,15 @@ export function classifyQuestion({ query, mode = 'auto', spaceId = null, hasDocu
     if (EXPLICIT_BACKREFERENCE.test(text)) {
       return reason(QUESTION_KIND.CONTEXTUAL_FOLLOW_UP, 'it refers to the conversation directly');
     }
+    // Shortness alone is not a continuation. "PostgreSQL 18 release date?" is
+    // four words and needs nothing from the conversation, while "why?" is one
+    // word and needs all of it. What separates them is whether the question
+    // names what it is about, so that test comes first — the earlier ordering
+    // sent every short question down the slow path and contradicted the rule
+    // stated two lines below it.
     const n = words(text).length;
-    if (n <= 4) {
-      return reason(QUESTION_KIND.CONTEXTUAL_FOLLOW_UP, 'too short to stand on its own');
+    if (n <= 4 && !namesItsOwnSubject(text)) {
+      return reason(QUESTION_KIND.CONTEXTUAL_FOLLOW_UP, 'too short to stand on its own, and it names no subject');
     }
     if (REFERENTIAL_OPENER.test(text) && !namesItsOwnSubject(text)) {
       return reason(QUESTION_KIND.CONTEXTUAL_FOLLOW_UP, 'it opens as a continuation and names no subject of its own');

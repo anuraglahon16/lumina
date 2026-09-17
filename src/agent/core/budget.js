@@ -33,6 +33,12 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
     else outer.addEventListener('abort', forward, { once: true });
   }
 
+  // However this cancellation ends, the timer has no further work. Without
+  // this it survives its own signal: a caller aborting after a hundred
+  // milliseconds left a sixty second timer pending, which holds the event loop
+  // open and made the test suite take a minute to exit after it had finished.
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
+
   return {
     signal: controller.signal,
     release: () => {
