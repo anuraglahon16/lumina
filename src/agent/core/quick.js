@@ -4,6 +4,7 @@ import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
 import { classifyQuestion, QUESTION_KIND } from './router.js';
 import { gatherFromWeb, gatherFromDocuments, rescueRetrieval, QUICK_PAGES } from './retrieve.js';
+import { createFunnel } from './funnel.js';
 import { rewriteFollowUp } from './rewrite.js';
 import { synthesizeAnswer } from './synthesize.js';
 import { extractMemories } from './memoryExtractor.js';
@@ -79,6 +80,9 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       hasDocuments: docs.indexed > 0,
       threadTurns: history.length,
     });
+    // Null unless DIAGNOSTIC_TRACE is on, and every call on it is guarded, so a
+    // production run carries nothing extra.
+    const funnel = createFunnel({ question: query });
     emit('route', { kind: route.kind, reason: route.reason });
     recorder.set({ route: route.kind });
 
@@ -97,6 +101,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       if (standalone && standalone !== query) {
         searchQuery = standalone;
         rewritten = true;
+        funnel?.rewrote(standalone);
         emit('query_rewritten', { from: query, to: standalone });
       }
       recorder.endPhase('rewrite', { rewritten: Boolean(standalone && standalone !== query) });
@@ -107,7 +112,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         ? await gatherFromDocuments({ query: searchQuery, ledger, budget, recorder, emit, userId, spaceId, signal })
         : route.kind === QUESTION_KIND.MEMORY_INSTRUCTION
           ? { searched: false, coverage: { ok: true, reasons: [] } }
-          : await gatherFromWeb({ query: searchQuery, ledger, budget, recorder, emit, signal, pages: QUICK_PAGES() });
+          : await gatherFromWeb({ query: searchQuery, ledger, budget, recorder, emit, signal, pages: QUICK_PAGES(), funnel });
 
     recorder.endPhase('retrieval', {
       route: route.kind,
@@ -153,6 +158,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         spaceId,
         signal,
         candidates: gathered.candidates || [],
+        funnel,
       });
       coverage = rescue.coverage;
       rescued = true;
@@ -243,7 +249,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
 
     const terminationReason = truncated ? 'max_tokens' : research.termination_reason;
     // Set before finish(): finish() is what persists the record.
-    recorder.set({ budget: budget.snapshot() });
+    recorder.set({ budget: budget.snapshot(), ...(funnel ? { funnel: funnel.toJSON() } : {}) });
     const run = recorder.finish({
       status: 'ok',
       terminationReason,

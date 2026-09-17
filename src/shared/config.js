@@ -156,6 +156,18 @@ export const config = {
 
   // Hard execution limits. Quick mode is deliberately small and must report
   // honestly when it hits a cap; Deep Search gets its own, larger envelope.
+  /**
+   * Observation, off by default.
+   *
+   * With it off a run behaves exactly as it did and its record carries nothing
+   * extra. With it on, the retrieval path keeps what it already has in memory:
+   * no additional searches, fetches or model calls are made for the sake of
+   * looking at them.
+   */
+  diagnostics: {
+    trace: bool(process.env.DIAGNOSTIC_TRACE, false),
+  },
+
   budgets: {
     quick: {
       maxIterations: num(process.env.QUICK_MAX_ITERATIONS, 4),

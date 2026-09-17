@@ -5,6 +5,7 @@ import { fetchPage } from '../services/fetcher.js';
 import { searchChunks } from '../services/ragStore.js';
 import { assessCoverage } from './coverage.js';
 import { deadlineSignal, abortReason } from './budget.js';
+// Recording only; null whenever tracing is off, and every call below is guarded.
 
 const log = createLogger('retrieve');
 
@@ -105,6 +106,7 @@ export async function gatherFromWeb({
   // whether the losers are cancelled — none of which is about the network.
   webSearch: searchFn = webSearch,
   fetchPage: fetchFn = fetchPage,
+  funnel = null,
 }) {
   const searchQuery = searchQueryFor(query);
   const allowed = budget.allows('web_search');
@@ -117,6 +119,13 @@ export async function gatherFromWeb({
     const found = await searchFn(searchQuery, { recorder, signal });
     results = found.results || [];
     ledger.noteCandidates(results);
+    funnel?.search({
+      query: searchQuery,
+      provider: found.provider ?? null,
+      cached: Boolean(found.cached),
+      durationMs: Math.round(performance.now() - t0),
+      results,
+    });
     trace(emit, recorder, {
       tool: 'web_search',
       input: { query: searchQuery },
@@ -127,11 +136,13 @@ export async function gatherFromWeb({
     });
   } catch (err) {
     trace(emit, recorder, { tool: 'web_search', input: { query: searchQuery }, ok: false, ms: Math.round(performance.now() - t0), error: err.message });
+    funnel?.search({ query: searchQuery, durationMs: Math.round(performance.now() - t0), results: [], error: err.message });
     log.warn('deterministic_search_failed', { err: err.message });
     return { searched: true, coverage: assessCoverage(query, ledger.citable), reason: err.message };
   }
 
   const coverage = await fetchUntilCovered({
+    funnel,
     fetchPage: fetchFn,
     query,
     searchQuery,
@@ -163,7 +174,7 @@ export async function gatherFromWeb({
  *
  * It remains one search and one retrieval phase. Nothing here consults a model.
  */
-async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budget, recorder, emit, signal, target, deadlineMs, fetchPage: fetchFn = fetchPage }) {
+async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budget, recorder, emit, signal, target, deadlineMs, fetchPage: fetchFn = fetchPage, funnel = null }) {
   /**
    * The pool's own cancellation, not merely its own deadline.
    *
@@ -192,6 +203,7 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     if (!budget.allows('fetch_page').ok) return;
     attempted.add(candidate.url);
     ledger.attempted?.add(candidate.url);
+    funnel?.attempted(candidate.url);
     budget.consume('fetch_page');
     const began = performance.now();
     const promise = fetchFn(candidate.url, { recorder, signal: pool.signal })
@@ -212,6 +224,18 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
       inFlight.delete(candidate.url);
 
       const readable = page?.ok && (page.text?.length ?? 0) >= config.budgets.quick.minPageChars;
+      funnel?.fetched(candidate.url, {
+        // A cancellation is not a failure. The pool aborts its losers on every
+        // successful run, and counting those would make a healthy system look
+        // like one whose fetches mostly fail.
+        status: page?.aborted ? 'cancelled' : readable ? 'usable' : page?.ok ? 'too_thin' : 'failed',
+        httpStatus: page?.status ?? null,
+        durationMs: page?.duration_ms ?? waited,
+        chars: page?.text?.length ?? 0,
+        selected: Boolean(readable),
+        reason: readable ? 'usable_text' : page?.aborted ? 'cancelled' : page?.error || 'insufficient text',
+      });
+
       if (readable) {
         ledger.addWebSource(page, { query: searchQuery });
         usable += 1;
@@ -235,13 +259,21 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
 
       if (readable) {
         coverage = assessCoverage(query, ledger.citable);
-        if (coverage.ok && usable >= Math.min(target, 1)) break;
+        funnel?.coverage({ afterUrl: candidate.url, sufficient: coverage.ok, reasons: coverage.reasons });
+        if (coverage.ok && usable >= Math.min(target, 1)) {
+          funnel?.stopped('coverage_sufficient');
+          break;
+        }
       }
 
-      if (bound.signal.aborted) break;
+      if (bound.signal.aborted) {
+        funnel?.stopped('deadline_or_cancelled');
+        break;
+      }
       // Replace what did not work with a lead not yet tried.
       if (inFlight.size + usable < target + 1) start(queue.shift(), attempted.size + 1);
     }
+    funnel?.stopped(funnel.stop_reason ?? (queue.length ? 'budget_exhausted' : 'candidates_exhausted'));
   } finally {
     // Whatever is still running is no longer wanted. Aborting stops the work;
     // settling it before returning is what guarantees nothing lands afterwards
@@ -318,7 +350,7 @@ export const QUICK_PAGES = () => config.budgets.quick.deterministicPages ?? 2;
  *
  * It is one more bounded attempt, not a loop, and no model is consulted.
  */
-export async function rescueRetrieval({ query, route, ledger, budget, recorder, emit, userId, spaceId, signal, candidates = [], webSearch: searchFn, fetchPage: fetchFn }) {
+export async function rescueRetrieval({ query, route, ledger, budget, recorder, emit, userId, spaceId, signal, candidates = [], webSearch: searchFn, fetchPage: fetchFn, funnel = null }) {
   const bound = deadlineSignal(config.budgets.quick.rescueCeilingMs, signal);
   try {
     if (route === 'documents') {
@@ -329,6 +361,7 @@ export async function rescueRetrieval({ query, route, ledger, budget, recorder, 
     const untried = choosePages(candidates, { limit: 8 }).filter((c) => !ledger.byUrl?.has(c.url) && !triedUrls(ledger).has(c.url));
     if (untried.length) {
       const coverage = await fetchUntilCovered({
+        funnel,
         fetchPage: fetchFn,
         query,
         searchQuery: searchQueryFor(query),
@@ -346,6 +379,7 @@ export async function rescueRetrieval({ query, route, ledger, budget, recorder, 
 
     // Nothing left to try, so a different search is the only move available.
     return await gatherFromWeb({
+      funnel,
       webSearch: searchFn,
       fetchPage: fetchFn,
       query: contentTerms(query),

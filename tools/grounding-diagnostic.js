@@ -5,6 +5,7 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { acquireLock } from './diagnostic-lock.js';
+import { classifyRetrieval } from '../src/agent/core/funnel.js';
 
 dotenv.config();
 
@@ -331,6 +332,18 @@ async function collectAll(commit) {
             scored_against: r.scored_against,
             ...classify({ sentence: r.sentence, refs: r.refs, scoredAgainst: r.scored_against, sources, support: r.best_score }),
           })),
+        // The whole path, when tracing was on: every candidate, what was tried,
+        // what came back, and where it stopped. Kept raw so every classification
+        // below can be read against the rows that produced it.
+        funnel: record.funnel ?? null,
+        retrieval_outcome: classifyRetrieval(
+          record.funnel ? { candidates: (record.funnel.searches ?? []).flatMap((x) => x.results ?? []) } : null,
+          {
+            citedSentences: citations.cited_sentences ?? 0,
+            supportedSentences: citations.supported_sentences ?? 0,
+            evidenceCount: record.sources?.fetched ?? 0,
+          },
+        ),
         sources_fetched: record.sources?.fetched ?? null,
         warnings: (record.warnings ?? []).map((x) => x.code),
         /**
@@ -430,6 +443,23 @@ function render({ commit, ran_at, node, health, runs }) {
   A('perfectly as equal to a run that cited twenty. Completeness is separate');
   A('again, and it is the one that catches a system scoring 1.00 grounding by');
   A('citing a single safe sentence and leaving everything else uncited.\n');
+
+  A('## Where retrieval ended up\n');
+  const outcomes = {};
+  for (const r of ok) {
+    const key = r.retrieval_outcome?.primary ?? 'unclassified';
+    outcomes[key] = (outcomes[key] ?? 0) + 1;
+  }
+  A('| outcome | runs |');
+  A('|---|---:|');
+  for (const [k, v] of Object.entries(outcomes).sort((a, b) => b[1] - a[1])) A(`| ${k} | ${v} |`);
+  A(`| **total** | **${ok.length}** |`);
+  A('');
+  A('One outcome per run, by precedence, so the totals add up. Rows marked');
+  A('provisional rest on a relevance judgement the scorer cannot make reliably;');
+  A('the candidates, titles and snippets behind each are in the JSON and the');
+  A('ambiguous ones want reading rather than trusting.');
+  A('');
 
   A('## Why cited sentences failed\n');
   if (!Object.keys(categories).length) A('No weak citations in this run.\n');
