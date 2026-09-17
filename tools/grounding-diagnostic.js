@@ -39,6 +39,10 @@ const flag = (name, fallback) => {
 };
 
 const BASE = process.env.DIAG_BASE || 'http://localhost:8787';
+// The agent, directly. Run records are observability rather than product, they
+// are not part of the assignment's contract, and reading them over loopback is
+// what makes this diagnostic see writes from the process that made them.
+const AGENT = process.env.DIAG_AGENT || 'http://localhost:8000';
 const OUT = flag('out', 'reports');
 const LIMIT = Number(flag('queries', 20));
 
@@ -129,8 +133,12 @@ async function ask(userId, query) {
  * a real answer and more useful than a confident wrong label, because the whole
  * point of this file is that someone can read the sentence and decide.
  */
-function classify({ sentence, refs, sources, support }) {
-  const cited = refs.map((n) => sources.find((s) => s.n === n)).filter(Boolean);
+function classify({ sentence, refs, scoredAgainst, sources, support }) {
+  // The passages the validator used, falling back to the stream's sources only
+  // when a run predates their being recorded.
+  const cited = (scoredAgainst ?? []).length
+    ? scoredAgainst.map((s) => ({ n: s.n, snippet: '', passages: s.passages ?? [] }))
+    : refs.map((n) => sources.find((s) => s.n === n)).filter(Boolean);
   if (!cited.length) return { category: 'wrong_citation', note: 'the cited number matches no source in this run' };
 
   const words = (t) =>
@@ -200,6 +208,38 @@ function factualSentences(answer) {
     .filter((s) => !/^\*?_?(?:research was cut short|the answer was cut short)/i.test(s));
 }
 
+/**
+ * One diagnostic at a time.
+ *
+ * Four of these once ran concurrently against the same gateway and the same run
+ * log, because each new attempt was started without stopping the last. They
+ * interleaved, the report stalled, and the numbers it did produce described no
+ * single run of anything. A lock is cheaper than working out afterwards which
+ * process wrote which row.
+ */
+function acquireLock(dir) {
+  const lockFile = path.join(dir, '.grounding-diagnostic.lock');
+  fs.mkdirSync(dir, { recursive: true });
+  try {
+    const fd = fs.openSync(lockFile, 'wx');
+    fs.writeFileSync(fd, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
+    fs.closeSync(fd);
+  } catch (err) {
+    if (err.code !== 'EEXIST') throw err;
+    const held = JSON.parse(fs.readFileSync(lockFile, 'utf8'));
+    // A lock left behind by a process that is gone is not a lock.
+    let alive = true;
+    try {
+      process.kill(held.pid, 0);
+    } catch {
+      alive = false;
+    }
+    if (alive) throw new Error(`another diagnostic is running (pid ${held.pid}, since ${held.started})`);
+    fs.writeFileSync(lockFile, JSON.stringify({ pid: process.pid, started: new Date().toISOString() }));
+  }
+  return () => fs.rmSync(lockFile, { force: true });
+}
+
 async function main() {
   const commit = sha();
   if (dirty()) {
@@ -207,6 +247,15 @@ async function main() {
     process.exit(1);
   }
 
+  const release = acquireLock(OUT);
+  try {
+    await collectAll(commit);
+  } finally {
+    release();
+  }
+}
+
+async function collectAll(commit) {
   const health = await fetch(new URL('/health', BASE)).then((r) => r.json());
   const runs = [];
 
@@ -229,19 +278,31 @@ async function main() {
        * computes its own version of the number it is diagnosing can only
        * disagree with the system for reasons of its own making.
        */
-      const { listRuns } = await import('../src/agent/store/runLog.js');
-      // The run is persisted after the stream closes, and the write is not
-      // awaited on the request path — deliberately, so a reader is not kept
-      // waiting on bookkeeping. Reading it the instant `done` arrives is a race
-      // this diagnostic loses, and losing it silently recorded twelve of twenty
-      // questions as failures of the system rather than of the measurement.
+      /**
+       * Read the run over HTTP, from the process that wrote it.
+       *
+       * Importing the store into this process looked equivalent and is not: the
+       * JSON collection reads its file once at construction and holds the
+       * result, so a reader in another process sees the snapshot it started
+       * with and never anything written afterwards. Polling it harder cannot
+       * help. It happened to work here only because MONGODB_URI is set and
+       * Mongo is genuinely shared — which means the defect would have appeared
+       * the first time anyone ran this without a database, as a silent zero.
+       *
+       * The user id is fresh per question, so "the newest run for this user" is
+       * exactly this run rather than whichever finished last.
+       */
       let record = null;
       for (let attempt = 0; attempt < 12 && !record; attempt += 1) {
-        const { items } = await listRuns({ userId }, { limit: 1 });
-        record = items[0] ?? null;
+        const res = await fetch(new URL(`/v1/runs?user_id=${encodeURIComponent(userId)}&limit=1`, AGENT));
+        if (res.ok) {
+          const body = await res.json();
+          record = body.items?.[0] ?? null;
+        }
         if (!record) await new Promise((r) => setTimeout(r, 250));
       }
       if (!record) throw new Error('the run was never persisted, after three seconds of waiting');
+
       const citations = record.citations ?? {};
 
       const factual = factualSentences(answer);
@@ -260,13 +321,20 @@ async function main() {
         groundedness: citations.groundedness ?? null,
         factual_sentences: factual.length,
         factual_sentences_cited: factualCited,
-        weak_citations: (citations.weak ?? []).map((w) => ({
-          sentence: w.sentence,
-          refs: w.refs,
-          support_score: w.support,
-          cited_passages: w.refs.map((n) => sources.find((s) => s.n === n)?.snippet ?? null),
-          ...classify({ sentence: w.sentence, refs: w.refs, sources, support: w.support }),
-        })),
+        // Classified against the passages the validator scored, not against the
+        // four-hundred character snippet on the stream. Scoring one thing and
+        // explaining another is how a citation supported by material further
+        // down a page gets filed as unsupported.
+        sentence_results: citations.sentence_results ?? [],
+        weak_citations: (citations.sentence_results ?? [])
+          .filter((r) => !r.supported)
+          .map((r) => ({
+            sentence: r.sentence,
+            refs: r.refs,
+            support_score: r.best_score,
+            scored_against: r.scored_against,
+            ...classify({ sentence: r.sentence, refs: r.refs, scoredAgainst: r.scored_against, sources, support: r.best_score }),
+          })),
         sources_fetched: record.sources?.fetched ?? null,
         warnings: (record.warnings ?? []).map((x) => x.code),
         ttft_ms: result.ttftMs,

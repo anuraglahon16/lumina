@@ -251,6 +251,7 @@ export class EvidenceLedger {
     let citedSentences = 0;
     let supportedSentences = 0;
     const weak = [];
+    const sentenceResults = [];
 
     for (const sentence of sentences) {
       const refs = [...sentence.matchAll(/\[(\d+(?:\s*,\s*\d+)*)\]/g)].flatMap((m) =>
@@ -278,8 +279,24 @@ export class EvidenceLedger {
       // Half the claim's content words appearing in the cited source is a
       // deliberately loose bar: it catches citations pointing at the wrong
       // source, not paraphrase.
-      if (best >= 0.5) supportedSentences += 1;
+      const supported = best >= 0.5;
+      if (supported) supportedSentences += 1;
       else weak.push({ sentence: sentence.slice(0, 240), refs, support: Number(best.toFixed(2)) });
+
+      // Every decision, with the text it was made against. A support score is
+      // not interpretable without it, and a diagnostic that re-derives the
+      // evidence from somewhere else is grading a different thing from the
+      // validator it is supposed to be explaining.
+      sentenceResults.push({
+        sentence: sentence.slice(0, 400),
+        refs,
+        supported,
+        best_score: Number(best.toFixed(3)),
+        scored_against: refs
+          .map((n) => this.sources.find((s) => s.n === n))
+          .filter(Boolean)
+          .map((s) => ({ n: s.n, chars: s.passages.join(' ').length, passages: s.passages.slice(0, 4) })),
+      });
     }
 
     // Each offending sentence is edited where it sits. Rebuilding the answer by
@@ -309,6 +326,7 @@ export class EvidenceLedger {
       cited_sentences: citedSentences,
       supported_sentences: supportedSentences,
       weak_citations: weak,
+      sentence_results: sentenceResults,
       stripped_for_absence: strippedForAbsence,
       groundedness: citedSentences ? Number((supportedSentences / citedSentences).toFixed(3)) : null,
     };

@@ -263,10 +263,15 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         // score is only interpretable beside the sentence it scored and the
         // text it was scored against; the ratio alone says a number failed and
         // nothing about why.
-        weak: (validation.weak_citations || []).slice(0, 12).map((w) => ({
-          sentence: w.sentence,
-          refs: w.refs,
-          support: w.support,
+        // The validator's own decisions, capped so a run record stays a record
+        // rather than a transcript. Passages are trimmed, not summarised: a
+        // classifier reading a paraphrase of the evidence is back to guessing.
+        sentence_results: (validation.sentence_results || []).slice(0, 20).map((r) => ({
+          sentence: r.sentence,
+          refs: r.refs,
+          supported: r.supported,
+          best_score: r.best_score,
+          scored_against: r.scored_against.map((s) => ({ n: s.n, chars: s.chars, passages: s.passages.map((p) => p.slice(0, 1200)) })),
         })),
       },
       sources: {
