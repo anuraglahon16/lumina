@@ -107,7 +107,27 @@ export const config = {
      * core/llm.js shapes the request for.
      */
     model: process.env.LUMINA_MODEL || 'claude-sonnet-5',
-    branchModel: process.env.LUMINA_BRANCH_MODEL || process.env.LUMINA_MODEL || 'claude-sonnet-5',
+
+    /**
+     * One model per role, because the roles are not alike.
+     *
+     * Most calls in a run are not writing the answer. Choosing which page to
+     * read, decomposing a question, rewriting a follow-up into something
+     * searchable, noticing a durable fact about the user: all of them are
+     * mechanical, none of them reaches the reader as prose, and all of them were
+     * being served by the model chosen for the one job that does. Deep synthesis
+     * keeps Sonnet — merging fifteen sources into one honest answer is where
+     * capability is actually spent.
+     *
+     * Each falls back to the older single-model settings, so an existing
+     * environment keeps working and can be moved one role at a time.
+     */
+    quickModel: process.env.LUMINA_QUICK_MODEL || process.env.LUMINA_MODEL || 'claude-haiku-4-5',
+    plannerModel: process.env.LUMINA_PLANNER_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
+    branchModel: process.env.LUMINA_BRANCH_MODEL || process.env.LUMINA_MODEL || 'claude-haiku-4-5',
+    deepSynthesisModel: process.env.LUMINA_DEEP_SYNTHESIS_MODEL || process.env.LUMINA_MODEL || 'claude-sonnet-5',
+    queryRewriteModel: process.env.LUMINA_QUERY_REWRITE_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
+    memoryModel: process.env.LUMINA_MEMORY_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     fastModel: process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     maxRetries: num(process.env.LLM_MAX_RETRIES, 2),
     timeoutMs: num(process.env.LLM_TIMEOUT_MS, 120000),
@@ -181,6 +201,17 @@ export const config = {
     },
     deep: {
       maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
+      /**
+       * The benchmark scores the *minimum* sub-question count across runs, so a
+       * single thin plan is worth as much as a run that never happened. Three is
+       * the floor below which a decomposition is not one.
+       */
+      minSubQuestions: num(process.env.DEEP_MIN_SUBQUESTIONS, 3),
+      /**
+       * Planning is a deep run's first paint: nothing is shown until it lands.
+       * A planner still thinking after this is treated as one that failed.
+       */
+      planCeilingMs: num(process.env.DEEP_PLAN_CEILING_MS, 3500),
       maxIterationsPerBranch: num(process.env.DEEP_BRANCH_MAX_ITERATIONS, 4),
       maxToolCallsPerBranch: num(process.env.DEEP_BRANCH_MAX_TOOL_CALLS, 6),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),

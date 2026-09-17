@@ -278,7 +278,18 @@ contractRouter.get('/health', async (req, res) => {
   const db = (await pingMongo()) === 'ok' ? 'ok' : 'down';
   res.json({
     status: caps.llm && db === 'ok' ? 'ok' : 'degraded',
-    model: config.llm.model,
+    // The contract wants one name, so it gets the model that writes answers;
+    // the full split is alongside it, since a cost figure is not interpretable
+    // without knowing which model produced which part of the run.
+    model: config.llm.quickModel,
+    models: {
+      quick: config.llm.quickModel,
+      planner: config.llm.plannerModel,
+      branch: config.llm.branchModel,
+      deep_synthesis: config.llm.deepSynthesisModel,
+      query_rewrite: config.llm.queryRewriteModel,
+      memory: config.llm.memoryModel,
+    },
     // The provider actually first in line, not merely one that is configured:
     // a recall or latency number is not comparable without knowing which.
     searchProvider: resolveProviders()[0] || 'none',

@@ -1,5 +1,6 @@
 import { config } from '../../shared/config.js';
 import { Budget, CAP_REASONS, deadlineSignal } from './budget.js';
+import { validatePlan, fallbackPlan, repairInstruction, PLAN_ORIGIN } from './plan.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
 import { runResearchLoop } from './researchLoop.js';
@@ -50,7 +51,7 @@ export async function runDeepQuery({
   const limits = config.budgets.deep;
   const deadline = Date.now() + limits.wallClockMs;
   const ledger = new EvidenceLedger();
-  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'deep', query, model: config.llm.model });
+  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'deep', query, model: config.llm.deepSynthesisModel });
   const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {
@@ -58,26 +59,41 @@ export async function runDeepQuery({
     thread_id: thread.id,
     mode: 'deep',
     query,
-    model: config.llm.model,
+    model: config.llm.deepSynthesisModel,
     budget: { limits, deadline_in_ms: limits.wallClockMs },
     search_provider: resolveProviders()[0],
   });
 
-  await appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id, mode: 'deep' });
 
   try {
     // ---- context ----------------------------------------------------------
     recorder.startPhase('context');
-    const memories = await searchMemories(query, { userId }).catch(() => []);
-    const docs = await documentStats(userId, { spaceId });
-    const history = (await threadContext(thread.id)).slice(0, -1);
+    // Three independent reads, so they go together. Sequentially they are three
+    // round trips to a remote database in front of a phase the SLA gives four
+    // seconds end to end, and none of them depends on another's result.
+    const [memories, docs, history] = await Promise.all([
+      searchMemories(query, { userId }).catch(() => []),
+      documentStats(userId, { spaceId }),
+      threadContext(thread.id),
+    ]);
+
+    // Recording the question is a write nothing downstream reads, so it is
+    // started here and not waited for. It used to run before the context reads
+    // purely so that `history` could drop its last entry, which made a
+    // bookkeeping write a step on the path to the first thing the user sees.
+    const questionRecorded = appendMessage(thread.id, {
+      role: 'user',
+      content: query,
+      run_id: recorder.id,
+      mode: 'deep',
+    }).catch((err) => log.warn('append_user_message_failed', { run_id: recorder.id, err: err.message }));
     recorder.endPhase('context', { memories: memories.length, documents: docs.indexed });
     if (memories.length) emit('memory_used', { memories });
 
     // ---- plan -------------------------------------------------------------
     recorder.startPhase('plan');
-    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn });
-    recorder.endPhase('plan', { sub_questions: plan.sub_questions.length });
+    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn, emit });
+    recorder.endPhase('plan', { sub_questions: plan.sub_questions.length, plan_origin: plan.origin });
     emit('plan', plan);
 
     // ---- parallel branch research ----------------------------------------
@@ -139,7 +155,9 @@ export async function runDeepQuery({
       plan,
       recorder,
       emit,
-      model: config.llm.model,
+      // The one call in a deep run that earns the larger model: merging fifteen
+      // sources into an answer that stays honest about what they disagree on.
+      model: config.llm.deepSynthesisModel,
       maxTokens: limits.maxTokens,
       effort: limits.effort,
       ceilingMs: limits.synthesisCeilingMs,
@@ -147,6 +165,9 @@ export async function runDeepQuery({
       ...(completeFn ? { streamComplete: completeFn } : {}),
     });
 
+    // The question's write is joined here and nowhere earlier: the thread
+    // must not show an answer arriving before the thing it answers.
+    await questionRecorded;
     await appendMessage(thread.id, {
       role: 'assistant',
       content: answer,
@@ -218,25 +239,79 @@ export async function runDeepQuery({
   }
 }
 
-async function buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn = complete }) {
-  // Planning is inside the run's wall clock like everything else. Deep mode
-  // tracks that clock as an absolute deadline rather than a Budget, because its
-  // limits are per branch; the bound is the same one either way.
-  const bound = deadlineSignal(deadline - Date.now(), signal);
+/**
+ * Produce a plan the run can act on: model, then one repair, then the harness.
+ *
+ * Planning is also the deep run's first paint — nothing is shown until it
+ * lands — so it gets a deadline of its own rather than sharing the run's. A
+ * planner that hangs past it is treated as a planner that failed, because a
+ * deep search showing nothing for thirty seconds reads as broken however good
+ * the eventual answer is.
+ */
+async function buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn = complete, emit }) {
+  const limits = config.budgets.deep;
+  const min = limits.minSubQuestions;
+  const max = limits.maxSubQuestions;
+  const budgetMs = Math.max(1000, Math.min(limits.planCeilingMs, deadline - Date.now()));
+  const bound = deadlineSignal(budgetMs, signal);
+
+  const attempt = async (repair) => {
+    const raw = await planCall({
+      query,
+      history,
+      memories,
+      recorder,
+      signal: bound.signal,
+      complete: completeFn,
+      repair,
+      maxSubQuestions: max,
+    });
+    return validatePlan(raw, { query, min, max });
+  };
+
   try {
-    return await planCall({ query, history, memories, recorder, signal: bound.signal, complete: completeFn });
+    let result;
+    try {
+      result = await attempt(null);
+    } catch (err) {
+      log.warn('plan_call_failed', { err: err.message });
+      result = { ok: false, problems: [`the planner call failed: ${err.message}`] };
+    }
+
+    if (result.ok) return { ...result.plan, origin: PLAN_ORIGIN.MODEL, degraded: false };
+
+    // One repair, with the problems named. Only worth attempting if there is
+    // time left to attempt it in.
+    log.warn('plan_invalid', { problems: result.problems.slice(0, 4) });
+    if (!bound.signal.aborted) {
+      try {
+        const repaired = await attempt(repairInstruction(result.problems, { min, max }));
+        if (repaired.ok) {
+          recorder.recordError('plan_repaired', new Error(result.problems[0] || 'invalid plan'));
+          return { ...repaired.plan, origin: PLAN_ORIGIN.REPAIR, degraded: false };
+        }
+        result = repaired;
+      } catch (err) {
+        log.warn('plan_repair_failed', { err: err.message });
+      }
+    }
+
+    // The harness decomposes it. A degraded run that answers beats a failed one.
+    log.warn('plan_fallback', { query: query.slice(0, 120), problems: result.problems?.slice(0, 3) });
+    recorder.recordError('plan_fallback', new Error(result.problems?.[0] || 'planner produced no usable plan'));
+    return { ...fallbackPlan(query, { min, max }), origin: PLAN_ORIGIN.FALLBACK, degraded: true };
   } finally {
     bound.release();
   }
 }
 
-async function planCall({ query, history, memories, recorder, signal, complete: completeFn = complete }) {
+async function planCall({ query, history, memories, recorder, signal, complete: completeFn = complete, repair, maxSubQuestions }) {
   const message = await completeFn({
-    purpose: 'plan',
+    purpose: repair ? 'plan_repair' : 'plan',
     recorder,
     signal,
-    model: config.llm.model,
-    system: plannerSystem({ maxSubQuestions: config.budgets.deep.maxSubQuestions }),
+    model: config.llm.plannerModel,
+    system: plannerSystem({ maxSubQuestions, minSubQuestions: config.budgets.deep.minSubQuestions }),
     messages: [
       {
         role: 'user',
@@ -244,41 +319,17 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
           history.length ? `<conversation_so_far>\n${history.map((m) => `${m.role}: ${m.content}`).join('\n')}\n</conversation_so_far>\n` : '',
           memories.length ? `<about_the_user>\n${memories.map((m) => `- ${m.content}`).join('\n')}\n</about_the_user>\n` : '',
           `<question>${query}</question>`,
+          repair ? `\n\n${repair}` : '',
         ].join(''),
       },
     ],
-    maxTokens: 2000,
-    effort: 'medium',
+    maxTokens: 600,
+    effort: 'low',
   });
 
-  const parsed = parseJsonLoose(textOf(message));
-  const subQuestions = Array.isArray(parsed?.sub_questions) ? parsed.sub_questions : [];
-
-  if (!subQuestions.length) {
-    // Planning failed to produce usable JSON: fall back to researching the
-    // question itself rather than failing the run.
-    return {
-      interpretation: query,
-      answer_shape: 'Direct answer with supporting evidence.',
-      sub_questions: [{ id: 'q1', question: query, why: 'fallback: planner returned no usable plan', search_queries: [query] }],
-      degraded: true,
-    };
-  }
-
-  return {
-    interpretation: parsed.interpretation || query,
-    answer_shape: parsed.answer_shape || null,
-    degraded: false,
-    sub_questions: subQuestions.slice(0, config.budgets.deep.maxSubQuestions).map((q, i) => ({
-      id: q.id || `q${i + 1}`,
-      question: String(q.question || '').slice(0, 400),
-      why: q.why || null,
-      search_queries: Array.isArray(q.search_queries) ? q.search_queries.slice(0, 4) : [],
-    })),
-  };
+  return parseJsonLoose(textOf(message));
 }
 
-/** Research every sub-question, at most `branchConcurrency` at a time. */
 async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, retrievalMode = 'auto', spaceId = null }) {
   const queue = [...plan.sub_questions];
   const results = [];

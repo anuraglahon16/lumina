@@ -17,7 +17,7 @@ export async function extractMemories({ userId, threadId, runId, query, answer, 
     const message = await complete({
       purpose: 'memory_extraction',
       recorder,
-      model: config.llm.fastModel,
+      model: config.llm.memoryModel,
       system: memoryExtractionSystem(),
       messages: [
         {

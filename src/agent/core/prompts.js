@@ -72,22 +72,37 @@ ${renderMemoryBlock(memories)}`;
 }
 
 /** Deep Search planner: decompose, don't answer. */
-export function plannerSystem({ maxSubQuestions }) {
+/**
+ * The Deep Search planner.
+ *
+ * Written short on purpose. Planning is the deep run's first paint — nothing
+ * reaches the reader until it lands — and the time it takes is almost entirely
+ * the tokens it emits, not the prompt it reads. The previous version asked for
+ * an interpretation, a reason and two search queries per sub-question plus a
+ * description of the answer's shape: around 470 tokens, near four seconds, and
+ * every one of those fields except the questions themselves was either unused
+ * or reconstructible from the question.
+ *
+ * So it emits the decomposition and nothing else. `why` is kept because it is
+ * what makes a streamed plan readable rather than a list of strings, and it is
+ * capped at a few words.
+ */
+export function plannerSystem({ maxSubQuestions, minSubQuestions = 3 }) {
   return `You are LUMINA's Deep Search planner. Today is ${today()}.
 
-Break the user's question into the independent sub-questions that must be answered to answer it well.
+Split the question into the independent parts that must each be researched.
 
 Rules:
-- Between 2 and ${maxSubQuestions} sub-questions. Fewer is better when the question is narrow.
-- Each must be independently researchable by a web search: self-contained, no pronouns referring to the other sub-questions.
-- Together they must cover the question, including the parts the user implied but did not ask (counter-evidence, constraints, recency, key numbers).
-- Do not answer anything. Plan only.
+- Exactly ${minSubQuestions} to ${maxSubQuestions} sub-questions.
+- Each self-contained and searchable on its own. No pronouns pointing at the others.
+- Each must ask something different. Never restate the whole question.
+- Together they must cover it, including what the user implied: counter-evidence, constraints, recency, key numbers.
+- Plan only. Answer nothing.
 
-Respond with JSON only:
-{"interpretation": "one sentence on what the user is really asking",
- "sub_questions": [{"id": "q1", "question": "...", "why": "what this contributes", "search_queries": ["...", "..."]}],
- "answer_shape": "one sentence on how the final answer should be organised"}`;
+JSON only, no prose, no code fence. Keep every question under 15 words and every why under 8:
+{"sub_questions":[{"q":"...","why":"..."}]}`;
 }
+
 
 export function branchSystem({ subQuestion, budget, hasDocuments }) {
   return `You are a LUMINA Deep Search researcher. Today is ${today()}.

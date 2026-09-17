@@ -23,7 +23,7 @@ const log = createLogger('quick');
 export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto' }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
-  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.model });
+  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.quickModel });
   const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {
@@ -31,21 +31,33 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     thread_id: thread.id,
     mode: 'quick',
     query,
-    model: config.llm.model,
+    model: config.llm.quickModel,
     budget: budget.snapshot(),
     search_provider: resolveProviders()[0],
   });
 
-  await appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id });
 
   try {
     // ---- context assembly -------------------------------------------------
     recorder.startPhase('context');
-    const [memories, docs] = await Promise.all([
+    // Three independent reads, so they go together. Sequentially they are three
+    // round trips to a remote database in front of a phase the SLA gives four
+    // seconds end to end, and none of them depends on another's result.
+    const [memories, docs, history] = await Promise.all([
       searchMemories(query, { userId }).catch(() => []),
       documentStats(userId, { spaceId }),
+      threadContext(thread.id),
     ]);
-    const history = (await threadContext(thread.id)).slice(0, -1);
+
+    // Recording the question is a write nothing downstream reads, so it is
+    // started here and not waited for. It used to run before the context reads
+    // purely so that `history` could drop its last entry, which made a
+    // bookkeeping write a step on the path to the first thing the user sees.
+    const questionRecorded = appendMessage(thread.id, {
+      role: 'user',
+      content: query,
+      run_id: recorder.id,
+    }).catch((err) => log.warn('append_user_message_failed', { run_id: recorder.id, err: err.message }));
     recorder.endPhase('context', { memories: memories.length, thread_turns: history.length, documents: docs.indexed });
 
     if (memories.length) emit('memory_used', { memories });
@@ -74,7 +86,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       userId,
       threadId: thread.id,
       runId: recorder.id,
-      model: config.llm.model,
+      model: config.llm.quickModel,
       maxTokens: config.budgets.quick.researchMaxTokens,
       effort: config.budgets.quick.researchEffort,
       hasDocuments: docs.indexed > 0,
@@ -108,13 +120,16 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       researchNotes: null,
       recorder,
       emit,
-      model: config.llm.model,
+      model: config.llm.quickModel,
       maxTokens: config.budgets.quick.maxTokens,
       effort: config.budgets.quick.effort,
       ceilingMs: config.budgets.quick.synthesisCeilingMs,
       signal,
     });
 
+    // The question's write is joined here and nowhere earlier: the thread
+    // must not show an answer arriving before the thing it answers.
+    await questionRecorded;
     await appendMessage(thread.id, {
       role: 'assistant',
       content: answer,

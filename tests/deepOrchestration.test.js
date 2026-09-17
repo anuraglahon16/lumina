@@ -173,3 +173,107 @@ test('deep never silently becomes quick', async () => {
   const { run: record } = await run({ emit, complete: fakeModel(), executor: fakeExecutor(calls) });
   assert.equal(record.mode, 'deep');
 });
+
+/* ------------------------------------------------ the plan a run acts on */
+
+const VALID_PLAN_JSON = JSON.stringify({
+  interpretation: 'three angles',
+  sub_questions: [
+    { question: 'which benchmarks measure this effect', why: 'primary evidence' },
+    { question: 'what do controlled studies report', why: 'strength of the evidence' },
+    { question: 'where does the effect fail to appear', why: 'limits' },
+  ],
+});
+
+/** A model whose planner response is scripted; branches and synthesis behave normally. */
+function modelWithPlanner(plannerResponses) {
+  let planCalls = 0;
+  const base = fakeModel();
+  const fn = async (params) => {
+    if (params.purpose === 'plan' || params.purpose === 'plan_repair') {
+      const next = plannerResponses[Math.min(planCalls, plannerResponses.length - 1)];
+      planCalls += 1;
+      if (typeof next === 'function') return next();
+      return { content: [{ type: 'text', text: next }], stop_reason: 'end_turn', usage: {} };
+    }
+    return base(params);
+  };
+  fn.planCalls = () => planCalls;
+  return fn;
+}
+
+const planFrom = (events) => events.find((e) => e.event === 'plan')?.data;
+
+test('a valid plan is used as the model gave it, and marked as the model’s', async () => {
+  const { emit, events } = collect();
+  const calls = [];
+  await run({ emit, complete: modelWithPlanner([VALID_PLAN_JSON]), executor: fakeExecutor(calls) });
+  const plan = planFrom(events);
+  assert.equal(plan.sub_questions.length, 3);
+  assert.equal(plan.origin, 'model');
+  assert.equal(plan.degraded, false);
+});
+
+test('an unusable plan is repaired once, and the repair is recorded as a repair', async () => {
+  const { emit, events } = collect();
+  const calls = [];
+  const model = modelWithPlanner(['not json at all', VALID_PLAN_JSON]);
+  await run({ emit, complete: model, executor: fakeExecutor(calls) });
+
+  assert.equal(model.planCalls(), 2, 'it tried again rather than giving up or looping');
+  const plan = planFrom(events);
+  assert.equal(plan.origin, 'repair');
+  assert.equal(plan.sub_questions.length, 3);
+});
+
+test('a planner that fails twice falls back, and the run says so', async () => {
+  // The important half is the second assertion: a fallback that reported itself
+  // as a model plan would hide the only thing worth knowing about the run.
+  const { emit, events } = collect();
+  const calls = [];
+  const result = await run({ emit, complete: modelWithPlanner(['{"sub_questions": []}', 'still not a plan']), executor: fakeExecutor(calls) });
+
+  const plan = planFrom(events);
+  assert.equal(plan.origin, 'fallback');
+  assert.equal(plan.degraded, true);
+  assert.ok(plan.sub_questions.length >= 3, 'and it still meets the floor the gate measures');
+  assert.ok(result.answer.length > 0, 'the run answered anyway');
+});
+
+test('a one-question plan never reaches the branches', async () => {
+  const { emit, events } = collect();
+  const calls = [];
+  const oneQuestion = JSON.stringify({ sub_questions: [{ question: 'just the one thing' }] });
+  await run({ emit, complete: modelWithPlanner([oneQuestion, oneQuestion]), executor: fakeExecutor(calls) });
+
+  const plan = planFrom(events);
+  assert.ok(plan.sub_questions.length >= 3, 'the floor holds even when the planner insists');
+  assert.equal(plan.origin, 'fallback');
+});
+
+test('a planner that hangs is treated as a planner that failed', async () => {
+  // Planning is a deep run's first paint: nothing is shown until it lands, so
+  // waiting indefinitely for it is indistinguishable from being broken.
+  const { emit, events } = collect();
+  const calls = [];
+  const hangs = () =>
+    new Promise((_resolve, reject) => setTimeout(() => reject(Object.assign(new Error('aborted'), { name: 'AbortError' })), 30));
+
+  const started = Date.now();
+  const result = await run({ emit, complete: modelWithPlanner([hangs, hangs]), executor: fakeExecutor(calls) });
+  assert.ok(Date.now() - started < 8000, 'it did not wait out the whole run budget');
+  assert.equal(planFrom(events).origin, 'fallback');
+  assert.ok(result.answer.length > 0);
+});
+
+test('the plan is emitted before any retrieval, whatever its origin', async () => {
+  for (const script of [[VALID_PLAN_JSON], ['garbage', 'more garbage']]) {
+    const { emit, events, names } = collect();
+    const calls = [];
+    await run({ emit, complete: modelWithPlanner(script), executor: fakeExecutor(calls) });
+    const planAt = names().indexOf('plan');
+    const firstTool = names().indexOf('tool_call');
+    assert.ok(planAt >= 0, 'a plan was emitted');
+    assert.ok(firstTool === -1 || planAt < firstTool, 'and it came before retrieval started');
+  }
+});
