@@ -205,6 +205,14 @@ export const config = {
       // One more deterministic attempt when the first found nothing at all,
       // bounded so that a rescue cannot cost more than the answer it rescues.
       rescueCeilingMs: num(process.env.QUICK_RESCUE_CEILING_MS, 6000),
+      // The whole retrieval phase, after which the answer is written from
+      // whatever arrived. A reader waiting is a cost too.
+      retrievalCeilingMs: num(process.env.QUICK_RETRIEVAL_CEILING_MS, 6000),
+      // More fetches in flight than the answer needs, because about half return
+      // nothing usable and finding that out serially is what made the tail long.
+      fetchConcurrency: num(process.env.QUICK_FETCH_CONCURRENCY, 3),
+      // Below this a "successful" fetch is navigation furniture, not evidence.
+      minPageChars: num(process.env.QUICK_MIN_PAGE_CHARS, 400),
       // A few hundred words does not take a minute and a half to write. The
       // ceiling exists for a stalled connection, not for a slow answer, so it
       // is sized just above what writing this much has ever taken.

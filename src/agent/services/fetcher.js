@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import * as cheerio from 'cheerio';
 import { config } from '../../shared/config.js';
+import { deadlineSignal } from '../core/budget.js';
 import { cached } from './cache.js';
 import { createLogger } from '../../shared/logger.js';
 import { breaker } from '../../shared/circuitBreaker.js';
@@ -161,12 +162,23 @@ async function readLimited(res, maxBytes) {
  * Fetch one URL and return cleaned, citable evidence.
  * Cached by URL, so repeated runs over the same source cost nothing.
  */
-export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxChars } = {}) {
+export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxChars, signal } = {}) {
   const started = performance.now();
-  const parsed = await assertFetchable(url);
+  const at = () => Math.round(performance.now() - started);
+  // Where the time inside one fetch actually goes. Without this, a slow page is
+  // just slow; with it, a slow resolver and a slow server and a heavy document
+  // are three different problems with three different answers.
+  const timings = { resolve_ms: null, robots_ms: null, headers_ms: null, body_ms: null, extract_ms: null };
 
-  if (!(await robotsAllows(parsed))) {
-    return { ok: false, url, error: 'disallowed by robots.txt', status: null, duration_ms: Math.round(performance.now() - started) };
+  const resolveStart = performance.now();
+  const parsed = await assertFetchable(url);
+  timings.resolve_ms = Math.round(performance.now() - resolveStart);
+
+  const robotsStart = performance.now();
+  const allowed = await robotsAllows(parsed);
+  timings.robots_ms = Math.round(performance.now() - robotsStart);
+  if (!allowed) {
+    return { ok: false, url, error: 'disallowed by robots.txt', status: null, duration_ms: at(), timings };
   }
 
   // Per host, because health is a property of the host rather than the URL. A
@@ -175,6 +187,10 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
   const hostBreaker = breaker(`fetch:${parsed.hostname}`, {
     failureThreshold: 3,
     cooldownMs: 120000,
+    // A cancellation is this system changing its mind, not the host failing.
+    // Counting it would let a run that found its evidence early trip the
+    // breaker for every later run against that host.
+    countsAsFailure: (err) => !(err?.name === 'AbortError' || err?.code === 'ABORT_ERR'),
   });
 
   const { value, cached: wasCached } = await cached(
@@ -182,15 +198,27 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
     { url: parsed.toString(), maxChars },
     config.cache.fetchTtlMs,
     async () => hostBreaker.run(async () => {
-      const res = await fetch(parsed, {
-        headers: {
-          'user-agent': config.fetcher.userAgent,
-          accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.8,*/*;q=0.5',
-          'accept-language': 'en',
-        },
-        redirect: 'follow',
-        signal: AbortSignal.timeout(config.fetcher.timeoutMs),
-      });
+      // The caller's cancellation and this fetch's own timeout, composed. Without
+      // the caller's, a page kept being read after the answer it was for had
+      // already been given up on — and on a coverage-driven pool that is most
+      // of the requests in flight.
+      const bound = deadlineSignal(config.fetcher.timeoutMs, signal);
+      let res;
+      const headersStart = performance.now();
+      try {
+        res = await fetch(parsed, {
+          headers: {
+            'user-agent': config.fetcher.userAgent,
+            accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.8,*/*;q=0.5',
+            'accept-language': 'en',
+          },
+          redirect: 'follow',
+          signal: bound.signal,
+        });
+      } finally {
+        timings.headers_ms = Math.round(performance.now() - headersStart);
+        bound.release();
+      }
 
       const contentType = res.headers.get('content-type') || '';
       if (res.status >= 500) throw new Error(`HTTP ${res.status}`);
@@ -199,7 +227,10 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
         return { ok: false, url: res.url, status: res.status, error: `unsupported content-type: ${contentType}` };
       }
 
+      const bodyStart = performance.now();
       const { text: body, truncated } = await readLimited(res, config.fetcher.maxBytes);
+      timings.body_ms = Math.round(performance.now() - bodyStart);
+      const extractStart = performance.now();
       const isHtml = /html|xml/.test(contentType) || /^\s*<(!doctype|html)/i.test(body);
       const extracted = isHtml
         ? extractArticle(body, res.url || parsed.toString())
@@ -211,6 +242,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
             text: body.slice(0, maxChars),
             paragraphs: body.split(/\n{2,}/).map((p) => p.trim()).filter((p) => p.length > 40),
           };
+      timings.extract_ms = Math.round(performance.now() - extractStart);
 
       return {
         ok: extracted.text.length > 0,
@@ -227,6 +259,10 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
       ok: false,
       url: parsed.toString(),
       status: null,
+      // A cancelled fetch says nothing about the host. Recording it as a
+      // failure would let a run that ended early trip the breaker for every
+      // later run against that host.
+      aborted: err?.name === 'AbortError' || err?.code === 'ABORT_ERR',
       error: err.code === 'circuit_open' ? `host temporarily skipped: ${err.message}` : err.message,
     })),
     recorder,
@@ -234,7 +270,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
     (value) => value.ok === true,
   );
 
-  return { ...value, cached: wasCached, duration_ms: Math.round(performance.now() - started) };
+  return { ...value, cached: wasCached, duration_ms: at(), timings };
 }
 
 /** Bounded-concurrency fetch of several URLs. */

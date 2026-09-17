@@ -134,7 +134,7 @@ export class RunRecorder {
     return cost;
   }
 
-  recordToolCall({ name, input, durationMs, ok, summary, error, cached, branch }) {
+  recordToolCall({ name, input, durationMs, ok, summary, error, cached, branch, meta }) {
     this.run.tool_calls.push({
       seq: this.run.tool_calls.length + 1,
       name,
@@ -145,6 +145,7 @@ export class RunRecorder {
       cached: Boolean(cached),
       summary,
       error: error || null,
+      ...(meta ? { meta } : {}),
       at_ms: this.elapsedMs(),
     });
   }

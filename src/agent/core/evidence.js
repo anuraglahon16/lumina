@@ -87,6 +87,10 @@ export class EvidenceLedger {
     this.sources = [];
     this.byUrl = new Map();
     this.candidates = new Map(); // url -> search result seen but not (yet) fetched
+    // Every url this run has tried to read, whether or not it yielded anything.
+    // A second attempt reaches for leads that were never tried rather than
+    // retrying one that already failed the same way.
+    this.attempted = new Set();
   }
 
   /** Record search hits so the trace shows what was considered but not read. */

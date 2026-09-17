@@ -152,6 +152,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         userId,
         spaceId,
         signal,
+        candidates: gathered.candidates || [],
       });
       coverage = rescue.coverage;
       rescued = true;
@@ -216,6 +217,16 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       ceilingMs: config.budgets.quick.synthesisCeilingMs,
       signal,
     });
+
+    // An answer written from evidence that cites none of it is the failure this
+    // system exists to prevent, and it is indistinguishable from an answer made
+    // up entirely. Recorded rather than patched: attaching citations after the
+    // fact would put markers on sentences nothing checked.
+    if (ledger.citable.length > 0 && validation.cited.length === 0) {
+      recorder.recordWarning('synthesis', 'uncited_answer', `${ledger.citable.length} sources available, none cited`);
+      emit('uncited_answer', { sources: ledger.citable.length });
+      log.warn('uncited_answer', { run_id: recorder.id, sources: ledger.citable.length, model: config.llm.quickModel });
+    }
 
     // The question's write is joined here and nowhere earlier: the thread
     // must not show an answer arriving before the thing it answers.
