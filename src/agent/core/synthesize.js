@@ -26,6 +26,8 @@ export async function synthesizeAnswer({
   effort,
   signal,
   ceilingMs,
+  // Injected so an orchestration test can run without a provider.
+  streamComplete: streamFn = streamComplete,
 }) {
   const sources = ledger.publicSources();
   emit?.('sources', {
@@ -56,7 +58,7 @@ export async function synthesizeAnswer({
   let message;
   let cancelled = false;
   try {
-    message = await streamComplete({
+    message = await streamFn({
       purpose: 'synthesis',
       recorder,
       model,
