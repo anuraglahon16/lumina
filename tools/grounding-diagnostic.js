@@ -253,12 +253,10 @@ async function main() {
         model: done?.model ?? null,
         answer,
         sources: sources.map((s) => ({ n: s.n, kind: s.kind, title: s.title, url: s.url ?? null, snippet: s.snippet })),
-        cited_sentences: citations.emitted ?? null,
-        supported_sentences:
-          citations.groundedness != null && citations.valid != null
-            ? Math.round(citations.groundedness * citations.valid)
-            : null,
-        cited_valid: citations.valid ?? null,
+        cited_sentences: citations.cited_sentences ?? null,
+        supported_sentences: citations.supported_sentences ?? null,
+        cited_sources: citations.valid ?? null,
+        markers_emitted: citations.emitted ?? null,
         groundedness: citations.groundedness ?? null,
         factual_sentences: factual.length,
         factual_sentences_cited: factualCited,
@@ -300,7 +298,12 @@ async function main() {
 function render({ commit, ran_at, node, health, runs }) {
   const ok = runs.filter((r) => !r.error);
   const sum = (f) => ok.reduce((a, r) => a + (f(r) ?? 0), 0);
-  const aggregate = sum((r) => r.supported_sentences) / (sum((r) => r.cited_valid) || 1);
+  // Pooled over sentences, which is what the ratio is made of. An earlier
+  // version divided by the count of distinct cited *sources*, producing a
+  // number that looked like grounding, read higher than the truth, and was not
+  // a grounding ratio at all.
+  const totalCited = sum((r) => r.cited_sentences);
+  const aggregate = totalCited ? sum((r) => r.supported_sentences) / totalCited : null;
   const perRun = ok.map((r) => r.groundedness).filter((g) => typeof g === 'number');
   const mean = perRun.length ? perRun.reduce((a, b) => a + b, 0) / perRun.length : null;
   const completeness = sum((r) => r.factual_sentences_cited) / (sum((r) => r.factual_sentences) || 1);
@@ -323,7 +326,7 @@ function render({ commit, ran_at, node, health, runs }) {
   A('## Two different numbers, reported separately\n');
   A('| metric | value | gate |');
   A('|---|---:|---:|');
-  A(`| aggregate grounding (supported ÷ cited, pooled) | ${aggregate.toFixed(3)} | 0.95 |`);
+  A(`| aggregate grounding (supported ÷ cited sentences, pooled) | ${aggregate === null ? '—' : aggregate.toFixed(3)} | 0.95 |`);
   A(`| mean run grounding (mean of per-run ratios) | ${mean === null ? '—' : mean.toFixed(3)} | 0.95 |`);
   A(`| citation completeness (factual sentences cited ÷ factual) | ${completeness.toFixed(3)} | — |`);
   A('');
@@ -359,7 +362,7 @@ function render({ commit, ran_at, node, health, runs }) {
   A('|---|---:|---:|---:|---:|---:|');
   for (const r of ok) {
     A(
-      `| ${r.query.slice(0, 52)} | ${r.cited_valid ?? '—'} | ${r.supported_sentences ?? '—'} | ${
+      `| ${r.query.slice(0, 52)} | ${r.cited_sentences ?? '—'} | ${r.supported_sentences ?? '—'} | ${
         r.groundedness ?? '—'
       } | ${r.factual_sentences_cited}/${r.factual_sentences} | ${r.weak_citations.length} |`,
     );

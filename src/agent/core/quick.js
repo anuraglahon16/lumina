@@ -253,6 +253,12 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         valid: validation.cited.length,
         invalid: validation.invalid_citations.length,
         groundedness: validation.groundedness,
+        // The two counts the ratio is made of. Without them a pooled figure
+        // across runs cannot be computed at all: `valid` counts distinct
+        // sources, not sentences, and dividing by it produces a number that
+        // looks like grounding and is not one.
+        cited_sentences: validation.cited_sentences,
+        supported_sentences: validation.supported_sentences,
         // Kept so grounding can be diagnosed from the run itself. A support
         // score is only interpretable beside the sentence it scored and the
         // text it was scored against; the ratio alone says a number failed and

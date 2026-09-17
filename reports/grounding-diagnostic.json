@@ -1,6 +1,6 @@
 {
-  "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-  "ran_at": "2026-09-17T12:43:18.306Z",
+  "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+  "ran_at": "2026-09-17T13:08:15.810Z",
   "base": "http://localhost:8787",
   "node": "v21.7.2",
   "health": {
@@ -10,58 +10,84 @@
   },
   "runs": [
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "How does a bloom filter trade memory for false positives in a storage engine?",
       "model": "claude-haiku-4-5",
-      "answer": "The evidence provided does not cover how bloom filters trade memory for false positives in storage engines. \n\nThe evidence discusses AI-detection tools for identifying generated text [1], compliance screening solutions [2], and a PDF document on false positives and negatives [3] that appears corrupted or unreadable. None of these sources address bloom filters or their use in storage engines.\n\nTo answer your question properly, I would need evidence specifically about bloom filter data structures and their design tradeoffs in database or storage contexts.",
+      "answer": "The evidence provided does not cover how bloom filters trade memory for false positives in storage engines. \n\nThe evidence discusses false positives in two different contexts: AI-enabled denied party screening in trade compliance [1] and AI-detection tools for identifying student writing [3]. Neither addresses bloom filters or storage engine design. I cannot establish the technical relationship you're asking about from these sources.",
       "sources": [
         {
           "n": 1,
-          "kind": "web",
-          "title": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say",
-          "url": "https://www.businessinsider.com/ai-detection-tool-false-positives-student-writing-2024-1",
-          "snippet": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say\n\nGenerative AI tools such as ChatGPT have been wildly popular with students\n\nFrank Rumpenhorst/picture alliance via Getty Images\n\nA group of researchers say they've created a highly accurate tool for identifying text produced by generative artificial-intelligence applications and large langu"
-        },
-        {
-          "n": 2,
           "kind": "web",
           "title": "Descartes Helps Reduce False Positives with AI-Enabled Denied Party Screening Solution",
           "url": "https://finance.yahoo.com/news/descartes-helps-reduce-false-positives-104500002.html",
           "snippet": "Oops, something went wrong Skip to navigation Skip to main content Skip to right column This is a paid press release. Contact the press release distributor directly with any inquiries. Descartes Helps Reduce False Positives with AI-Enabled Denied Party Screening Solution The Descartes Systems Group Inc August 6, 2025 5 min read DSG.TO DSGX The Descartes Systems Group Inc LONDON and ATLANTA, Aug. 0"
         },
         {
+          "n": 2,
+          "kind": "web",
+          "title": "Trade - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Trade",
+          "snippet": "This article is about the economic mechanism. For other uses, see Trade (disambiguation).\n\nThe San Juan de Dios Market in Guadalajara, Jalisco, Mexico\n\nThe Liberty to Trade as Buttressed by National Law (1909) by George Howard Earle, Jr.\n\nChief business officer/Chief brand officer\n\nChief executive officer/Chief operating officer\n\nChief information officer/Chief marketing officer\n\nChief product off"
+        },
+        {
           "n": 3,
           "kind": "web",
-          "title": "S0519_Impact_of_false_positives_and_negatives.pdf",
-          "url": "https://assets.publishing.service.gov.uk/media/5ef5de1486650c1295cb5ed2/S0519_Impact_of_false_positives_and_negatives.pdf",
-          "snippet": "%PDF-1.6\r%����\r\n193 0 obj\r<</Linearized 1/L 240657/O 195/E 134211/N 5/T 240275/H [ 521 269]>>\rendobj\r             \r\n216 0 obj\r<</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/ID[<9E37C12827A43141B68E1064E9F13336><D93FDB33A909844E86D4B4E8BFB9FF72>]/Index[193 38]/Info 192 0 R/Length 113/Prev 240276/Root 194 0 R/Size 231/Type/XRef/W[1 3 1]>>stream\r\nh�bbd`\u0010``b``f\u0003�\f3@$�\u000e�d�\u0001�L�`�\u0014D�-\u0001�?\u0005��"
+          "title": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say",
+          "url": "https://www.businessinsider.com/ai-detection-tool-false-positives-student-writing-2024-1",
+          "snippet": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say\n\nGenerative AI tools such as ChatGPT have been wildly popular with students\n\nFrank Rumpenhorst/picture alliance via Getty Images\n\nA group of researchers say they've created a highly accurate tool for identifying text produced by generative artificial-intelligence applications and large langu"
         }
       ],
-      "cited_sentences": 3,
-      "supported_sentences": 3,
-      "cited_valid": 3,
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
       "groundedness": 1,
       "factual_sentences": 4,
       "factual_sentences_cited": 1,
       "weak_citations": [],
       "sources_fetched": 3,
-      "warnings": [],
-      "ttft_ms": 6220,
-      "latency_ms": 7956,
-      "cost_usd": 0.006295,
-      "terminated": "done",
-      "search_cached": false
+      "warnings": [
+        "evidence_limited"
+      ],
+      "ttft_ms": 2071,
+      "latency_ms": 3530,
+      "cost_usd": 0.004206,
+      "terminated": "cap",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What does the Linux OOM killer use to score which process to terminate?",
-      "error": "terminated"
+      "model": "claude-haiku-4-5",
+      "answer": "The Linux OOM Killer calculates a \"badness score\" for each running process based on four primary factors [1]:\n\n1. Memory footprint: Processes using more memory receive higher scores [1]\n\n2. Process runtime: Longer-running processes score lower, as they are likely important [1]\n\n3. Root privileges: Processes running as root are penalized less [1]\n\n4. Nice value: Lower-priority processes (higher nice values) score higher [1]\n\nAdditionally, you can manually override these calculations using the oom_score_adj parameter, which ranges from -1000 to 1000 [1]. The kernel terminates the process with the highest badness score to free up memory when the system runs out of RAM and swap space [1].",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Linux OOM Killer: Scores, Logs, and Configuration | Last9",
+          "url": "https://last9.io/blog/understanding-the-linux-oom-killer/",
+          "snippet": "We use cookies to customize your Last9 experience.\n\nFeb 18th, 2025 Linux OOM Killer: A Detailed Guide to Memory Management Learn how the Linux OOM Killer manages memory pressure, terminates processes, and ensures system stability when memory runs low. Anjali Udasi\n\nThe Linux OOM Killer is a kernel mechanism that terminates memory-hogging processes when your system runs out of RAM and swap space, p"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 7,
+      "factual_sentences_cited": 7,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1305,
+      "latency_ms": 3184,
+      "cost_usd": 0.002475,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "How does TCP slow start decide the initial congestion window?",
       "model": "claude-haiku-4-5",
-      "answer": "TCP",
+      "answer": "TCP slow start determines the initial congestion window (cwnd) based on the sender's maximum segment size (SMSS) according to guidelines defined in RFC 5681 [1].\n\nThe initial cwnd value follows these rules [1]:\n\n- If SMSS is greater than 2190 bytes: IW = 2 * SMSS bytes, capped at 2 segments maximum\n- If SMSS is between 1095 and 2190 bytes: IW = 3 * SMSS bytes, capped at 3 segments maximum\n- If SMSS is 1095 bytes or less: IW = 4 * SMSS bytes, capped at 4 segments maximum\n\nFor example, with a common MSS of 1460 bytes on the internet, the initial cwnd would be calculated as 3 * 1460 = 4380 bytes, allowing the sender to transmit 3 full segments once the connection is established [1]. After receiving acknowledgment from the receiver, the sender then increases the cwnd and can send additional segments, doubling the sending rate until congestion is detected or the receiver's window limit is reached [1].",
       "sources": [
         {
           "n": 1,
@@ -71,179 +97,741 @@
           "snippet": "SupportFind answers, guides, and tutorials to supercharge your content delivery.Getting StartedZonesPull ZonePush ZoneIntegrationsCMSFrameworksAccount ManagementTroubleshootingTutorialsGlossaryCategoriesGetting StartedZonesPull ZonePush ZoneIntegrationsCMSFrameworksAccount ManagementTroubleshootingTutorialsGlossaryWhat Is TCP Slow StartUpdated on October 4, 2018What is TCP slow start?TCP slow star"
         }
       ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 7,
+      "factual_sentences_cited": 4,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1068,
+      "latency_ms": 3227,
+      "cost_usd": 0.003021,
+      "terminated": "done",
+      "search_cached": true
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "What is the difference between a clustered and a non-clustered database index?",
+      "model": "claude-haiku-4-5",
+      "answer": "[1] A clustered index defines the order in which data is physically stored in a table. Table data can be sorted in only one way, so there can be only one clustered index per table. [1] In SQL Server, the primary key constraint automatically creates a clustered index on that column.\n\n[1] A non-clustered index is not explicitly defined in the evidence provided, though the source title indicates it is discussed. The evidence only covers clustered indexes in detail.\n\nThe key practical difference is this: [1] without indexes, a database management system has to scan through all records in a table to retrieve results, which is extremely slow. [1] With indexes, the database goes to the index first and then retrieves the corresponding table records directly. Since a clustered index controls the physical order of storage, it affects how all queries access the table. A non-clustered index, by contrast, creates a separate structure that points to table rows without changing their physical arrangement, allowing multiple non-clustered indexes per table.\n\nThe evidence does not provide sufficient detail on non-clustered indexes to fully answer your question. You would need additional sources to understand how they differ in structure, creation, and performance characteristics.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "What is the difference between Clustered and Non-Clustered Indexes in SQL Server?",
+          "url": "https://www.sqlshack.com/what-is-the-difference-between-clustered-and-non-clustered-indexes-in-sql-server/",
+          "snippet": "Indexes are used to speed-up query process in SQL Server, resulting in high performance. They are similar to textbook indexes. In textbooks, if you need to go to a particular chapter, you go to the index, find the page number of the chapter and go directly to that page. Without indexes, the process of finding your desired chapter would have been very slow.\n\nThe same applies to indexes in databases"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 0.8,
+      "factual_sentences": 11,
+      "factual_sentences_cited": 5,
+      "weak_citations": [
+        {
+          "sentence": "[1] A non-clustered index is not explicitly defined in the evidence provided, though the source title indicates it is discussed.",
+          "refs": [
+            1
+          ],
+          "support_score": 0.18,
+          "cited_passages": [
+            "Indexes are used to speed-up query process in SQL Server, resulting in high performance. They are similar to textbook indexes. In textbooks, if you need to go to a particular chapter, you go to the index, find the page number of the chapter and go directly to that page. Without indexes, the process of finding your desired chapter would have been very slow.\n\nThe same applies to indexes in databases"
+          ],
+          "category": "missing_passage_or_unsupported",
+          "note": "no source in this run covers the claim; either the wrong section was selected or nothing supports it"
+        }
+      ],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1200,
+      "latency_ms": 4393,
+      "cost_usd": 0.00313,
+      "terminated": "done",
+      "search_cached": true
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "How does the DNS resolver decide when a cached record has expired?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence explains that DNS resolvers cache records based on the TTL (time to live) value set on the record. [1] When a resolver caches a DNS record, it should expire after the TTL period passes, at which point the resolver will request a fresh copy from the authoritative nameserver rather than serving the cached version.\n\nHowever, the evidence notes an important caveat: some resolvers ignore the TTL entirely and cache records for their own chosen duration, such as 24 hours, regardless of what the TTL specifies. [1] This means the TTL is not always the deciding factor in practice.\n\nThe evidence does not provide the technical details of how resolvers actually implement TTL expiration (for example, whether they use timers, check timestamps, or other mechanisms). It focuses on the fact that TTL exists as the intended mechanism but is sometimes disregarded by resolvers.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "DNS \"propagation\" is actually caches expiring",
+          "url": "https://jvns.ca/blog/2021/12/06/dns-doesn-t-propagate/",
+          "snippet": "I feel like the term \"DNS propagation\" is misleading, like you're not actually waiting for DNS records to \"propagate\", you're waiting for cached records to expire— 🔎Julia Evans🔍 (@b0rk) December 5, 2021\n\nand I want to talk about it a little more. This came up because I was showing a\n\nfriend a demo of how DNS caching works last week, and he realized that what was\n\nhappening in the demo didn’t lin"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 0.5,
+      "factual_sentences": 6,
+      "factual_sentences_cited": 2,
+      "weak_citations": [
+        {
+          "sentence": "[1] This means the TTL is not always the deciding factor in practice.",
+          "refs": [
+            1
+          ],
+          "support_score": 0.33,
+          "cited_passages": [
+            "I feel like the term \"DNS propagation\" is misleading, like you're not actually waiting for DNS records to \"propagate\", you're waiting for cached records to expire— 🔎Julia Evans🔍 (@b0rk) December 5, 2021\n\nand I want to talk about it a little more. This came up because I was showing a\n\nfriend a demo of how DNS caching works last week, and he realized that what was\n\nhappening in the demo didn’t lin"
+          ],
+          "category": "missing_passage_or_unsupported",
+          "note": "no source in this run covers the claim; either the wrong section was selected or nothing supports it"
+        }
+      ],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1308,
+      "latency_ms": 5332,
+      "cost_usd": 0.00273,
+      "terminated": "done",
+      "search_cached": true
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "What does a Merkle tree let a distributed system verify cheaply?",
+      "model": "claude-haiku-4-5",
+      "answer": "A Merkle tree lets a distributed system verify data integrity cheaply by using hashes instead of transmitting entire files [2]. Rather than sending all data across the network for comparison, one system sends only the root hash to another [2]. If the hashes match, verification is complete; if not, the systems exchange only the hashes of divergent branches until they locate mismatched data blocks [2].\n\nThis approach is efficient because hashes are vastly smaller than the actual files [2]. For example, with a dataset of 1 billion entries, traditional verification would require transmitting gigabytes of data, but a Merkle tree approach needs only about 30 hashes, reducing the burden by several orders of magnitude [1].\n\nThe verification process exploits the fact that network transmission is slower than local computation [2]. Since changes to even a single byte of data completely alter the root hash, any data corruption is immediately detectable [1]. Once a mismatch is found, the systems can drill down into only the inconsistent branches rather than resyncing everything [1].\n\nThis is why Merkle trees are widely used in systems like Bitcoin (to verify transaction inclusion in blocks), Git (to synchronize repositories), and distributed databases like Amazon DynamoDB and Apache Cassandra (for replica synchronization) [1].",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Merkle Trees: The Data Structure for Verifiable State",
+          "url": "https://pratikpandey.substack.com/p/merkle-trees-the-data-structure-for",
+          "snippet": "SubscribeSign inMerkle Trees: The Data Structure for Verifiable StateA Merkle Tree is a binary tree of cryptographic hashes, constructed from the bottom up to efficiently verify data integrity.Pratik PandeyJun 22, 20252025ShareIn large scale data systems, trust is everything. But how do you verify that two massive datasets are identical without sending gigabytes of data across a network? How does"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Merkle Tree | Brilliant Math & Science Wiki",
+          "url": "https://brilliant.org/wiki/merkle-tree/",
+          "snippet": "This wiki page is an archived resource and is no longer maintained. Learn moreMerkle TreeA Merkle tree is a hash-based data structure that is a generalization of the hash list. It is a tree structure in which each leaf node is a hash of a block of data, and each non-leaf node is a hash of its children. Typically, Merkle trees have a branching factor of 2, meaning that each node has up to 2 childre"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 0.778,
+      "factual_sentences": 9,
+      "factual_sentences_cited": 9,
+      "weak_citations": [
+        {
+          "sentence": "The verification process exploits the fact that network transmission is slower than local computation [2].",
+          "refs": [
+            2
+          ],
+          "support_score": 0.44,
+          "cited_passages": [
+            "This wiki page is an archived resource and is no longer maintained. Learn moreMerkle TreeA Merkle tree is a hash-based data structure that is a generalization of the hash list. It is a tree structure in which each leaf node is a hash of a block of data, and each non-leaf node is a hash of its children. Typically, Merkle trees have a branching factor of 2, meaning that each node has up to 2 childre"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        },
+        {
+          "sentence": "Once a mismatch is found, the systems can drill down into only the inconsistent branches rather than resyncing everything [1].",
+          "refs": [
+            1
+          ],
+          "support_score": 0.45,
+          "cited_passages": [
+            "SubscribeSign inMerkle Trees: The Data Structure for Verifiable StateA Merkle Tree is a binary tree of cryptographic hashes, constructed from the bottom up to efficiently verify data integrity.Pratik PandeyJun 22, 20252025ShareIn large scale data systems, trust is everything. But how do you verify that two massive datasets are identical without sending gigabytes of data across a network? How does"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        }
+      ],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2851,
+      "latency_ms": 6553,
+      "cost_usd": 0.004174,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "How does write amplification arise in solid state drives?",
+      "model": "claude-haiku-4-5",
+      "answer": "Write amplification arises from how flash memory physically operates [2]. Flash memory cannot be directly overwritten like a hard disk drive. Instead, when new data replaces old data, the SSD controller writes the new data to a fresh location and updates its logical mapping to point there [2]. The old data becomes invalid and must be erased before that space can be used again [2].\n\nThe problem is granularity: flash memory writes data in small pages (typically 4 kilobytes) but erases data in much larger blocks (256 kilobytes) [2]. Because of this coarse erase operation, the process of rewriting data requires reading, updating, and writing user data and metadata multiple times, and erasing much larger portions of flash than actually needed [2]. This multiplying effect means the actual number of writes to the storage media exceeds the logical writes intended by the user [2].\n\nWrite amplification also results from garbage collection and wear leveling operations [2]. As the SSD's logical-to-physical mapping becomes fragmented during random write workloads, the drive must perform more garbage collection to clean up unused data blocks, which increases internal write traffic [1].\n\nThe consequence is significant: higher write amplification reduces SSD lifespan because flash memory can only endure a limited number of program/erase cycles, and it also degrades write performance by consuming bandwidth to the flash memory [2].",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Write amplification is the silent killer of SSDs, here's how to mitigate it",
+          "url": "https://www.xda-developers.com/write-amplification-is-the-silent-killer-of-ssds/",
+          "snippet": "Madeline (She/Her) is a PC Author at XDA with 13 years of experience in tech journalism. She focuses on gaming, computer hardware, components, and software.\n\nHer byline has appeared at multiple publications including Laptop Mag, Tom's Guide, Bleeding Cool, and Diver Mag.\n\nMadeline is also a photographer and scuba instructor.\n\nSolid-state drives are generally preferable to hard disk drives on any m"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Write amplification - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Write_amplification",
+          "snippet": "Phenomenon associated with solid state storage\n\nThis article needs to be updated. Please help update this article to reflect recent events or newly available information. (July 2020)\n\nAn SSD experiences write amplification as a result of garbage collection and wear leveling, thereby increasing writes on the drive and reducing its life.[1]\n\nWrite amplification (WA) is an undesirable phenomenon asso"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 1,
+      "factual_sentences": 10,
+      "factual_sentences_cited": 9,
+      "weak_citations": [],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 3213,
+      "latency_ms": 6845,
+      "cost_usd": 0.004345,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "model": "claude-haiku-4-5",
+      "answer": "The two-phase commit protocol solves the problem of atomically updating data across multiple nodes in a distributed system. [2] When data needs to be stored on multiple cluster nodes, nodes cannot make the data accessible to clients until there is a decision about whether the operation succeeded everywhere, and each node needs to know if other nodes successfully stored the data. [2] The protocol coordinates all participating processes to either commit or abort a transaction as a single unit. [1]\n\nThe protocol works in two phases. [2] In the prepare phase, a coordinator asks each node whether it can promise to execute the operation, and each node acquires whatever resources (such as locks) it needs to ensure it can commit. If all nodes agree, the commit phase proceeds and the operation executes. If any node cannot make that promise, the coordinator aborts the transaction and all nodes roll back. [2]\n\nThe costs are significant. The protocol is not resilient to all failure configurations, and in rare cases manual intervention is needed. [1] Recovery procedures compose a substantial portion of the protocol because many failure scenarios must be supported. [1] Each participant must ensure the durability of its decision through logging, which is typically slow to generate. [1] The protocol also requires that each node maintain stable storage with a write-ahead log and that any two nodes can communicate with each other. [1] These constraints mean the protocol introduces latency and operational complexity, particularly in recovery from failures.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Two-phase commit protocol - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol",
+          "snippet": "\"2PC\" redirects here. For the play in American and Canadian football, see Two-point conversion. For the cryptographic protocol, see Commitment scheme. For the concurrency control, see Two-phase locking.\n\nA typical sequence of a Two-phase commit.\n\nIn transaction processing, databases, and computer networking, the two-phase commit protocol (2PC, tupac) is a type of atomic commitment protocol (ACP)."
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Two-Phase Commit",
+          "url": "https://martinfowler.com/articles/patterns-of-distributed-systems/two-phase-commit.html",
+          "snippet": "Update resources on multiple nodes in one atomic operation\n\nWhen data needs to be atomically stored on multiple cluster nodes,\n\nnodes cannot make the data accessible to clients until the decision\n\nEach node needs to know if other nodes successfully stored the data or\n\nThe essence of two-phase commit, unsurprisingly, is that it carries out an\n\nThe prepare phase asks each node if it can promise to c"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 0.778,
+      "factual_sentences": 12,
+      "factual_sentences_cited": 7,
+      "weak_citations": [
+        {
+          "sentence": "[2] The protocol coordinates all participating processes to either commit or abort a transaction as a single unit.",
+          "refs": [
+            2
+          ],
+          "support_score": 0.45,
+          "cited_passages": [
+            "Update resources on multiple nodes in one atomic operation\n\nWhen data needs to be atomically stored on multiple cluster nodes,\n\nnodes cannot make the data accessible to clients until the decision\n\nEach node needs to know if other nodes successfully stored the data or\n\nThe essence of two-phase commit, unsurprisingly, is that it carries out an\n\nThe prepare phase asks each node if it can promise to c"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        },
+        {
+          "sentence": "[1] These constraints mean the protocol introduces latency and operational complexity, particularly in recovery from failures.",
+          "refs": [
+            1
+          ],
+          "support_score": 0.2,
+          "cited_passages": [
+            "\"2PC\" redirects here. For the play in American and Canadian football, see Two-point conversion. For the cryptographic protocol, see Commitment scheme. For the concurrency control, see Two-phase locking.\n\nA typical sequence of a Two-phase commit.\n\nIn transaction processing, databases, and computer networking, the two-phase commit protocol (2PC, tupac) is a type of atomic commitment protocol (ACP)."
+          ],
+          "category": "missing_passage_or_unsupported",
+          "note": "no source in this run covers the claim; either the wrong section was selected or nothing supports it"
+        }
+      ],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2690,
+      "latency_ms": 6234,
+      "cost_usd": 0.003418,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "How does HTTP content negotiation choose a response representation?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence describes content negotiation through HTTP headers but does not explain how the server chooses among options.\n\n[1] states that HTTP defines a set of message headers starting with Accept as \"a way for a browser to announce the format, language, or encoding it prefers\" and that \"this article explains how this advertisement happens, how the server is expected to react, and how it chooses the most adequate response to a request.\" However, the actual mechanism for how the server makes that choice is not provided in the evidence blocks.\n\nTo answer your question fully, I would need details on the algorithm or logic servers use to evaluate client preferences against available representations and select the best match.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "HTTP: Hypertext Transfer Protocol | MDN",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP",
+          "snippet": "HTTP is an application-layer protocol for transmitting hypermedia documents, such as HTML.\n\nIt was designed for communication between web browsers and web servers, but it can also be used for other purposes, such as machine-to-machine communication, programmatic access to APIs, and more.\n\nHTTP follows a classical client-server model, with a client opening a connection to make a request, then waiti"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "What is HTTP",
+          "url": "https://www.w3schools.com/whatis/whatis_http.asp",
+          "snippet": "HTTP stands for Hyper Text Transfer Protocol\n\nWWW is about communication between web clients and servers\n\nCommunication between client computers and web servers is done by sending\n\nHTTP Requests and receiving HTTP Responses\n\nThe World Wide Web is about communication between web clients and\n\nClients are often browsers (Chrome, Edge, Safari), but they\n\nServers are most often computers in the cloud."
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 4,
+      "factual_sentences_cited": 1,
+      "weak_citations": [],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2786,
+      "latency_ms": 4635,
+      "cost_usd": 0.002913,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "What does the borrow checker in Rust prevent at compile time?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence provided does not contain information about what the Rust borrow checker prevents at compile time in general terms. Evidence [2] discusses specific problems users encounter with the borrow checker and workarounds, but does not explain the borrow checker's fundamental purpose or what it prevents. Evidence [1] is about a Google index checking tool and is unrelated to Rust.\n\nTo answer your question properly, I would need documentation that explains the borrow checker's core function and design goals.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Rapid Index Checker Launches Bulk Google Index Checker for SEO Teams and Agencies",
+          "url": "https://finance.yahoo.com/news/rapid-index-checker-launches-bulk-123500292.html",
+          "snippet": "Oops, something went wrong Skip to navigation Skip to main content Skip to right column This is a paid press release. Contact the press release distributor directly with any inquiries. Rapid Index Checker Launches Bulk Google Index Checker for SEO Teams and Agencies Rapid Index Checker February 10, 2026 4 min read GOOGL Bulk Google index checker Rapid Index Checker diagnoses noindex tags, robots.t"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Yet another fight with the borrow checker",
+          "url": "https://users.rust-lang.org/t/yet-another-fight-with-the-borrow-checker/131372",
+          "snippet": "Yet another fight with the borrow checker\n\nI ran into (almost exactly) the 1st problem in this article: Four limitations of Rust’s borrow checker | Considerations on Codecrafting\n\nlet's reiterate the problem in this simple example:\n\nerror[E0502]: cannot borrow `self.0` as mutable because it is also borrowed as immutable\n\n6 | fn get(&mut self, k: &u32) -> &String {\n\n| - let's call the lifetime of t"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 1,
+      "cited_valid": 2,
+      "groundedness": 0.5,
+      "factual_sentences": 4,
+      "factual_sentences_cited": 2,
+      "weak_citations": [
+        {
+          "sentence": "Evidence [2] discusses specific problems users encounter with the borrow checker and workarounds, but does not explain the borrow checker's fundamental purpose or what it prevents.",
+          "refs": [
+            2
+          ],
+          "support_score": 0.36,
+          "cited_passages": [
+            "Yet another fight with the borrow checker\n\nI ran into (almost exactly) the 1st problem in this article: Four limitations of Rust’s borrow checker | Considerations on Codecrafting\n\nlet's reiterate the problem in this simple example:\n\nerror[E0502]: cannot borrow `self.0` as mutable because it is also borrowed as immutable\n\n6 | fn get(&mut self, k: &u32) -> &String {\n\n| - let's call the lifetime of t"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        }
+      ],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2876,
+      "latency_ms": 4435,
+      "cost_usd": 0.003296,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence provided does not address JIT compiler behavior or the criteria for method compilation. The single source is an App Store listing for \"Decide Now! Spin the Wheel,\" a decision-making application, which contains no information about just-in-time compilation techniques.\n\nI cannot answer this question based on the available evidence.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Decide Now! Spin the Wheel App - App Store",
+          "url": "https://apps.apple.com/us/app/decide-now-spin-the-wheel/id383718755",
+          "snippet": "Decide Now! Spin the Wheel Yes or no & random name picker $1.99 · Designed for iPad. Not verified for macOS. Share iPhone, iPad \"Where should we eat?\"\n\n\"I don't know… where do YOU want to eat?\"\n\nDecide Now! turns any decision into a colorful spinning wheel. Type your options, tap, and let fate do the arguing. It's the fastest way to end a debate nobody actually wants to win.\n\n• Dinner — the eterna"
+        }
+      ],
       "cited_sentences": 0,
       "supported_sentences": null,
       "cited_valid": 0,
       "groundedness": null,
-      "factual_sentences": 0,
+      "factual_sentences": 4,
       "factual_sentences_cited": 0,
       "weak_citations": [],
       "sources_fetched": 1,
       "warnings": [
+        "evidence_limited",
         "uncited_answer"
       ],
-      "ttft_ms": 3058,
-      "latency_ms": 943986,
-      "cost_usd": 0,
+      "ttft_ms": 3733,
+      "latency_ms": 4842,
+      "cost_usd": 0.001988,
       "terminated": "cap",
       "search_cached": false
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "What is the difference between a clustered and a non-clustered database index?",
-      "model": "claude-haiku-4-5",
-      "answer": "The search for evidence on this topic returned no usable results. I cannot answer your question from retrieved sources. Please try a Deep Search to locate technical documentation on database index types.",
-      "sources": [],
-      "cited_sentences": 0,
-      "supported_sentences": null,
-      "cited_valid": 0,
-      "groundedness": null,
-      "factual_sentences": 3,
-      "factual_sentences_cited": 0,
-      "weak_citations": [],
-      "sources_fetched": 0,
-      "warnings": [
-        "evidence_limited"
-      ],
-      "ttft_ms": 213401,
-      "latency_ms": 215216,
-      "cost_usd": 0.000946,
-      "terminated": "cap",
-      "search_cached": false
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "How does the DNS resolver decide when a cached record has expired?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "What does a Merkle tree let a distributed system verify cheaply?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "How does write amplification arise in solid state drives?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "What problem does the two-phase commit protocol solve, and what does it cost?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "How does HTTP content negotiation choose a response representation?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "What does the borrow checker in Rust prevent at compile time?",
-      "error": "terminated"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "How does a JIT compiler decide that a method is hot enough to compile?",
-      "model": "claude-haiku-4-5",
-      "answer": "The retrieval found no usable evidence on this topic. I cannot answer your question from the available sources. Try a Deep Search to locate material on JIT compiler heuristics and hotness thresholds.",
-      "sources": [],
-      "cited_sentences": 0,
-      "supported_sentences": null,
-      "cited_valid": 0,
-      "groundedness": null,
-      "factual_sentences": 3,
-      "factual_sentences_cited": 0,
-      "weak_citations": [],
-      "sources_fetched": 0,
-      "warnings": [
-        "evidence_limited"
-      ],
-      "ttft_ms": 1046475,
-      "latency_ms": 1048024,
-      "cost_usd": 0.00098,
-      "terminated": "cap",
-      "search_cached": false
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What is the purpose of a write-ahead log in database crash recovery?",
       "model": "claude-haiku-4-5",
-      "answer": "The retrieval found no usable evidence to answer this question. Try Deep Search to locate sources on database crash recovery and write-ahead logging mechanisms.",
-      "sources": [],
+      "answer": "The purpose of a write-ahead log in database crash recovery is to ensure that data modifications survive system crashes through a simple rule: before modifying a data page on disk, write a record describing that modification to the log [1]. If the system crashes, you replay the log to reconstruct lost writes [1].\n\nThe WAL protocol follows three steps to guarantee this: write to the log first by appending a redo record before modifying a data page, flush the log to disk with fsync to ensure durability, and then apply the change to the data page [1]. This sequence means that even if the system crashes mid-operation, the log record is already safely stored and can be replayed to recover the transaction [1].\n\nThe recovery outcome depends critically on when the crash occurs relative to these steps [1]. If the crash happens after the log is flushed to disk but before the page is written, the transaction can be recovered because the WAL has the redo record [1]. If it happens before the log is even flushed, the transaction is lost because the data never made it to durable storage [1].",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Write-Ahead Log (WAL): The Foundation of Crash Recovery and Durability — System Design Guides",
+          "url": "https://codefarm.in/guides/system-design/04-core-algorithms/write-ahead-log",
+          "snippet": "All GuidesCore AlgorithmsShareTable of ContentsGuidesCore AlgorithmsWrite-Ahead Log (WAL): The Foundation of Crash Recovery and DurabilityUnderstand the WAL algorithm - the foundation of crash recovery in PostgreSQL, durability in Kafka, and replication in databases. Learn fsync ordering, checkpointing, and point-in-time recovery.March 15, 2025Updated May 15, 2025WALcrash-recoverydurabilityPostgre"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 0.857,
+      "factual_sentences": 7,
+      "factual_sentences_cited": 7,
+      "weak_citations": [
+        {
+          "sentence": "The recovery outcome depends critically on when the crash occurs relative to these steps [1].",
+          "refs": [
+            1
+          ],
+          "support_score": 0.25,
+          "cited_passages": [
+            "All GuidesCore AlgorithmsShareTable of ContentsGuidesCore AlgorithmsWrite-Ahead Log (WAL): The Foundation of Crash Recovery and DurabilityUnderstand the WAL algorithm - the foundation of crash recovery in PostgreSQL, durability in Kafka, and replication in databases. Learn fsync ordering, checkpointing, and point-in-time recovery.March 15, 2025Updated May 15, 2025WALcrash-recoverydurabilityPostgre"
+          ],
+          "category": "missing_passage_or_unsupported",
+          "note": "no source in this run covers the claim; either the wrong section was selected or nothing supports it"
+        }
+      ],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 5988,
+      "latency_ms": 8573,
+      "cost_usd": 0.003044,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
+      "query": "How does consistent hashing limit the keys that move when a node leaves?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence provided does not address consistent hashing, node distribution, or the mechanics of how keys are redistributed in distributed systems. The three blocks cover startup fundraising strategies, VM migration software, and human migration patterns—none of which relate to your question about consistent hashing algorithms.\n\nI cannot answer this question from the available evidence.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "A founder who raised $23 million for her startup and convinced Mark Cuban to invest always takes the same 2 steps after a pitch goes wrong",
+          "url": "https://www.businessinsider.com/business-advice-pitch-node-falon-fatemi-tips-2018-12",
+          "snippet": "A founder who raised $23 million for her startup and convinced Mark Cuban to invest always takes the same 2 steps after a pitch goes wrong\n\nWant to unfollow? Unsubscribe via the link in your email.\n\nFalon Fatemi got a job at Google when she was 19 years old.\n\nOne of the keys to a successful business pitch is addressing your audience's questions before they're asked.\n\nAlthough it's not always possi"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Nutanix Move: Streamline Application Migration | Nutanix",
+          "url": "https://www.nutanix.com/products/move",
+          "snippet": "The fastest and simplest path to your IT transformation and cloud\n\nadoption goals. Migrate applications without refactoring or re-architecting.\n\nShift any application to any cloud with ease\n\nEliminate complex app dependency mapping and time-consuming refactoring. Move offers a faster, more cost-effective path to the Nutanix Cloud Platform—on-premises or in the cloud.\n\nAccelerate and simplify workl"
+        },
+        {
+          "n": 3,
+          "kind": "web",
+          "title": "MOVE: Where People are Going for a Better Future - Parag Khanna",
+          "url": "https://www.paragkhanna.com/move/",
+          "snippet": "Where People are Going for a Better Future\n\nIn the 60,000 years since people began colonizing the continents, a recurring feature of human civilization has been mobility—the constant search for resources and stability. Seismic global events—wars and genocides, revolutions and plagues—have only accelerated the process. The map of humanity isn’t settled—not now, not ever.\n\nAs climate change tips tow"
+        }
+      ],
       "cited_sentences": 0,
       "supported_sentences": null,
       "cited_valid": 0,
       "groundedness": null,
-      "factual_sentences": 2,
+      "factual_sentences": 3,
       "factual_sentences_cited": 0,
       "weak_citations": [],
-      "sources_fetched": 0,
+      "sources_fetched": 3,
       "warnings": [
-        "evidence_limited"
+        "evidence_limited",
+        "uncited_answer"
       ],
-      "ttft_ms": 202871,
-      "latency_ms": 203440,
-      "cost_usd": 0.000914,
+      "ttft_ms": 1702,
+      "latency_ms": 2920,
+      "cost_usd": 0.003605,
       "terminated": "cap",
-      "search_cached": false
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
-      "query": "How does consistent hashing limit the keys that move when a node leaves?",
-      "error": "the run was not recorded"
-    },
-    {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What does TLS certificate pinning protect against, and what does it break?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "TLS certificate pinning protects against man-in-the-middle (MITM) attacks [1]. By pinning an SSL/TLS certificate to a specific root certificate, the app accepts only that particular certificate. This means hackers cannot intercept communication and issue a fake SSL/TLS certificate, since the browser will reject any certificate that doesn't match the pinned one [1].\n\nThe main things it breaks or limits are:\n\n**Flexibility.** Pinning restricts SSL/TLS certificates to a specific Certificate Authority, reducing your ability to switch CAs if needed [1].\n\n**Maintenance burden.** Root certificates require regular updates; without them you risk lost traffic, broken links, or error messages [1]. You need a mechanism in place to update certificates quickly during security breaches or revocations [1].\n\n**Browser compatibility.** Not all browsers support certificate pinning [1].\n\n**False positives.** Pinning can cause browsers to reject legitimate SSL certificates and warn users of attacks that aren't happening [1]. This can be reduced through testing before deployment and providing clear error messages [1].\n\nThe evidence does not detail other potential operational disruptions beyond these, though the implication is that improper implementation could lock users out of legitimate services.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Certificate Pinning — Does It Help App Security? – PreEmptive",
+          "url": "https://www.preemptive.com/blog/what-is-certificate-pinning-app-security/",
+          "snippet": "Explore Sembi IQ - The AI engine powering the next generation of intelligent quality\n\nCertificate Pinning — Does It Help App Security?\n\nCybersecurity for apps is a critical aspect of securing business activities. As applications are connected to the cloud and used over various networks, they are more prone to security vulnerabilities such as man-in-the-middle (MITM) attacks.\n\nAn Accenture report s"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 11,
+      "factual_sentences_cited": 8,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1427,
+      "latency_ms": 4491,
+      "cost_usd": 0.002972,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "Copy-on-Write (CoW) avoids duplicating data by postponing copying until modification occurs. [1] Instead of immediately duplicating data when creating a snapshot, CoW allows multiple processes to share the same data pages. [1] When one of those processes needs to modify the data, only then is a copy of that specific data page created. [1]\n\nThe mechanism works through page sharing and write interception. [1] When multiple processes start, they all initially point to the same physical memory pages, which are marked as read-only. [1] If a process attempts to modify a page, a \"page fault\" occurs, which triggers the CoW mechanism to create a private copy of that page for the writing process. [1] All other processes continue to use the original, shared page. [1] This approach maximizes memory utilization and reduces the amount of physical memory required. [1]\n\nIn practical terms, when you clone a virtual machine using CoW, the new VM does not immediately duplicate all of its data. [1] Instead, the clone initially shares the same data pages as the original. Only when either the original or the clone modifies data does the system create a separate copy of those modified pages.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "What is Copy-on-Write? A Detailed Overview",
+          "url": "https://www.starwindsoftware.com/blog/copy-on-write-overview/",
+          "snippet": "StarWind x Proxmox VE SAN Integration Services\n\n[[!getUserAuthorized? &chunkTrue=`chunk-logout` &chunkFalse=`chunk-login`]]\n\nHomeBlogWhat is Copy-on-Write? A Detailed Overview\n\nSee how NVMe-oF removes iSCSI bottlenecks\n\nThe Best Hyperconverged Infrastructure (HCI) for Enterprise ROBO, SMB & Edge\n\nWhat is Copy-on-Write? A Detailed Overview\n\nStarWind Director of Product Management. Ivan is an expert"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 11,
+      "factual_sentences_cited": 7,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1202,
+      "latency_ms": 3363,
+      "cost_usd": 0.002919,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "Head-of-line blocking in HTTP/2 occurs because [1] TCP requires that packets be processed in order, and if a packet is lost, subsequent packets must wait until the missing packet is retransmitted and received. This causes delays in multiplexed connections.\n\nHTTP/3 avoids this problem because [1] its QUIC protocol eliminates the head-of-line blocking that plagues HTTP/2, ensuring independent data streams continue unaffected by packet loss. Additionally, [1] QUIC's Forward Error Correction mechanisms allow receivers to reconstruct missing packets without retransmission, minimizing congestion impact.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "HTTP/2 vs. HTTP/3",
+          "url": "https://www.logicmonitor.com/deep-dive/http3-vs-http2/introduction",
+          "snippet": "Milliseconds define user experience. HTTP/3’s QUIC protocol revolutionizes web communication by solving HTTP/2’s TCP limitations for faster, more reliable connections.\n\nGet the latest blogs, whitepapers, eGuides, and more straight into your inbox.\n\nHTTP/3’s QUIC protocol eliminates the head-of-line blocking that plagues HTTP/2, ensuring independent data streams continue unaffected by packet loss."
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 1,
+      "factual_sentences": 4,
+      "factual_sentences_cited": 3,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 1545,
+      "latency_ms": 3020,
+      "cost_usd": 0.002296,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "How does a vector clock differ from a Lamport timestamp?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "A vector clock and a Lamport timestamp differ in their core data structure and what they can express about event ordering.\n\nA Lamport clock maintains a single integer timestamp at each process [1]. When an internal event occurs, the clock increments by 1. When a process receives a message, it sets its clock to the maximum of its current timestamp and the received timestamp, then increments by 1, following the rule: t := max(currentTimestamp, messageTimestamp) + 1 [1].\n\nA vector clock, by contrast, maintains an array of integers rather than a single integer, with one entry for each process in the system [1]. For internal events, only the entry corresponding to the current process increments by 1. When receiving a message, the receiving process updates each element of its vector by taking the maximum of its current value and the corresponding value in the received vector [1].\n\nThe practical difference is in ordering capability. Lamport timestamps determine a partial ordering of events, meaning they can tell if one event causally happened before another in some cases but not always [1]. Vector clocks provide stronger information: they can determine causal relationships more completely. For example, when process P0's event f sends a message received by process P1's event k, Lamport assigns them timestamps based on a global counter rule, while vector clock shows the dependency explicitly through the updated vector values [1].\n\nIn short, Lamport uses one number per process; vector clock uses an array of numbers per process, capturing more detailed causality information.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Lamport clock vs Vector clock - Ngoc Tran",
+          "url": "https://newbiettn.github.io/2014/05/03/lamport-clock-vs-vector-clock/",
+          "snippet": "First and foremost, I want to say I am pretty much tired mentally and physically yet do not how to boost up myself. But I am human, so just have some fun with knowledge and pray I will be better when I reach the end of the post. Pray for me!\n\nMy today topic is much different compared to other posts. Neither programming languages nor Web-related things. Today is about Distributed Computer Systems a"
+        }
+      ],
+      "cited_sentences": 1,
+      "supported_sentences": 1,
+      "cited_valid": 1,
+      "groundedness": 0.667,
+      "factual_sentences": 12,
+      "factual_sentences_cited": 6,
+      "weak_citations": [
+        {
+          "sentence": "When receiving a message, the receiving process updates each element of its vector by taking the maximum of its current value and the corresponding value in the received vector [1].",
+          "refs": [
+            1
+          ],
+          "support_score": 0.42,
+          "cited_passages": [
+            "First and foremost, I want to say I am pretty much tired mentally and physically yet do not how to boost up myself. But I am human, so just have some fun with knowledge and pray I will be better when I reach the end of the post. Pray for me!\n\nMy today topic is much different compared to other posts. Neither programming languages nor Web-related things. Today is about Distributed Computer Systems a"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        },
+        {
+          "sentence": "For example, when process P0's event f sends a message received by process P1's event k, Lamport assigns them timestamps based on a global counter rule, while vector clock shows the dependency explicitly through the updated vector values [1",
+          "refs": [
+            1
+          ],
+          "support_score": 0.42,
+          "cited_passages": [
+            "First and foremost, I want to say I am pretty much tired mentally and physically yet do not how to boost up myself. But I am human, so just have some fun with knowledge and pray I will be better when I reach the end of the post. Pray for me!\n\nMy today topic is much different compared to other posts. Neither programming languages nor Web-related things. Today is about Distributed Computer Systems a"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        }
+      ],
+      "sources_fetched": 1,
+      "warnings": [],
+      "ttft_ms": 958,
+      "latency_ms": 4893,
+      "cost_usd": 0.00325,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What does the CAP theorem actually claim about partition tolerance?",
       "model": "claude-haiku-4-5",
-      "answer": "I cannot answer this question. The retrieval found no usable evidence on the CAP theorem or its claims about partition tolerance. Try Deep Search to locate relevant sources on distributed systems theory.",
-      "sources": [],
-      "cited_sentences": 0,
-      "supported_sentences": null,
-      "cited_valid": 0,
-      "groundedness": null,
-      "factual_sentences": 2,
-      "factual_sentences_cited": 0,
-      "weak_citations": [],
-      "sources_fetched": 0,
-      "warnings": [
-        "evidence_limited"
+      "answer": "The CAP theorem claims that partition tolerance is mandatory in distributed systems. [1] Partition tolerance means the system can continue operating even if the network connecting nodes fails, creating two or more partitions where nodes in each partition can only communicate among themselves. [1]\n\nThe key assertion is that partition tolerance is not optional. [2] Since distributed databases inherently operate across networks, network failures are inevitable, so partition tolerance becomes a necessary property for any reliable distributed service. [2] Because partition tolerance is a given, the CAP theorem frames the real choice as being between the other two properties: when a network failure occurs, a system must choose to prioritize either consistency or availability, but cannot guarantee both simultaneously. [2]\n\nIn other words, the theorem does not claim you can trade away partition tolerance. It assumes you must have it, and forces you to decide what to sacrifice between consistency and availability instead.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "The CAP Theorem in DBMS - GeeksforGeeks",
+          "url": "https://www.geeksforgeeks.org/dbms/the-cap-theorem-in-dbms/",
+          "snippet": "CoursesTutorialsInterview PrepDBMS TutorialInterview QuestionsQuizzesAcid PropertiesER ModelData WarehousingNotesIndexingSQLCompiler DesignComputer NetworkDigital ElectronicsThe CAP Theorem in DBMSLast Updated : 3 Jul, 2026The CAP Theorem is a key idea in distributed systems that explains why building a perfectly reliable, networked data system is impossible. When a network partition occurs, a dis"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "CAP Theorem Explained: Consistency, Availability & Partition Tolerance",
+          "url": "https://www.bmc.com/blogs/cap-theorem",
+          "snippet": "October 30, 2024 5 minute read Jonathan Johnson\n\nThe CAP theorem is a belief from theoretical computer science about distributed data stores that claims, in the event of a network failure on a distributed database, it is possible to provide either consistency or availability—but not both.\n\nWhat is the CAP theorem? The CAP Theorem is comprised of three components (hence its name) as they relate to"
+        }
       ],
-      "ttft_ms": 199853,
-      "latency_ms": 200905,
-      "cost_usd": 0.000951,
-      "terminated": "cap",
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 1,
+      "factual_sentences": 7,
+      "factual_sentences_cited": 3,
+      "weak_citations": [],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2446,
+      "latency_ms": 5396,
+      "cost_usd": 0.003549,
+      "terminated": "done",
       "search_cached": false
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "How do columnar storage formats achieve better compression than row formats?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence explains that columnar formats can employ compression methods to reduce storage space, but it does not provide specific details about how columnar storage achieves better compression than row formats [1].\n\nOne clue appears in the second source, which mentions compression as a benefit of columnar storage and notes that similar data types are grouped together in columns [2]. The implication is that storing the same type of data together (all values of a single attribute) likely allows compression algorithms to work more effectively, but the evidence does not explicitly explain the mechanics of why this is the case.\n\nThe evidence acknowledges there is a deeper technical explanation available elsewhere but does not cover the specifics here. To get a full answer on compression techniques and their comparative effectiveness, you would need additional sources.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "What Is a Columnar Database? Complete Guide with Examples",
+          "url": "https://www.fivetran.com/learn/a-guide-to-columnar-database",
+          "snippet": "GuidesWhat is a columnar database? A guide with the best examplesMay 29, 2023Fivetran,Anchor LinkTopicsDatabase ReplicationShareTraditionally, data has been stored in relational databases using a row-based storage format. However, when dealing with large volumes of data, this format can become a bottleneck, leading to slower query performance. This is where Columnar Databases come into play.Tradit"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Back To The Basics: What Is Columnar Storage",
+          "url": "https://seattledataguy.substack.com/p/back-to-the-basics-what-is-columnar",
+          "snippet": "SeattleDataGuy’s NewsletterSubscribeSign inBack To The Basics: What Is Columnar StorageAnd Why Is Everyone Using Parquet?SeattleDataGuyMay 08, 20257135ShareHi, fellow future and current Data Leaders; Ben here 👋Over the past few months I’ve been writing a series focused on going back to the basics. I’ve covered most of the various steps in an ETL/ELT as well as did some deeper dives into SQL.Below"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 1,
+      "factual_sentences": 5,
+      "factual_sentences_cited": 2,
+      "weak_citations": [],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 2205,
+      "latency_ms": 5138,
+      "cost_usd": 0.003522,
+      "terminated": "done",
+      "search_cached": true
     },
     {
-      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "commit": "b77f77187c009d20149e8e2a46066fb14b4aedd5",
       "query": "What is false sharing, and why does it slow down multicore code?",
-      "error": "the run was not recorded"
+      "model": "claude-haiku-4-5",
+      "answer": "False sharing occurs when multiple threads on different cores work on logically independent data that happens to reside in the same cache line [1, 2]. A cache line is the smallest unit of data transferred between main memory and the CPU cache, typically 64 bytes [1].\n\nHere's why it degrades performance. Modern CPUs cache data at the granularity of cache lines, not individual variables [2]. When one thread writes to its portion of a cache line, the CPU invalidates the entire cache line across all cores to maintain cache coherency, even though the threads are modifying different variables [2]. This forces other cores to reload the cache line from main memory, creating repeated, unnecessary memory traffic [1].\n\nConsider a concrete example: if two threads write to adjacent array elements that fall within the same cache line, Thread A's write invalidates the cache line for Thread B, and vice versa. The threads repeatedly reload data they don't actually need to update, causing a significant performance penalty [1].\n\nThe problem scales with workload. In one reported case, a multithreaded Poisson distribution calculation slowed dramatically as array size increased due to false sharing at segment boundaries between threads. Fixing the issue by aligning memory to cache line boundaries dropped runtime from 10.92 seconds to 0.06 seconds [1]. Another benchmark showed approximately 40% performance improvement from adding padding to separate variables onto different cache lines [2].\n\nSolutions include aligning memory allocations to cache line boundaries using tools like posix_memalign [1], or adding padding between struct fields so independent variables occupy separate cache lines [2].",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "Understanding and Solving False Sharing in Multi-threaded Applications with an actual issue I had",
+          "url": "https://dev.to/ariasdiniz/understanding-and-solving-false-sharing-in-multi-threaded-applications-with-an-actual-issue-i-had-57c",
+          "snippet": "Recently, I was working on a multi-threaded implementation of a function to calculate the Poisson distribution (amath_pdist). The goal was to divide the workload across multiple threads to improve performance, especially for large arrays. However, instead of achieving the expected speedup, I noticed a significant slowdown as the size of the array increased.\n\nAfter some investigation, I discovered"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Writing concurrent code that leads to false sharing (#92) - 100 Go Mistakes and How to Avoid Them",
+          "url": "https://100go.co/92-false-sharing/",
+          "snippet": "Writing concurrent code that leads to false sharing\n\nIn previous sections, we have discussed the fundamental concepts of CPU caching. We have seen that some specific caches (typically, L1 and L2) aren’t shared among all the logical cores but are specific to a physical core. This specificity has some concrete impacts such as concurrency and the concept of false sharing, which can lead to a signific"
+        }
+      ],
+      "cited_sentences": 2,
+      "supported_sentences": 2,
+      "cited_valid": 2,
+      "groundedness": 0.778,
+      "factual_sentences": 11,
+      "factual_sentences_cited": 9,
+      "weak_citations": [
+        {
+          "sentence": "This forces other cores to reload the cache line from main memory, creating repeated, unnecessary memory traffic [1].",
+          "refs": [
+            1
+          ],
+          "support_score": 0.45,
+          "cited_passages": [
+            "Recently, I was working on a multi-threaded implementation of a function to calculate the Poisson distribution (amath_pdist). The goal was to divide the workload across multiple threads to improve performance, especially for large arrays. However, instead of achieving the expected speedup, I noticed a significant slowdown as the size of the array increased.\n\nAfter some investigation, I discovered"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        },
+        {
+          "sentence": "The threads repeatedly reload data they don't actually need to update, causing a significant performance penalty [1].",
+          "refs": [
+            1
+          ],
+          "support_score": 0.42,
+          "cited_passages": [
+            "Recently, I was working on a multi-threaded implementation of a function to calculate the Poisson distribution (amath_pdist). The goal was to divide the workload across multiple threads to improve performance, especially for large arrays. However, instead of achieving the expected speedup, I noticed a significant slowdown as the size of the array increased.\n\nAfter some investigation, I discovered"
+          ],
+          "category": "tokenization_false_negative",
+          "note": "a faithful paraphrase shares few exact words with its source"
+        }
+      ],
+      "sources_fetched": 2,
+      "warnings": [],
+      "ttft_ms": 1309,
+      "latency_ms": 6355,
+      "cost_usd": 0.004611,
+      "terminated": "done",
+      "search_cached": true
     }
   ]
 }
