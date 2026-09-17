@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { getEventListeners } from 'node:events';
 
 /**
  * What a cancellation has to be for the rest of the system to treat it as one.
@@ -20,7 +21,7 @@ import path from 'node:path';
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-cancel-'));
 process.env.MONGODB_URI = '';
 
-const { abortReason } = await import('../src/agent/core/budget.js');
+const { abortReason, deadlineSignal } = await import('../src/agent/core/budget.js');
 const { isHostFault, raceSignal } = await import('../src/agent/services/fetcher.js');
 const { breaker } = await import('../src/shared/circuitBreaker.js');
 
@@ -120,9 +121,57 @@ test('an already-aborted caller does not wait at all', async () => {
 test('the abort listener is removed once the race settles', async () => {
   // A long-lived signal shared across many fetches would otherwise accumulate
   // one listener per page for the life of the request.
+  //
+  // The first version of this asked `signal.listenerCount?.('abort')`, which is
+  // undefined on an AbortSignal, so it compared zero with zero and would have
+  // passed against any leak at all. getEventListeners actually counts them.
   const controller = new AbortController();
-  const before = controller.signal.listenerCount?.('abort') ?? 0;
+  const count = () => getEventListeners(controller.signal, 'abort').length;
+  const before = count();
   for (let i = 0; i < 20; i += 1) await raceSignal(Promise.resolve(i), controller.signal, 'aborted');
-  const after = controller.signal.listenerCount?.('abort') ?? 0;
-  assert.ok(after <= before + 1, `listeners did not accumulate (${before} -> ${after})`);
+  assert.equal(count(), before, `twenty races left no listeners behind (${before} -> ${count()})`);
+});
+
+/* --------------------------------------------- reasons from outside */
+
+test('a caller aborting with a plain Error still produces an AbortError downstream', () => {
+  // Nothing in this codebase does it today, but a composed signal that forwards
+  // whatever it is handed is one caller away from the classification bug
+  // returning: the breaker would read the plain Error as the host's fault.
+  const outer = new AbortController();
+  const { signal, release } = deadlineSignal(60_000, outer.signal);
+  try {
+    outer.abort(new Error('client_disconnected'));
+    assert.equal(signal.aborted, true);
+    assert.equal(signal.reason.name, 'AbortError', 'the class is corrected');
+    assert.equal(signal.reason.message, 'client_disconnected', 'and the reason is kept');
+    assert.equal(isHostFault(signal.reason), false, 'so the breaker does not count it');
+  } finally {
+    release();
+  }
+});
+
+test('an outer signal that already carries an AbortError is passed through unchanged', () => {
+  const outer = new AbortController();
+  const original = abortReason('client_disconnected');
+  outer.abort(original);
+  const { signal, release } = deadlineSignal(60_000, outer.signal);
+  try {
+    assert.equal(signal.reason, original, 'a correct reason is not rewrapped');
+  } finally {
+    release();
+  }
+});
+
+test('an outer signal aborted before composition is still normalised', () => {
+  const outer = new AbortController();
+  outer.abort(new Error('too late'));
+  const { signal, release } = deadlineSignal(60_000, outer.signal);
+  try {
+    assert.equal(signal.aborted, true);
+    assert.equal(signal.reason.name, 'AbortError');
+    assert.equal(isHostFault(signal.reason), false);
+  } finally {
+    release();
+  }
 });

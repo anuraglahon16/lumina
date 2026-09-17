@@ -53,9 +53,23 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
   // under a 390-second ceiling that never fired: the deadline existed, held
   // nothing, and was collected. One owned controller cannot be collected out
   // from under the request it is bounding.
-  const forward = () => controller.abort(outer.reason);
+  /**
+   * Normalise whatever the caller aborted with.
+   *
+   * An outer signal carries whatever reason its owner supplied, and a caller
+   * doing `controller.abort(new Error('client_disconnected'))` would reintroduce
+   * exactly the classification bug this helper exists to prevent: a plain Error
+   * forwarded downstream, where the circuit breaker reads it as the host's
+   * fault. The message is kept, since it is the useful part; the class is made
+   * correct, since that is the part everything else reads.
+   */
+  const forward = () => {
+    const given = outer.reason;
+    const isAbort = given?.name === 'AbortError' || given?.code === 'ABORT_ERR';
+    controller.abort(isAbort ? given : abortReason(given?.message || 'cancelled'));
+  };
   if (outer) {
-    if (outer.aborted) controller.abort(outer.reason);
+    if (outer.aborted) forward();
     else outer.addEventListener('abort', forward, { once: true });
   }
 
