@@ -8,10 +8,11 @@ import { compact } from '../store/filter.js';
 const documents = collection('documents');
 const chunks = collection('chunks');
 
-export async function createDocument({ userId, filename, mimetype, size }) {
+export async function createDocument({ userId, filename, mimetype, size, spaceId = null }) {
   return documents.put({
     id: newId('doc'),
     user_id: userId,
+    space_id: spaceId,
     filename,
     mimetype,
     size_bytes: size,

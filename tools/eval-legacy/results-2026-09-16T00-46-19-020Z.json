@@ -1,0 +1,877 @@
+{
+  "started_at": "2026-09-16T00:42:56.878Z",
+  "base": "https://lumina-anuraglahon.vercel.app",
+  "repeats": 2,
+  "cases": [
+    {
+      "case_id": "recent-factual",
+      "mode": "quick",
+      "runs": 2,
+      "failures": 0,
+      "contracts": {
+        "sources_before_tokens": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "no_invalid_citations": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "search_then_fetch": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "mode_respected": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "honest_when_capped": {
+          "mean": 1,
+          "lo": 0.20654329147389294,
+          "hi": 1,
+          "n": 1
+        },
+        "deep_planned": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "quality": {
+        "enough_sources": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "groundedness": {
+          "mean": 0.3335,
+          "lo": -3.905285000000001,
+          "hi": 4.572285000000001,
+          "sd": 0.4716402230514272,
+          "n": 2
+        },
+        "citation_coverage": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "mention_recall": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "expressed_uncertainty": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "performance": {
+        "latency_ms": {
+          "mean": 12158,
+          "lo": -13846.660000000003,
+          "hi": 38162.66,
+          "sd": 2893.4809486153526,
+          "n": 2
+        },
+        "ttft_ms": {
+          "mean": 8489.5,
+          "lo": -8967.685000000001,
+          "hi": 25946.685,
+          "sd": 1942.4223279194462,
+          "n": 2
+        },
+        "cost_usd": {
+          "mean": 0.019586,
+          "lo": -0.07829370999999999,
+          "hi": 0.11746571,
+          "sd": 0.010890858643835204,
+          "n": 2
+        },
+        "tool_calls": {
+          "mean": 4,
+          "lo": -21.42,
+          "hi": 29.42,
+          "sd": 2.8284271247461903,
+          "n": 2
+        },
+        "output_tokens": {
+          "mean": 901.5,
+          "lo": -312.30500000000006,
+          "hi": 2115.3050000000003,
+          "sd": 135.0573952066306,
+          "n": 2
+        }
+      },
+      "termination_reasons": {
+        "max_iterations_reached": 1,
+        "completed": 1
+      },
+      "runs_detail": [
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": true,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 2,
+          "enough_sources": true,
+          "cited_sources": 2,
+          "citation_coverage": 1,
+          "groundedness": 0.667,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 14204,
+          "ttft_ms": 9863,
+          "cost_usd": 0.027287,
+          "input_tokens": 8373,
+          "output_tokens": 997,
+          "tool_calls": 6,
+          "cache_hits": 0,
+          "termination_reason": "max_iterations_reached",
+          "capped": true,
+          "answer_chars": 885
+        },
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 1,
+          "enough_sources": true,
+          "cited_sources": 1,
+          "citation_coverage": 1,
+          "groundedness": 0,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 10112,
+          "ttft_ms": 7116,
+          "cost_usd": 0.011885,
+          "input_tokens": 1959,
+          "output_tokens": 806,
+          "tool_calls": 2,
+          "cache_hits": 1,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 385
+        }
+      ]
+    },
+    {
+      "case_id": "numeric-claim",
+      "mode": "quick",
+      "runs": 2,
+      "failures": 0,
+      "contracts": {
+        "sources_before_tokens": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "no_invalid_citations": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "search_then_fetch": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "mode_respected": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "honest_when_capped": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "deep_planned": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "quality": {
+        "enough_sources": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "groundedness": {
+          "mean": 0.95,
+          "lo": 0.3145,
+          "hi": 1.5855,
+          "sd": 0.07071067811865474,
+          "n": 2
+        },
+        "citation_coverage": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "mention_recall": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "expressed_uncertainty": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "performance": {
+        "latency_ms": {
+          "mean": 22524,
+          "lo": -17169.329999999994,
+          "hi": 62217.329999999994,
+          "sd": 4416.588955291176,
+          "n": 2
+        },
+        "ttft_ms": {
+          "mean": 14053,
+          "lo": -26669.840000000004,
+          "hi": 54775.840000000004,
+          "sd": 4531.140253843397,
+          "n": 2
+        },
+        "cost_usd": {
+          "mean": 0.040911,
+          "lo": -0.006243100000000015,
+          "hi": 0.08806510000000002,
+          "sd": 0.005246732316404185,
+          "n": 2
+        },
+        "tool_calls": {
+          "mean": 5.5,
+          "lo": -0.8550000000000004,
+          "hi": 11.855,
+          "sd": 0.7071067811865476,
+          "n": 2
+        },
+        "output_tokens": {
+          "mean": 1850,
+          "lo": -2712.8900000000003,
+          "hi": 6412.89,
+          "sd": 507.70266889194113,
+          "n": 2
+        }
+      },
+      "termination_reasons": {
+        "completed": 2
+      },
+      "runs_detail": [
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 2,
+          "enough_sources": true,
+          "cited_sources": 2,
+          "citation_coverage": 1,
+          "groundedness": 0.9,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 19401,
+          "ttft_ms": 10849,
+          "cost_usd": 0.044621,
+          "input_tokens": 14695,
+          "output_tokens": 1491,
+          "tool_calls": 6,
+          "cache_hits": 0,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 1994
+        },
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 1,
+          "enough_sources": true,
+          "cited_sources": 1,
+          "citation_coverage": 1,
+          "groundedness": 1,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 25647,
+          "ttft_ms": 17257,
+          "cost_usd": 0.037201,
+          "input_tokens": 7626,
+          "output_tokens": 2209,
+          "tool_calls": 5,
+          "cache_hits": 1,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 2025
+        }
+      ]
+    },
+    {
+      "case_id": "comparison",
+      "mode": "quick",
+      "runs": 2,
+      "failures": 0,
+      "contracts": {
+        "sources_before_tokens": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "no_invalid_citations": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "search_then_fetch": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "mode_respected": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "honest_when_capped": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "deep_planned": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "quality": {
+        "enough_sources": {
+          "mean": 0,
+          "lo": 0,
+          "hi": 0.6576280471103807,
+          "n": 2
+        },
+        "groundedness": {
+          "mean": 0.8165,
+          "lo": 0.6067850000000006,
+          "hi": 1.0262149999999994,
+          "sd": 0.02333452377915601,
+          "n": 2
+        },
+        "citation_coverage": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "mention_recall": {
+          "mean": 1,
+          "lo": 1,
+          "hi": 1,
+          "sd": 0,
+          "n": 2
+        },
+        "expressed_uncertainty": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "performance": {
+        "latency_ms": {
+          "mean": 22037.5,
+          "lo": -3363.4350000000013,
+          "hi": 47438.435,
+          "sd": 2826.3058044026307,
+          "n": 2
+        },
+        "ttft_ms": {
+          "mean": 14941.5,
+          "lo": -7739.495000000003,
+          "hi": 37622.495,
+          "sd": 2523.664102054788,
+          "n": 2
+        },
+        "cost_usd": {
+          "mean": 0.0329195,
+          "lo": 0.019338864999999997,
+          "hi": 0.046500135,
+          "sd": 0.001511087191395652,
+          "n": 2
+        },
+        "tool_calls": {
+          "mean": 4.5,
+          "lo": -1.8550000000000004,
+          "hi": 10.855,
+          "sd": 0.7071067811865476,
+          "n": 2
+        },
+        "output_tokens": {
+          "mean": 1818.5,
+          "lo": -615.4650000000001,
+          "hi": 4252.465,
+          "sd": 270.82189719444773,
+          "n": 2
+        }
+      },
+      "termination_reasons": {
+        "completed": 2
+      },
+      "runs_detail": [
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 1,
+          "enough_sources": false,
+          "cited_sources": 1,
+          "citation_coverage": 1,
+          "groundedness": 0.833,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 24036,
+          "ttft_ms": 16726,
+          "cost_usd": 0.033988,
+          "input_tokens": 6966,
+          "output_tokens": 2010,
+          "tool_calls": 4,
+          "cache_hits": 0,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 1854
+        },
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": true,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 1,
+          "enough_sources": false,
+          "cited_sources": 1,
+          "citation_coverage": 1,
+          "groundedness": 0.8,
+          "mention_recall": 1,
+          "expressed_uncertainty": null,
+          "latency_ms": 20039,
+          "ttft_ms": 13157,
+          "cost_usd": 0.031851,
+          "input_tokens": 7810,
+          "output_tokens": 1627,
+          "tool_calls": 5,
+          "cache_hits": 0,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 1783
+        }
+      ]
+    },
+    {
+      "case_id": "unanswerable",
+      "mode": "quick",
+      "runs": 2,
+      "failures": 0,
+      "contracts": {
+        "sources_before_tokens": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "no_invalid_citations": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "search_then_fetch": {
+          "mean": 0,
+          "lo": 0,
+          "hi": 0.6576280471103807,
+          "n": 2
+        },
+        "mode_respected": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "honest_when_capped": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "deep_planned": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "quality": {
+        "enough_sources": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "groundedness": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "citation_coverage": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "mention_recall": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "expressed_uncertainty": {
+          "mean": 0.5,
+          "lo": 0.09452865480086614,
+          "hi": 0.9054713451991339,
+          "n": 2
+        }
+      },
+      "performance": {
+        "latency_ms": {
+          "mean": 9637,
+          "lo": 9192.15,
+          "hi": 10081.85,
+          "sd": 49.49747468305833,
+          "n": 2
+        },
+        "ttft_ms": {
+          "mean": 7465,
+          "lo": 4427.3099999999995,
+          "hi": 10502.69,
+          "sd": 337.9970414071697,
+          "n": 2
+        },
+        "cost_usd": {
+          "mean": 0.010826,
+          "lo": 0.009478739999999998,
+          "hi": 0.012173260000000003,
+          "sd": 0.00014990663761154836,
+          "n": 2
+        },
+        "tool_calls": {
+          "mean": 2,
+          "lo": 2,
+          "hi": 2,
+          "sd": 0,
+          "n": 2
+        },
+        "output_tokens": {
+          "mean": 620,
+          "lo": 531.03,
+          "hi": 708.97,
+          "sd": 9.899494936611665,
+          "n": 2
+        }
+      },
+      "termination_reasons": {
+        "completed": 2
+      },
+      "runs_detail": [
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": false,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 0,
+          "enough_sources": true,
+          "cited_sources": 0,
+          "citation_coverage": null,
+          "groundedness": null,
+          "mention_recall": null,
+          "expressed_uncertainty": false,
+          "latency_ms": 9602,
+          "ttft_ms": 7704,
+          "cost_usd": 0.010932,
+          "input_tokens": 2210,
+          "output_tokens": 613,
+          "tool_calls": 2,
+          "cache_hits": 0,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 294
+        },
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": false,
+          "honest_when_capped": null,
+          "mode_respected": true,
+          "deep_planned": null,
+          "sources": 0,
+          "enough_sources": true,
+          "cited_sources": 0,
+          "citation_coverage": null,
+          "groundedness": null,
+          "mention_recall": null,
+          "expressed_uncertainty": true,
+          "latency_ms": 9672,
+          "ttft_ms": 7226,
+          "cost_usd": 0.01072,
+          "input_tokens": 2183,
+          "output_tokens": 627,
+          "tool_calls": 2,
+          "cache_hits": 0,
+          "termination_reason": "completed",
+          "capped": false,
+          "answer_chars": 281
+        }
+      ]
+    },
+    {
+      "case_id": "deep-multipart",
+      "mode": "deep",
+      "runs": 2,
+      "failures": 0,
+      "contracts": {
+        "sources_before_tokens": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "no_invalid_citations": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "search_then_fetch": {
+          "mean": 0,
+          "lo": 0,
+          "hi": 0.6576280471103807,
+          "n": 2
+        },
+        "mode_respected": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "honest_when_capped": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        },
+        "deep_planned": {
+          "mean": 1,
+          "lo": 0.34237195288961925,
+          "hi": 1,
+          "n": 2
+        }
+      },
+      "quality": {
+        "enough_sources": {
+          "mean": 0,
+          "lo": 0,
+          "hi": 0.6576280471103807,
+          "n": 2
+        },
+        "groundedness": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "citation_coverage": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "mention_recall": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        },
+        "expressed_uncertainty": {
+          "mean": null,
+          "lo": null,
+          "hi": null,
+          "n": 0
+        }
+      },
+      "performance": {
+        "latency_ms": {
+          "mean": 32807,
+          "lo": 23604.96,
+          "hi": 42009.04,
+          "sd": 1023.8906191581208,
+          "n": 2
+        },
+        "ttft_ms": {
+          "mean": 25911,
+          "lo": 23572.36,
+          "hi": 28249.64,
+          "sd": 260.2152954766495,
+          "n": 2
+        },
+        "cost_usd": {
+          "mean": 0.09426799999999999,
+          "lo": 0.07535552000000004,
+          "hi": 0.11318047999999994,
+          "sd": 0.0021043497808111602,
+          "n": 2
+        },
+        "tool_calls": {
+          "mean": 23,
+          "lo": 23,
+          "hi": 23,
+          "sd": 0,
+          "n": 2
+        },
+        "output_tokens": {
+          "mean": 4273.5,
+          "lo": 2741.9449999999997,
+          "hi": 5805.055,
+          "sd": 170.41273426595797,
+          "n": 2
+        }
+      },
+      "termination_reasons": {
+        "capped": 2
+      },
+      "runs_detail": [
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": false,
+          "honest_when_capped": true,
+          "mode_respected": true,
+          "deep_planned": true,
+          "sources": 0,
+          "enough_sources": false,
+          "cited_sources": 0,
+          "citation_coverage": null,
+          "groundedness": null,
+          "mention_recall": null,
+          "expressed_uncertainty": null,
+          "latency_ms": 32083,
+          "ttft_ms": 26095,
+          "cost_usd": 0.09278,
+          "input_tokens": 19159,
+          "output_tokens": 4153,
+          "tool_calls": 23,
+          "cache_hits": 0,
+          "termination_reason": "capped",
+          "capped": true,
+          "answer_chars": 1275
+        },
+        {
+          "failed": false,
+          "error": null,
+          "sources_before_tokens": true,
+          "no_invalid_citations": true,
+          "search_then_fetch": false,
+          "honest_when_capped": true,
+          "mode_respected": true,
+          "deep_planned": true,
+          "sources": 0,
+          "enough_sources": false,
+          "cited_sources": 0,
+          "citation_coverage": null,
+          "groundedness": null,
+          "mention_recall": null,
+          "expressed_uncertainty": null,
+          "latency_ms": 33531,
+          "ttft_ms": 25727,
+          "cost_usd": 0.095756,
+          "input_tokens": 19566,
+          "output_tokens": 4394,
+          "tool_calls": 23,
+          "cache_hits": 0,
+          "termination_reason": "capped",
+          "capped": true,
+          "answer_chars": 1813
+        }
+      ]
+    }
+  ]
+}

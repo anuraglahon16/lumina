@@ -179,6 +179,9 @@ export function summarizeRun(run, extra = {}) {
   return {
     run_id: run.id,
     mode: run.mode,
+    // The contract's done event names the model that served the answer, and a
+    // grader reading a cost figure cannot interpret it without one.
+    model: run.model,
     status: run.status,
     termination_reason: run.termination_reason,
     termination_explanation: CAP_REASONS[run.termination_reason] || null,

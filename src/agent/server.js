@@ -9,6 +9,7 @@ import { threadsRouter } from './routes/threads.js';
 import { memoriesRouter } from './routes/memories.js';
 import { documentsRouter } from './routes/documents.js';
 import { observabilityRouter } from './routes/observability.js';
+import { contractRouter } from './routes/contract.js';
 import { jobQueue } from './services/jobs.js';
 import './services/ingest.js'; // registers the index_document job handler
 
@@ -54,6 +55,10 @@ app.use('/v1', threadsRouter);
 app.use('/v1', memoriesRouter);
 app.use('/v1', documentsRouter);
 app.use('/v1', observabilityRouter);
+
+// The assignment's API, served at the paths its contract names. The gateway
+// forwards these through unchanged; `/v1` stays this project's own surface.
+app.use('/contract', contractRouter);
 
 app.use((req, res) => res.status(404).json({ error: { code: 'not_found', message: `No route for ${req.method} ${req.path}` } }));
 app.use(errorHandler(log));
