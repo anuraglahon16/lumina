@@ -259,8 +259,13 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
   };
 }
 
-export async function documentStats(userId) {
-  const docs = await documents.all({ user_id: userId });
+export async function documentStats(userId, { spaceId = null } = {}) {
+  // Scoped when a Space was named, because "this user has documents" and "the
+  // Space this question was asked in has documents" are different facts, and it
+  // is the second one that decides whether offering a document search is
+  // honest. Offering it over an empty scope produces a tool that can only fail.
+  const all = await documents.all({ user_id: userId });
+  const docs = spaceId ? all.filter((d) => d.space_id === spaceId) : all;
   return {
     documents: docs.length,
     indexed: docs.filter((d) => d.status === 'indexed').length,

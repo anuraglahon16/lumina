@@ -32,6 +32,12 @@ export async function runDeepQuery({
   requestId,
   emit,
   signal,
+  // Where the answer should come from, and which Space if it is documents.
+  // Quick has honoured these since the contract arrived; Deep accepted the
+  // request and researched the open web regardless, so a Deep question asked
+  // against an uploaded Space was answered from somewhere else entirely.
+  retrievalMode = 'auto',
+  spaceId = null,
   // Injected the way the research loop's are, and for the same reason: the
   // orchestration here — does it plan before retrieving, does every branch get
   // its own budget, is one branch's failure survivable — is the part that broke
@@ -63,7 +69,7 @@ export async function runDeepQuery({
     // ---- context ----------------------------------------------------------
     recorder.startPhase('context');
     const memories = await searchMemories(query, { userId }).catch(() => []);
-    const docs = await documentStats(userId);
+    const docs = await documentStats(userId, { spaceId });
     const history = (await threadContext(thread.id)).slice(0, -1);
     recorder.endPhase('context', { memories: memories.length, documents: docs.indexed });
     if (memories.length) emit('memory_used', { memories });
@@ -79,6 +85,8 @@ export async function runDeepQuery({
     const branchResults = await runBranches({
       complete: completeFn,
       executor,
+      retrievalMode,
+      spaceId,
       plan,
       ledger,
       recorder,
@@ -271,7 +279,7 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
 }
 
 /** Research every sub-question, at most `branchConcurrency` at a time. */
-async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor }) {
+async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, retrievalMode = 'auto', spaceId = null }) {
   const queue = [...plan.sub_questions];
   const results = [];
 
@@ -360,6 +368,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       maxTokens: config.budgets.deep.researchMaxTokens,
       effort: config.budgets.deep.researchEffort,
       hasDocuments,
+      retrievalMode,
+      spaceId,
       signal,
     });
 

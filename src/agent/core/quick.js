@@ -43,7 +43,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     recorder.startPhase('context');
     const [memories, docs] = await Promise.all([
       searchMemories(query, { userId }).catch(() => []),
-      documentStats(userId),
+      documentStats(userId, { spaceId }),
     ]);
     const history = (await threadContext(thread.id)).slice(0, -1);
     recorder.endPhase('context', { memories: memories.length, thread_turns: history.length, documents: docs.indexed });
