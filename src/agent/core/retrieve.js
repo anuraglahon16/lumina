@@ -91,7 +91,21 @@ export function choosePages(results, { limit = 2 } = {}) {
  * synthesise or hand the question to the research loop with the evidence
  * already in hand — the loop continues from here rather than starting over.
  */
-export async function gatherFromWeb({ query, ledger, budget, recorder, emit, signal, pages = 2, deadlineMs }) {
+export async function gatherFromWeb({
+  query,
+  ledger,
+  budget,
+  recorder,
+  emit,
+  signal,
+  pages = 2,
+  deadlineMs,
+  // Injected the way the research loop's model is, and for the same reason:
+  // what is worth pinning here is when the pool stops, what it retries, and
+  // whether the losers are cancelled — none of which is about the network.
+  webSearch: searchFn = webSearch,
+  fetchPage: fetchFn = fetchPage,
+}) {
   const searchQuery = searchQueryFor(query);
   const allowed = budget.allows('web_search');
   if (!allowed.ok) return { searched: false, coverage: assessCoverage(query, ledger.citable), reason: allowed.reason };
@@ -100,7 +114,7 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
   const t0 = performance.now();
   try {
     budget.consume('web_search');
-    const found = await webSearch(searchQuery, { recorder, signal });
+    const found = await searchFn(searchQuery, { recorder, signal });
     results = found.results || [];
     ledger.noteCandidates(results);
     trace(emit, recorder, {
@@ -118,6 +132,7 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
   }
 
   const coverage = await fetchUntilCovered({
+    fetchPage: fetchFn,
     query,
     searchQuery,
     candidates: choosePages(results, { limit: 8 }),
@@ -148,8 +163,24 @@ export async function gatherFromWeb({ query, ledger, budget, recorder, emit, sig
  *
  * It remains one search and one retrieval phase. Nothing here consults a model.
  */
-async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budget, recorder, emit, signal, target, deadlineMs }) {
-  const bound = deadlineSignal(deadlineMs, signal);
+async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budget, recorder, emit, signal, target, deadlineMs, fetchPage: fetchFn = fetchPage }) {
+  /**
+   * The pool's own cancellation, not merely its own deadline.
+   *
+   * This previously used a deadline signal and called release() on the way out,
+   * which clears the timer and the listener and aborts nothing at all: the
+   * losing fetches carried on to completion, unobserved. "Ignored" is not
+   * "cancelled", and on a pool where most requests are losers that is most of
+   * the work in flight — still holding sockets, still able to write cache
+   * entries, still keeping a serverless invocation alive after the answer was
+   * sent.
+   */
+  const pool = new AbortController();
+  const bound = deadlineSignal(deadlineMs, signal, () => pool.abort(new Error('retrieval_deadline')));
+  const forwardAbort = () => pool.abort(bound.signal.reason);
+  if (bound.signal.aborted) forwardAbort();
+  else bound.signal.addEventListener('abort', forwardAbort, { once: true });
+
   const queue = [...candidates];
   const inFlight = new Map();
   const attempted = new Set();
@@ -163,7 +194,7 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     ledger.attempted?.add(candidate.url);
     budget.consume('fetch_page');
     const began = performance.now();
-    const promise = fetchPage(candidate.url, { recorder, signal: bound.signal })
+    const promise = fetchFn(candidate.url, { recorder, signal: pool.signal })
       .catch((err) => ({ ok: false, url: candidate.url, error: err.message, aborted: err?.name === 'AbortError' }))
       .then((page) => ({ page, candidate, rank, waited: Math.round(performance.now() - began) }));
     inFlight.set(candidate.url, promise);
@@ -212,11 +243,14 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
       if (inFlight.size + usable < target + 1) start(queue.shift(), attempted.size + 1);
     }
   } finally {
-    // Whatever is still running is no longer wanted; aborting stops the work
-    // rather than merely ignoring it, and the ledger cannot be mutated after
-    // the answer has moved on.
+    // Whatever is still running is no longer wanted. Aborting stops the work;
+    // settling it before returning is what guarantees nothing lands afterwards
+    // — a fetch that resolved during the gap would otherwise add a source to a
+    // ledger the answer had already been written from.
+    pool.abort(new Error('retrieval_complete'));
     bound.release();
-    for (const promise of inFlight.values()) promise.catch(() => {});
+    await Promise.allSettled([...inFlight.values()]);
+    inFlight.clear();
   }
 
   return assessCoverage(query, ledger.citable);
@@ -284,7 +318,7 @@ export const QUICK_PAGES = () => config.budgets.quick.deterministicPages ?? 2;
  *
  * It is one more bounded attempt, not a loop, and no model is consulted.
  */
-export async function rescueRetrieval({ query, route, ledger, budget, recorder, emit, userId, spaceId, signal, candidates = [] }) {
+export async function rescueRetrieval({ query, route, ledger, budget, recorder, emit, userId, spaceId, signal, candidates = [], webSearch: searchFn, fetchPage: fetchFn }) {
   const bound = deadlineSignal(config.budgets.quick.rescueCeilingMs, signal);
   try {
     if (route === 'documents') {
@@ -295,6 +329,7 @@ export async function rescueRetrieval({ query, route, ledger, budget, recorder, 
     const untried = choosePages(candidates, { limit: 8 }).filter((c) => !ledger.byUrl?.has(c.url) && !triedUrls(ledger).has(c.url));
     if (untried.length) {
       const coverage = await fetchUntilCovered({
+        fetchPage: fetchFn,
         query,
         searchQuery: searchQueryFor(query),
         candidates: untried,
@@ -311,6 +346,8 @@ export async function rescueRetrieval({ query, route, ledger, budget, recorder, 
 
     // Nothing left to try, so a different search is the only move available.
     return await gatherFromWeb({
+      webSearch: searchFn,
+      fetchPage: fetchFn,
       query: contentTerms(query),
       ledger,
       budget,

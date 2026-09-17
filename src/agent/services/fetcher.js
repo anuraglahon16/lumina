@@ -45,18 +45,29 @@ async function assertFetchable(url) {
 
 const robotsCache = new Map();
 
-async function robotsAllows(parsed) {
+async function robotsAllows(parsed, { signal } = {}) {
   if (!config.fetcher.respectRobots) return true;
+  if (signal?.aborted) throw Object.assign(new Error('aborted before robots.txt'), { name: 'AbortError' });
   const origin = parsed.origin;
   if (!robotsCache.has(origin)) {
     robotsCache.set(
       origin,
       (async () => {
         try {
-          const res = await fetch(`${origin}/robots.txt`, {
-            headers: { 'user-agent': config.fetcher.userAgent },
-            signal: AbortSignal.timeout(5000),
-          });
+          // Its own short bound, composed with the caller's: robots is cached
+          // per origin and shared between concurrent runs, so one caller
+          // hanging up must not cancel the lookup another is waiting on. The
+          // caller's own abort is checked above and after.
+          const robotsBound = deadlineSignal(5000, undefined);
+          let res;
+          try {
+            res = await fetch(`${origin}/robots.txt`, {
+              headers: { 'user-agent': config.fetcher.userAgent },
+              signal: robotsBound.signal,
+            });
+          } finally {
+            robotsBound.release();
+          }
           if (!res.ok) return [];
           const text = (await res.text()).slice(0, 200000);
           const rules = [];
@@ -78,6 +89,9 @@ async function robotsAllows(parsed) {
     );
   }
   const rules = await robotsCache.get(origin);
+  // The lookup is shared between concurrent runs and cached per origin, so it
+  // is not cancelled on one caller's behalf — but that caller stops here.
+  if (signal?.aborted) throw Object.assign(new Error('aborted after robots.txt'), { name: 'AbortError' });
   const path = parsed.pathname + parsed.search;
   // Longest-match wins, as per the robots.txt convention.
   let best = null;
@@ -137,13 +151,24 @@ function extractArticle(html, url) {
 }
 
 /** Read the body with a hard byte ceiling so one huge page can't exhaust memory. */
-async function readLimited(res, maxBytes) {
+/**
+ * Read a body, stopping at a byte ceiling or on cancellation.
+ *
+ * Checked between chunks rather than only at the end: a cancelled request that
+ * keeps draining a large response has not been cancelled, it has been ignored
+ * with extra steps, and the reader is what holds the socket open.
+ */
+async function readLimited(res, maxBytes, signal) {
   const reader = res.body?.getReader();
   if (!reader) return { text: await res.text(), truncated: false };
   const chunks = [];
   let total = 0;
   let truncated = false;
   while (true) {
+    if (signal?.aborted) {
+      await reader.cancel().catch(() => {});
+      throw Object.assign(new Error('aborted while reading the body'), { name: 'AbortError' });
+    }
     const { done, value } = await reader.read();
     if (done) break;
     total += value.byteLength;
@@ -165,17 +190,34 @@ async function readLimited(res, maxBytes) {
 export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxChars, signal } = {}) {
   const started = performance.now();
   const at = () => Math.round(performance.now() - started);
+
+  /**
+   * The caller's cancellation and this fetch's own timeout, composed once and
+   * held for the whole operation.
+   *
+   * It used to be released as soon as the response headers arrived, which left
+   * the body read and the extraction — the expensive part of a large page —
+   * outside both the timeout and the caller's control. A cancelled request went
+   * on downloading.
+   *
+   * One thing this genuinely cannot cancel is the DNS lookup inside the SSRF
+   * check: `dns.promises.lookup` takes no signal, so an abort during resolution
+   * is noticed after it returns rather than during. The resolver has its own
+   * timeout and the window is short, but it is a gap and not a cancellation.
+   */
+  const bound = deadlineSignal(config.fetcher.timeoutMs, signal);
   // Where the time inside one fetch actually goes. Without this, a slow page is
   // just slow; with it, a slow resolver and a slow server and a heavy document
   // are three different problems with three different answers.
   const timings = { resolve_ms: null, robots_ms: null, headers_ms: null, body_ms: null, extract_ms: null };
 
+  try {
   const resolveStart = performance.now();
   const parsed = await assertFetchable(url);
   timings.resolve_ms = Math.round(performance.now() - resolveStart);
 
   const robotsStart = performance.now();
-  const allowed = await robotsAllows(parsed);
+  const allowed = await robotsAllows(parsed, { signal: bound.signal });
   timings.robots_ms = Math.round(performance.now() - robotsStart);
   if (!allowed) {
     return { ok: false, url, error: 'disallowed by robots.txt', status: null, duration_ms: at(), timings };
@@ -198,11 +240,6 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
     { url: parsed.toString(), maxChars },
     config.cache.fetchTtlMs,
     async () => hostBreaker.run(async () => {
-      // The caller's cancellation and this fetch's own timeout, composed. Without
-      // the caller's, a page kept being read after the answer it was for had
-      // already been given up on — and on a coverage-driven pool that is most
-      // of the requests in flight.
-      const bound = deadlineSignal(config.fetcher.timeoutMs, signal);
       let res;
       const headersStart = performance.now();
       try {
@@ -217,7 +254,6 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
         });
       } finally {
         timings.headers_ms = Math.round(performance.now() - headersStart);
-        bound.release();
       }
 
       const contentType = res.headers.get('content-type') || '';
@@ -228,7 +264,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
       }
 
       const bodyStart = performance.now();
-      const { text: body, truncated } = await readLimited(res, config.fetcher.maxBytes);
+      const { text: body, truncated } = await readLimited(res, config.fetcher.maxBytes, bound.signal);
       timings.body_ms = Math.round(performance.now() - bodyStart);
       const extractStart = performance.now();
       const isHtml = /html|xml/.test(contentType) || /^\s*<(!doctype|html)/i.test(body);
@@ -271,6 +307,9 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
   );
 
   return { ...value, cached: wasCached, duration_ms: at(), timings };
+  } finally {
+    bound.release();
+  }
 }
 
 /** Bounded-concurrency fetch of several URLs. */
