@@ -4,6 +4,9 @@ import { collection } from '../store/jsonStore.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
 import { usingMongoVectors, vectorBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc, countChunks } from './vectorStore.js';
 import { compact } from '../store/filter.js';
+import { createLogger } from '../../shared/logger.js';
+
+const log = createLogger('rag');
 
 const documents = collection('documents');
 const chunks = collection('chunks');
@@ -49,35 +52,98 @@ export async function deleteDocument(id, userId) {
   return true;
 }
 
-/** Embed and persist a document's chunks. Reports progress back to the job. */
+/**
+ * Embed and persist a document's chunks, all in one vector space.
+ *
+ * The embedding happens before anything is written, and every chunk is checked
+ * to have come from the same namespace before any of it is persisted. That
+ * ordering is the whole point. Embedding slice by slice and writing as it went
+ * meant a document whose provider was rate limited halfway through ended up
+ * part remote vectors and part local ones — and cosine similarity across two
+ * models is not a worse similarity, it is a meaningless number that the
+ * arithmetic happily returns. Nothing errored. The document looked indexed,
+ * search returned results, and recall was zero.
+ *
+ * If the namespaces disagree the whole document is embedded again with the
+ * fallback, because a document half in one space is worse than a document
+ * wholly in the weaker one.
+ */
 export async function indexChunks(doc, docChunks, { onProgress } = {}) {
+  const texts = docChunks.map((c) => c.text);
   const batchSize = config.embeddings.batchSize;
-  let provider = null;
-  for (let i = 0; i < docChunks.length; i += batchSize) {
-    const slice = docChunks.slice(i, i + batchSize);
-    const { vectors, provider: p } = await embedBatch(slice.map((c) => c.text), { inputType: 'document' });
-    provider = p;
-    const records = slice.map((chunk, j) => ({
-      id: newId('chk'),
-      chunk_id: `${doc.id}:${chunk.index}`,
-      doc_id: doc.id,
-      user_id: doc.user_id,
-      filename: doc.filename,
-      index: chunk.index,
-      page: chunk.page,
-      page_label: chunk.page_label,
-      text: chunk.text,
-      tokens: tokenize(chunk.text),
-      embedding: vectors[j],
-    }));
-    // Written to whichever store is configured. Mongo is the shared one, so it
-    // is what a second process would read; the local store stays the default.
-    if (usingMongoVectors()) await putChunks(records);
-    else for (const r of records) await chunks.put(r);
-    onProgress?.(Math.min(1, (i + slice.length) / docChunks.length));
+
+  const embedAll = async (forced) => {
+    const out = [];
+    const namespaces = new Set();
+    let meta = null;
+    for (let i = 0; i < texts.length; i += batchSize) {
+      const slice = texts.slice(i, i + batchSize);
+      const res = await embedBatch(slice, { inputType: 'document', ...(forced ? { provider: forced } : {}) });
+      out.push(...res.vectors);
+      if (res.namespace) namespaces.add(res.namespace);
+      meta = res;
+      // Progress covers embedding only; persistence is fast by comparison.
+      onProgress?.(Math.min(0.95, (i + slice.length) / texts.length));
+    }
+    return { vectors: out, namespaces, meta };
+  };
+
+  let { vectors, namespaces, meta } = await embedAll(null);
+
+  if (namespaces.size > 1) {
+    // One provider failed partway. Redo the document in the space every chunk
+    // can reach rather than persisting a mixture.
+    log.warn('embedding_namespace_split_reindexing', { doc_id: doc.id, namespaces: [...namespaces] });
+    ({ vectors, namespaces, meta } = await embedAll('local'));
   }
+
+  const namespace = [...namespaces][0] ?? null;
+  const records = docChunks.map((chunk, j) => ({
+    id: newId('chk'),
+    chunk_id: `${doc.id}:${chunk.index}`,
+    doc_id: doc.id,
+    user_id: doc.user_id,
+    space_id: doc.space_id ?? null,
+    filename: doc.filename,
+    index: chunk.index,
+    page: chunk.page,
+    page_label: chunk.page_label,
+    text: chunk.text,
+    tokens: tokenize(chunk.text),
+    embedding: vectors[j],
+    // Carried on the chunk, not only on the document, because retrieval
+    // compares chunks and has to know which of them may be compared.
+    embedding_namespace: namespace,
+    embedding_provider: meta?.provider ?? null,
+    embedding_model: meta?.model ?? null,
+    embedding_dimension: meta?.dim ?? null,
+  }));
+
+  if (usingMongoVectors()) await putChunks(records);
+  else for (const r of records) await chunks.put(r);
   if (!usingMongoVectors()) await chunks.flush();
-  return { provider, count: docChunks.length, backend: vectorBackend() };
+  onProgress?.(1);
+
+  return {
+    provider: meta?.provider ?? null,
+    model: meta?.model ?? null,
+    dim: meta?.dim ?? null,
+    namespace,
+    count: docChunks.length,
+    backend: vectorBackend(),
+  };
+}
+
+/** A chunk written before namespaces existed: describe it from what it has. */
+function legacyNamespace(chunk) {
+  const dim = Array.isArray(chunk.embedding) ? chunk.embedding.length : 0;
+  return `legacy:unknown:${dim}:v0`;
+}
+
+/** The provider half of a namespace string. */
+function providerFromNamespace(ns) {
+  const provider = String(ns || '').split(':')[0];
+  return provider && provider !== 'legacy' ? provider : undefined;
 }
 
 /** Okapi BM25 over the candidate corpus, computed per query. */
@@ -189,41 +255,78 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
     docIds = items.map((d) => d.id);
     if (!docIds.length) return { results: [], corpus_size: 0, embedding_provider: null, backend: 'none' };
   }
-  // Embed the question with the model that embedded the corpus. A document
-  // indexed by the local embedder after the remote one was rate limited is
-  // still perfectly searchable — but only by a query from the same model, and
-  // the current default is not necessarily it.
-  const indexedWith = await corpusProvider(userId, docIds);
-  const { vector, provider } = await embedQuery(query, { recorder, provider: indexedWith });
-
   // Dense retrieval happens where the chunks live: the index does it on Atlas,
   // a scan does it on a local mongod, and the in-process store does it here.
   // Everything after this point is identical, because fusion works on rankings
   // rather than on whatever each backend calls a score.
   let corpus;
-  let dense = new Map();
   let backend;
 
   if (usingMongoVectors()) {
-    const [near, all] = await Promise.all([
-      nearestChunks(vector, { userId, docIds, limit: Math.max(topK * 8, 50) }),
-      allChunks({ userId, docIds }),
-    ]);
-    backend = near.backend;
-    corpus = all;
-    for (const c of near.candidates) dense.set(c.id ?? c.chunk_id, c.score);
+    corpus = await allChunks({ userId, docIds });
+    backend = vectorBackend();
   } else {
     backend = 'in-process';
     corpus = await chunks.all(compact({ user_id: userId, doc_id: docIds?.length ? { $in: docIds } : undefined }));
-    for (const chunk of corpus) dense.set(chunk.id, cosine(vector, chunk.embedding));
   }
 
-  if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: provider, backend };
+  if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: null, backend };
 
+  /**
+   * Group the corpus by the space its vectors live in, and score each group
+   * against a query embedded the same way.
+   *
+   * A Space can legitimately hold more than one: a document indexed while the
+   * remote provider was rate limited is local, one indexed an hour later is
+   * not, and both are perfectly good — they simply cannot be compared to each
+   * other, or to one query vector. Scoring them together produces numbers the
+   * arithmetic is happy to return and that mean nothing.
+   *
+   * So each namespace is ranked on its own and the rankings are fused. Rank
+   * fusion is what makes this sound: a position within a group survives being
+   * merged across groups, where a raw cosine from one model would not.
+   */
+  const byNamespace = new Map();
+  for (const chunk of corpus) {
+    const ns = chunk.embedding_namespace || legacyNamespace(chunk);
+    if (!byNamespace.has(ns)) byNamespace.set(ns, []);
+    byNamespace.get(ns).push(chunk);
+  }
+
+  const dense = new Map();
+  let provider = null;
+  for (const [ns, group] of byNamespace) {
+    const wanted = group[0]?.embedding_provider || providerFromNamespace(ns);
+    let queryVector;
+    try {
+      const embedded = await embedQuery(query, { recorder, provider: wanted });
+      // If the query could not be embedded in this group's space — the provider
+      // is down, the key is gone — this group gets no dense scores at all
+      // rather than scores against the wrong model. BM25 still reaches it.
+      if (embedded.provider !== wanted) continue;
+      queryVector = embedded.vector;
+      provider = provider ?? embedded.provider;
+    } catch {
+      continue;
+    }
+
+    const ranked = new Map();
+    for (const chunk of group) {
+      if (!Array.isArray(chunk.embedding) || chunk.embedding.length !== queryVector.length) continue;
+      ranked.set(chunk.id, cosine(queryVector, chunk.embedding));
+    }
+    // Ranked within the namespace, then merged: a position is comparable
+    // across groups in a way a similarity score is not.
+    for (const [id, r] of rank(ranked)) dense.set(id, 1 / (60 + r));
+  }
+
+  // Lexical retrieval spans every namespace, because it needs no vectors at
+  // all. It is the floor under the whole scheme: a corpus whose embedder is
+  // unreachable is still searchable, just less well.
   const lexical = bm25Scores(tokenize(query), corpus);
   // The local embedder is lexical, not semantic, so leaning on it as if it
   // were dense retrieval double-counts the same signal. Shift weight to BM25.
-  const w = provider === 'local' ? Math.min(config.rag.denseWeight, 0.4) : config.rag.denseWeight;
+  const w = provider === 'local' || !dense.size ? Math.min(config.rag.denseWeight, 0.4) : config.rag.denseWeight;
 
   const fused = reciprocalRankFusion([
     { ranking: rank(dense), weight: w },

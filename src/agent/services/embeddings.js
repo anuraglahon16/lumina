@@ -72,6 +72,36 @@ async function openaiEmbed(texts) {
 }
 
 /**
+ * The version of how text is turned into a vector.
+ *
+ * Bumped when chunking, cleaning or normalisation changes in a way that makes
+ * old vectors describe text the system no longer produces. Part of the
+ * namespace, so old vectors stop being compared to new ones rather than being
+ * silently mixed with them.
+ */
+export const EMBEDDING_VERSION = 1;
+
+/** The model actually used for a provider, which is what a vector belongs to. */
+export function modelFor(provider) {
+  if (provider === 'voyage') return config.embeddings.voyageModel;
+  if (provider === 'openai') return config.embeddings.openaiModel;
+  return `local-${config.embeddings.localDim}`;
+}
+
+/**
+ * The space a vector lives in.
+ *
+ * Cosine similarity between vectors from different models is not a smaller
+ * similarity, it is a meaningless number — and it does not announce itself,
+ * because the arithmetic succeeds and returns something between -1 and 1. Two
+ * vectors may only be compared when every part of this string matches, so the
+ * comparison is gated on identity rather than on dimension agreeing by luck.
+ */
+export function embeddingNamespace({ provider, model, dim }) {
+  return `${provider}:${model || modelFor(provider)}:${dim}:v${EMBEDDING_VERSION}`;
+}
+
+/**
  * Embed a batch of texts, reporting which embedder actually produced them.
  *
  * The fallback used to happen per slice, which kept indexing alive and quietly
@@ -86,13 +116,25 @@ async function openaiEmbed(texts) {
  * is searched against.
  */
 export async function embedBatch(texts, { inputType = 'document', recorder, provider: forced } = {}) {
-  if (!texts.length) return { vectors: [], provider: forced || resolveEmbeddingProvider(), dim: 0 };
+  if (!texts.length) {
+    const p = forced || resolveEmbeddingProvider();
+    return { vectors: [], provider: p, model: modelFor(p), dim: 0, namespace: null };
+  }
   // A query must be embedded by whatever embedded the chunks it will be
   // compared against, which is not always the current default.
   const provider = forced || resolveEmbeddingProvider();
 
+  // A provider this build does not implement cannot be reached by trying. It
+  // reaches here when a chunk was written by a deployment configured
+  // differently, and attempting the call would mean a network round trip and a
+  // misleading 401 before arriving at the same answer.
+  if (!['voyage', 'openai', 'local'].includes(provider)) {
+    return { vectors: [], provider: 'unavailable', model: null, dim: 0, namespace: null };
+  }
+
   if (provider === 'local') {
-    return { vectors: texts.map(localEmbed), provider: 'local', dim: config.embeddings.localDim };
+    const dim = config.embeddings.localDim;
+    return { vectors: texts.map(localEmbed), provider: 'local', model: modelFor('local'), dim, namespace: embeddingNamespace({ provider: 'local', dim }) };
   }
 
   try {
@@ -108,11 +150,13 @@ export async function embedBatch(texts, { inputType = 'document', recorder, prov
       );
       vectors.push(...value);
     }
-    return { vectors, provider, dim: vectors[0]?.length || 0 };
+    const dim = vectors[0]?.length || 0;
+    return { vectors, provider, model: modelFor(provider), dim, namespace: embeddingNamespace({ provider, dim }) };
   } catch (err) {
     // All of it, or none of it.
     log.warn('embedding_provider_failed_using_local', { provider, texts: texts.length, err: err.message });
-    return { vectors: texts.map(localEmbed), provider: 'local', dim: config.embeddings.localDim };
+    const dim = config.embeddings.localDim;
+    return { vectors: texts.map(localEmbed), provider: 'local', model: modelFor('local'), dim, namespace: embeddingNamespace({ provider: 'local', dim }) };
   }
 }
 
