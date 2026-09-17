@@ -11,9 +11,9 @@ import { runQuickQuery } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
-import { createDocument, listDocuments, updateDocument } from '../services/ragStore.js';
+import { listDocuments } from '../services/ragStore.js';
+import { enqueueDocument } from '../services/ingest.js';
 import { createSpace, listSpaces, getSpace } from '../services/spaces.js';
-import { jobQueue } from '../services/jobs.js';
 import { listRuns, runStats } from '../store/runLog.js';
 import { pingMongo } from '../store/mongo.js';
 import { resolveProviders } from '../services/search/index.js';
@@ -223,21 +223,20 @@ contractRouter.post('/spaces/:spaceId/documents', upload.single('file'), async (
       return next(new HttpError(415, 'unsupported_media_type', `Accepted types: ${[...ACCEPTED].join(', ')}`));
     }
 
-    const doc = await createDocument({
+    // Accepting is one write and a handle. The SLA gives this route 300ms at
+    // p95 and the database is remote, so every round trip that is not needed to
+    // answer "yes, I have it" happens after the answer: queueing the job and
+    // recording its id are the worker's business, not the uploader's.
+    const accepted = enqueueDocument({
       userId: req.userId,
       filename: req.file.originalname,
       mimetype: req.file.mimetype,
-      size: req.file.size,
+      buffer: req.file.buffer,
       spaceId: space.id,
+      onAccepted: (doc) => res.status(202).json({ docId: doc.id, status: 'pending' }),
     });
-
-    await jobQueue.enqueue(
-      'index_document',
-      { docId: doc.id, userId: req.userId, buffer: req.file.buffer.toString('base64'), mimetype: req.file.mimetype },
-      { userId: req.userId },
-    );
-
-    res.status(202).json({ docId: doc.id, status: 'pending' });
+    if (config.runtime.serverless) await accepted;
+    else accepted.catch((err) => log.error('contract_ingest_failed', { request_id: req.requestId, err: err.message }));
   } catch (err) {
     next(err);
   }
@@ -254,8 +253,11 @@ contractRouter.get('/spaces/:spaceId/documents', async (req, res, next) => {
         .map((d) => ({
           docId: d.id,
           title: d.filename || d.title || d.id,
-          status: DOC_STATUS[d.status] ?? 'pending',
-          pct: typeof d.progress === 'number' ? Math.max(0, Math.min(100, d.progress)) : d.status === 'ready' ? 100 : 0,
+          // `stage` is the live state; `status` only says queued/processing/done,
+          // and the contract's five values line up with the stages.
+          status: DOC_STATUS[d.status === 'processing' ? d.stage : d.status] ?? 'pending',
+          // Stored as a fraction, reported as a percentage.
+          pct: Math.max(0, Math.min(100, Math.round((d.progress ?? 0) * 100))),
           ...(d.page_count ? { pages: d.page_count } : {}),
           ...(typeof d.chunk_count === 'number' ? { chunks: d.chunk_count } : {}),
           ...(d.error ? { error: d.error } : {}),
@@ -300,5 +302,27 @@ contractRouter.get('/stats', async (req, res, next) => {
     });
   } catch (err) {
     next(err);
+  }
+});
+
+
+/* ---------------------------------------------------------- eval report */
+
+/**
+ * The published evaluation, readable without a user.
+ *
+ * The contract marks this route `auth: false` deliberately: a report nobody can
+ * open without credentials is not published. It serves whatever the last eval
+ * run wrote, and an empty report rather than a 404 when none has run, because
+ * "no results yet" is a true answer and a 404 here reads as a broken route.
+ */
+contractRouter.get('/evals/report.json', async (req, res) => {
+  try {
+    const { readFile } = await import('node:fs/promises');
+    const path = await import('node:path');
+    const file = path.join(config.root, 'reports', 'eval.json');
+    res.set('cache-control', 'no-store').type('application/json').send(await readFile(file, 'utf8'));
+  } catch {
+    res.json({ generatedAt: null, cases: [], note: 'No evaluation has been run against this deployment yet.' });
   }
 });

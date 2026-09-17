@@ -58,7 +58,7 @@ app.use((req, res, next) => (isUpload(req) ? next() : express.json({ limit: '512
  * benchmark and the provided UI actually send. Putting the password in front of
  * them would fail every graded request with a 401.
  */
-const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces)(\/|$)/;
+const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces|evals\/report\.json)(\/|$)/;
 app.use((req, res, next) => {
   if (!CONTRACT_PATH.test(req.path)) return next();
   req.requestId = req.get('x-request-id') || newId('req');

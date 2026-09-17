@@ -96,6 +96,8 @@ contractRouter.post('/spaces', requireUser, forward('/contract/spaces'));
 contractRouter.get('/spaces', requireUser, forward('/contract/spaces'));
 contractRouter.get('/spaces/:spaceId/documents', requireUser, forward((req) => `/contract/spaces/${encodeURIComponent(req.params.spaceId)}/documents`));
 contractRouter.get('/stats', requireUser, forward('/contract/stats'));
+// Public by contract: a report nobody can open without credentials is not published.
+contractRouter.get('/evals/report.json', (req, res, next) => forwardJson(req, res, next, { path: '/contract/evals/report.json' }));
 
 /**
  * The upload streams through as multipart rather than being parsed here.
