@@ -217,49 +217,51 @@ async function main() {
       const result = await ask(userId, query);
       const { sources, answer, done } = result;
 
-      // Re-scored here against the same sources the answer was streamed with,
-      // so every number in this file can be recomputed from this file.
-      const { EvidenceLedger } = await import('../src/agent/core/evidence.js');
-      const ledger = new EvidenceLedger();
-      for (const s of sources) {
-        ledger.sources.push({
-          n: s.n,
-          type: s.kind === 'doc' ? 'document' : 'web',
-          title: s.title,
-          url: s.url ?? null,
-          snippet: s.snippet ?? '',
-          passages: [s.snippet ?? ''],
-          _terms: null,
-        });
-      }
-      for (const s of ledger.sources) {
-        const { tokenize } = await import('../src/agent/services/embeddings.js');
-        s._terms = new Set(tokenize([s.snippet, ...(s.passages ?? [])].join(' ')));
-      }
-      const validation = ledger.validate(answer);
+      /**
+       * Read from the run the system itself recorded, not re-derived here.
+       *
+       * The first version of this rebuilt a ledger from the sources on the
+       * stream and re-scored the answer against them. Those carry a
+       * four-hundred character snippet, while the validator scores against the
+       * full passages the page was read into — so almost every sentence failed
+       * and the file reported 0.19 for a system measuring 0.86. The instrument
+       * was wrong, not the thing it was pointed at, and a diagnostic that
+       * computes its own version of the number it is diagnosing can only
+       * disagree with the system for reasons of its own making.
+       */
+      const { listRuns } = await import('../src/agent/store/runLog.js');
+      const { items } = await listRuns({ userId }, { limit: 1 });
+      const record = items[0];
+      if (!record) throw new Error('the run was not recorded');
+      const citations = record.citations ?? {};
 
-      const factual = factualSentences(validation.answer);
+      const factual = factualSentences(answer);
       const factualCited = factual.filter((s) => /\[\d/.test(s)).length;
 
       runs.push({
         commit,
         query,
         model: done?.model ?? null,
-        answer: validation.answer,
+        answer,
         sources: sources.map((s) => ({ n: s.n, kind: s.kind, title: s.title, url: s.url ?? null, snippet: s.snippet })),
-        cited_sentences: validation.cited_sentences,
-        supported_sentences: validation.supported_sentences,
-        groundedness: validation.groundedness,
+        cited_sentences: citations.emitted ?? null,
+        supported_sentences:
+          citations.groundedness != null && citations.valid != null
+            ? Math.round(citations.groundedness * citations.valid)
+            : null,
+        cited_valid: citations.valid ?? null,
+        groundedness: citations.groundedness ?? null,
         factual_sentences: factual.length,
         factual_sentences_cited: factualCited,
-        weak_citations: (validation.weak_citations ?? []).map((w) => ({
+        weak_citations: (citations.weak ?? []).map((w) => ({
           sentence: w.sentence,
           refs: w.refs,
           support_score: w.support,
           cited_passages: w.refs.map((n) => sources.find((s) => s.n === n)?.snippet ?? null),
           ...classify({ sentence: w.sentence, refs: w.refs, sources, support: w.support }),
         })),
-        stripped_for_absence: (validation.stripped_for_absence ?? []).length,
+        sources_fetched: record.sources?.fetched ?? null,
+        warnings: (record.warnings ?? []).map((x) => x.code),
         ttft_ms: result.ttftMs,
         latency_ms: done?.latencyMs ?? null,
         cost_usd: done?.costUsd ?? null,
@@ -289,7 +291,7 @@ async function main() {
 function render({ commit, ran_at, node, health, runs }) {
   const ok = runs.filter((r) => !r.error);
   const sum = (f) => ok.reduce((a, r) => a + (f(r) ?? 0), 0);
-  const aggregate = sum((r) => r.supported_sentences) / (sum((r) => r.cited_sentences) || 1);
+  const aggregate = sum((r) => r.supported_sentences) / (sum((r) => r.cited_valid) || 1);
   const perRun = ok.map((r) => r.groundedness).filter((g) => typeof g === 'number');
   const mean = perRun.length ? perRun.reduce((a, b) => a + b, 0) / perRun.length : null;
   const completeness = sum((r) => r.factual_sentences_cited) / (sum((r) => r.factual_sentences) || 1);
@@ -348,7 +350,7 @@ function render({ commit, ran_at, node, health, runs }) {
   A('|---|---:|---:|---:|---:|---:|');
   for (const r of ok) {
     A(
-      `| ${r.query.slice(0, 52)} | ${r.cited_sentences} | ${r.supported_sentences} | ${
+      `| ${r.query.slice(0, 52)} | ${r.cited_valid ?? '—'} | ${r.supported_sentences ?? '—'} | ${
         r.groundedness ?? '—'
       } | ${r.factual_sentences_cited}/${r.factual_sentences} | ${r.weak_citations.length} |`,
     );

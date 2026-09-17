@@ -253,6 +253,15 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         valid: validation.cited.length,
         invalid: validation.invalid_citations.length,
         groundedness: validation.groundedness,
+        // Kept so grounding can be diagnosed from the run itself. A support
+        // score is only interpretable beside the sentence it scored and the
+        // text it was scored against; the ratio alone says a number failed and
+        // nothing about why.
+        weak: (validation.weak_citations || []).slice(0, 12).map((w) => ({
+          sentence: w.sentence,
+          refs: w.refs,
+          support: w.support,
+        })),
       },
       sources: {
         discovered: ledger.sources.length + ledger.candidates.size,
