@@ -3,6 +3,9 @@ import { Budget, CAP_REASONS } from './budget.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
 import { runResearchLoop } from './researchLoop.js';
+import { classifyQuestion, QUESTION_KIND } from './router.js';
+import { gatherFromWeb, gatherFromDocuments, QUICK_PAGES } from './retrieve.js';
+import { rewriteFollowUp } from './rewrite.js';
 import { synthesizeAnswer } from './synthesize.js';
 import { extractMemories } from './memoryExtractor.js';
 import { researchSystem, buildResearchUserMessage } from './prompts.js';
@@ -68,9 +71,63 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       document_chunks: docs.chunks,
     });
 
+    // ---- routing ----------------------------------------------------------
+    // Decided from the request, not by asking a model. The turn that used to
+    // reach this conclusion sat in front of every answer.
+    const route = classifyQuestion({
+      query,
+      mode: retrievalMode,
+      spaceId,
+      hasDocuments: docs.indexed > 0,
+      threadTurns: history.length,
+    });
+    emit('route', { kind: route.kind, reason: route.reason });
+    recorder.set({ route: route.kind });
+
+    // ---- deterministic retrieval -------------------------------------------
+    recorder.startPhase('retrieval');
+    let searchQuery = query;
+    let rewritten = false;
+
+    if (route.kind === QUESTION_KIND.CONTEXTUAL_FOLLOW_UP) {
+      // "why?" cannot be searched. One small model call turns it back into a
+      // question that can be, which is the only place in this path where a
+      // model is needed before retrieval — and it is needed, because the
+      // information is in the conversation rather than in the request.
+      const standalone = await rewriteFollowUp({ query, history, recorder, signal }).catch(() => null);
+      if (standalone && standalone !== query) {
+        searchQuery = standalone;
+        rewritten = true;
+        emit('query_rewritten', { from: query, to: standalone });
+      }
+    }
+
+    const gathered =
+      route.kind === QUESTION_KIND.DOCUMENTS
+        ? await gatherFromDocuments({ query: searchQuery, ledger, budget, recorder, emit, userId, spaceId, signal })
+        : route.kind === QUESTION_KIND.MEMORY_INSTRUCTION
+          ? { searched: false, coverage: { ok: true, reasons: [] } }
+          : await gatherFromWeb({ query: searchQuery, ledger, budget, recorder, emit, signal, pages: QUICK_PAGES() });
+
+    recorder.endPhase('retrieval', {
+      route: route.kind,
+      rewritten,
+      sources: ledger.citable.length,
+      coverage_ok: gathered.coverage.ok,
+      coverage_reasons: gathered.coverage.reasons,
+    });
+
+    // Enough in hand: the loop would spend a turn agreeing.
+    const deterministicSufficed = gathered.coverage.ok;
+
     // ---- research ---------------------------------------------------------
+    // Only when the harness's own retrieval fell short. The loop starts from
+    // the evidence already gathered rather than from nothing, so a shortfall
+    // costs the turns it needs and not the ones already paid for.
     recorder.startPhase('research');
-    const research = await runResearchLoop({
+    const research = deterministicSufficed
+      ? { notes: [], termination_reason: 'sufficient_evidence', capped: false, cap_reason: null, budget: budget.snapshot() }
+      : await runResearchLoop({
       system: researchSystem({
         mode: 'quick',
         budget: config.budgets.quick,
@@ -93,7 +150,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       retrievalMode,
       spaceId,
       signal,
-    });
+        });
     recorder.endPhase('research', {
       tool_calls: budget.counts.tool_calls,
       sources_fetched: ledger.sources.length,
