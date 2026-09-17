@@ -181,7 +181,14 @@ async function corpusProvider(userId, docIds) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-export async function searchChunks(query, { userId, docIds, topK = config.rag.topK, recorder } = {}) {
+export async function searchChunks(query, { userId, docIds, spaceId, topK = config.rag.topK, recorder } = {}) {
+  // A Space is the scope the question was asked in. Searching outside it would
+  // answer from documents the asker did not point at.
+  if (spaceId && !docIds?.length) {
+    const { items } = await documents.list({ user_id: userId, space_id: spaceId }, { limit: 500 });
+    docIds = items.map((d) => d.id);
+    if (!docIds.length) return { results: [], corpus_size: 0, embedding_provider: null, backend: 'none' };
+  }
   // Embed the question with the model that embedded the corpus. A document
   // indexed by the local embedder after the remote one was rate limited is
   // still perfectly searchable — but only by a query from the same model, and

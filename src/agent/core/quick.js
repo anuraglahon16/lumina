@@ -20,7 +20,7 @@ const log = createLogger('quick');
  * Quick never escalates into Deep Search. If the budget runs out it says so,
  * an honest partial answer beats a silently-truncated confident one.
  */
-export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal }) {
+export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto' }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
   const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.model });
@@ -78,6 +78,8 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       maxTokens: config.budgets.quick.researchMaxTokens,
       effort: config.budgets.quick.researchEffort,
       hasDocuments: docs.indexed > 0,
+      retrievalMode,
+      spaceId,
       signal,
     });
     recorder.endPhase('research', {

@@ -1,5 +1,6 @@
 import express from 'express';
 import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 import { config } from '../../shared/config.js';
 import { upstreamError, HttpError } from '../../shared/errors.js';
 import { createLogger } from '../../shared/logger.js';
@@ -74,9 +75,14 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
     });
     res.flushHeaders?.();
 
-    await Readable.fromWeb(upstream.body).pipe(res);
+    // pipeline, not pipe: `pipe` does not forward errors, so a reader that
+    // aborts mid-stream — which is what a client hanging up looks like from
+    // here — emits an unhandled 'error' on the source and takes the process
+    // down with it. A disconnect is the most ordinary thing that can happen to
+    // a stream and must not be fatal to everyone else's requests.
+    await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (err) {
-    if (controller.signal.aborted) return; // the client left; nothing to report
+    if (controller.signal.aborted || err?.name === 'AbortError' || err?.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
     log.error('contract_ask_forward_failed', { request_id: req.requestId, err: err.message });
     if (!res.headersSent) return next(upstreamError('The agent service is unreachable', { cause: err.message }));
     res.end();

@@ -64,7 +64,7 @@ const askSchema = z.object({
 contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
   const parsed = askSchema.safeParse(req.body ?? {});
   if (!parsed.success) return next(badRequest('Invalid ask request', parsed.error.flatten()));
-  const { query, depth, spaceId } = parsed.data;
+  const { query, mode, depth, spaceId } = parsed.data;
   const userId = req.userId;
 
   // The thread is addressed in the path, so it has to exist before the run
@@ -88,6 +88,9 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
       threadId: thread.id,
       requestId: req.requestId,
       spaceId,
+      // 'docs' and 'web' are the caller choosing where the answer comes from;
+      // the toolset is narrowed accordingly rather than the prompt asking.
+      retrievalMode: mode,
       emit,
       signal: controller.signal,
     });

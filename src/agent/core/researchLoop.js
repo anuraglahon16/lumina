@@ -25,6 +25,8 @@ export async function runResearchLoop({
   maxTokens,
   effort,
   hasDocuments,
+  retrievalMode = 'auto',
+  spaceId = null,
   signal,
   // Injected so the loop's control flow can be tested without a model or a
   // network: the behaviours worth pinning here are when it stops, why, and what
@@ -32,8 +34,8 @@ export async function runResearchLoop({
   complete: completeFn = complete,
   executor,
 }) {
-  const execute = executor || createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch });
-  const tools = toolDefinitionsFor({ hasDocuments });
+  const execute = executor || createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch, spaceId });
+  const tools = toolDefinitionsFor({ hasDocuments, retrievalMode });
   const messages = [{ role: 'user', content: userMessage }];
   const notes = [];
   // Counted from here rather than from the ledger's total: Deep Search branches
