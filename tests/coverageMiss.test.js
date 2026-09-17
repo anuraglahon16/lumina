@@ -13,9 +13,8 @@ import path from 'node:path';
  *
  * In the TLS certificate pinning run, the right page was fetched in full —
  * nineteen thousand characters — and what came out of it was the table of
- * contents. Nothing was cancelled and nothing was missing; the extraction
- * picked the wrong text out of a page that had the right text in it. That is
- * fixed by query-aware passage selection.
+ * contents. The extraction picked the wrong text out of a page that had the
+ * right text in it. That is fixed by query-aware passage selection.
  *
  * In the HTTP/2-versus-HTTP/3 run, the page that was read covers HTTP/2 only.
  * It satisfied the coverage rule, which stopped the pool and aborted the two
@@ -25,6 +24,14 @@ import path from 'node:path';
  *
  * This case only became classifiable once aborted losers were recorded as
  * `cancelled` rather than left at `attempted` — see fetchTermination.test.js.
+ *
+ * The first version of this file separated them by asking whether relevant
+ * pages had been cancelled under a coverage stop, and a live probe against the
+ * same two questions showed that was not enough: the TLS run has two cancelled
+ * relevant pages as well. Coverage cancels losers on every healthy run, so its
+ * presence carries no information. What separates them is whether extraction
+ * gave up what the page it read actually contained, and both fixtures below now
+ * carry the cancellations that made the old rule wrong.
  */
 
 process.env.DATA_DIR = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-covmiss-'));
@@ -58,12 +65,19 @@ const TLS = {
         extracted_chars: 19911,
         extracted_passages: ['Table of contents', 'What Is Certificate Pinning?', 'Related resources'],
       }),
+      // The live probe reproduced this run with the other relevant page
+      // cancelled by the same coverage stop. Coverage cancels losers on every
+      // healthy run, so its presence proves nothing by itself — which is
+      // exactly why the fixture carries it.
+      event(2, 'https://other.test/pinning-guide', 'cancelled', { reason: 'cancelled' }),
     ],
     stop_reason: 'coverage_sufficient',
   },
   review: {
     relevant_urls: ['https://paloaltonetworks.test/certificate-pinning', 'https://other.test/pinning-guide'],
     extracted_passages_contain_answer: false,
+    // The page held the answer; what came out of it was its table of contents.
+    extraction_faithful: false,
   },
 };
 
@@ -88,12 +102,17 @@ const HTTP = {
   review: {
     relevant_urls: ['https://http2.test/hol-blocking', 'https://quic.test/tcp-vs-quic', 'https://cdn.test/mitigating-hol'],
     extracted_passages_contain_answer: false,
+    // Extraction gave up what the page actually said. The page only said half.
+    extraction_faithful: true,
   },
 };
 
 const classify = (fixture) => classifyRetrieval(fixture.funnel, { citedSentences: 1, supportedSentences: 0, review: fixture.review });
 
-test('extraction that returned only headings is a passage miss', () => {
+test('extraction that returned only headings is a passage miss, even with pages cancelled', () => {
+  // The case a live probe caught. Both fixtures now have relevant pages
+  // cancelled under a coverage stop, because both real runs did, so the
+  // cancellation cannot be what decides between them.
   const outcome = classify(TLS);
   assert.equal(outcome.primary, RETRIEVAL_OUTCOME.PASSAGE_MISS);
   assert.match(outcome.flags[0], /extracted passages did not carry the answer/);
@@ -102,7 +121,7 @@ test('extraction that returned only headings is a passage miss', () => {
 test('relevant pages cancelled by a coverage stop is a coverage miss', () => {
   const outcome = classify(HTTP);
   assert.equal(outcome.primary, RETRIEVAL_OUTCOME.COVERAGE_MISS);
-  assert.match(outcome.flags[0], /coverage was declared sufficient/);
+  assert.match(outcome.flags[0], /extraction was faithful and coverage cancelled/);
   assert.match(outcome.flags[0], /2 relevant page/, 'and says how much evidence it let go of');
 });
 
@@ -111,6 +130,27 @@ test('the two fixtures produce different outcomes', () => {
   // and the reported fix — query-aware passage selection — would have done
   // nothing at all for the second.
   assert.notEqual(classify(TLS).primary, classify(HTTP).primary);
+});
+
+test('an undecided extraction judgement stays pending rather than guessing', () => {
+  // With relevant pages cancelled under a coverage stop, the two categories are
+  // genuinely ambiguous. Picking one would manufacture a confident label out of
+  // a reviewer's silence, which is the mistake the whole review stage exists to
+  // avoid.
+  const { extraction_faithful, ...withoutJudgement } = HTTP.review;
+  const outcome = classify({ funnel: HTTP.funnel, review: withoutJudgement });
+  assert.equal(outcome.primary, RETRIEVAL_OUTCOME.PENDING_REVIEW);
+  assert.match(outcome.flags[0], /whether extraction represented the page it read/);
+});
+
+test('extraction_faithful is not asked for when nothing relevant was cancelled', () => {
+  // No ambiguity, so no extra question. Otherwise every existing review would
+  // go pending for a distinction that does not arise in its run.
+  const outcome = classify({
+    funnel: { ...HTTP.funnel, fetch_events: [HTTP.funnel.fetch_events[0]] },
+    review: { relevant_urls: ['https://http2.test/hol-blocking'], extracted_passages_contain_answer: false },
+  });
+  assert.equal(outcome.primary, RETRIEVAL_OUTCOME.PASSAGE_MISS);
 });
 
 test('a cancellation that was not a coverage stop is not a coverage miss', () => {

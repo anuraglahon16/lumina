@@ -285,11 +285,37 @@ export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentenc
     // evidence in its hands and let go of it.
     const cancelledRelevant = relevant.filter((c) => attemptsFor(c.url).some((e) => e.status === 'cancelled'));
     const stoppedOnCoverage = funnel.stop_reason === 'coverage_sufficient';
+
+    // Both conditions hold more often than they look like they would, and a
+    // live probe caught this: the TLS run reproduced with two relevant pages
+    // cancelled under a coverage stop *and* an extraction that returned a
+    // navigation menu from a nineteen-thousand-character page. Coverage
+    // cancelling losers is what the pool does on every healthy run, so its
+    // presence is not evidence of anything on its own.
+    //
+    // What separates them is whether the page that was read gave up what it
+    // contained. If extraction returned the page's actual content and the
+    // content was only half the answer, the run stopped too early. If
+    // extraction returned headings from a page with the answer in it, the
+    // gathering was fine and the reading was not.
+    //
+    // A reviewer can see that by comparing the extracted passages against the
+    // page, and nothing in the funnel can. So it is asked for, and only here —
+    // where the ambiguity is real. Where no relevant page was cancelled there
+    // is nothing to confuse, and the question is not asked.
     if (cancelledRelevant.length && stoppedOnCoverage) {
-      return done(
-        RETRIEVAL_OUTCOME.COVERAGE_MISS,
-        `coverage was declared sufficient and cancelled ${cancelledRelevant.length} relevant page(s) still in flight`,
-      );
+      if (!decided(review.extraction_faithful)) {
+        return pending(
+          'a relevant page was read and relevant pages were cancelled by a coverage stop; ' +
+            'whether extraction represented the page it read has not been decided, and that is what separates a coverage miss from a passage miss',
+        );
+      }
+      if (review.extraction_faithful) {
+        return done(
+          RETRIEVAL_OUTCOME.COVERAGE_MISS,
+          `extraction was faithful and coverage cancelled ${cancelledRelevant.length} relevant page(s) still in flight`,
+        );
+      }
     }
     return done(RETRIEVAL_OUTCOME.PASSAGE_MISS, 'the page was read and the extracted passages did not carry the answer');
   }

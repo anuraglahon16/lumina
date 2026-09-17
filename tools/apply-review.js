@@ -161,6 +161,15 @@ export function render(run) {
   const A = (line = '') => L.push(line);
 
   A('# Retrieval outcomes, after review\n');
+  // Emitted by the generator rather than added to the file afterwards. A note
+  // written by hand into generated output survives until the next run of the
+  // generator, which is exactly when someone is most likely to read the file
+  // and least likely to remember the caveat.
+  A('> **Not the official benchmark.** One observational run, n=1 per question.');
+  A('> Citation figures here are superseded by `rescored.md`: a sentence-splitter');
+  A('> defect split claims from their citation markers. Outcomes derived from');
+  A('> citation counts are provisional, and `agent_direct_ttft_ms` is not the gate');
+  A('> metric. See `README.md` in this directory.\n');
   A(`- commit: \`${run.commit}\``);
   A(`- run: ${run.ran_at}`);
   A(`- reviewed: ${run.reviewed_at ?? 'not yet'}`);
