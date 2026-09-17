@@ -155,3 +155,27 @@ test('a run that fails before any source still sends sources before done', () =>
   assert.deepEqual(names(), ['sources', 'done']);
   assert.equal(names().indexOf('sources') < names().indexOf('done'), true);
 });
+
+test('a page label becomes a structured locator the grader can compare', () => {
+  // The ledger carries "p. 3" because that is what reads well under a citation.
+  // The contract wants { page: 3 }, and the grader tests it numerically, so a
+  // citation pointing at exactly the right page failed every check while
+  // looking perfectly correct to a reader.
+  assert.deepEqual(__testing.toLocator('p. 3'), { page: 3 });
+  assert.deepEqual(__testing.toLocator('page 12'), { page: 12 });
+  assert.deepEqual(__testing.toLocator('7'), { page: 7 });
+  assert.deepEqual(__testing.toLocator({ page: 4 }), { page: 4 });
+});
+
+test('a label with no page becomes a heading rather than being dropped', () => {
+  // A markdown document has no pages, and losing the locator entirely would
+  // send the reader to the top of the file.
+  assert.deepEqual(__testing.toLocator('Retrieval Basics'), { heading: 'Retrieval Basics' });
+  assert.equal(__testing.toLocator(null), undefined);
+  assert.equal(__testing.toLocator('  '), undefined);
+});
+
+test('a doc source carries its locator through the mapper', () => {
+  const s = __testing.toContractSource({ n: 1, type: 'document', title: 'r.pdf', doc_id: 'd1', snippet: 'x', locator: 'p. 9' });
+  assert.deepEqual(s.locator, { page: 9 });
+});

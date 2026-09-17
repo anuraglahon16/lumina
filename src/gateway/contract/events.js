@@ -23,6 +23,25 @@
 /** Tools the contract knows about. Ours that have no counterpart are not traced. */
 const TOOL_NAMES = new Set(['web_search', 'fetch_page', 'search_documents', 'recall_memory', 'save_memory', 'plan_research']);
 
+/**
+ * Our page label as the contract's Locator.
+ *
+ * The ledger carries a human string — "p. 3", or a heading for a document with
+ * no pages — because that is what reads well under a citation. The contract
+ * wants a structured locator, and the grader tests `locator.page === n`
+ * numerically, so a citation that points at exactly the right page of exactly
+ * the right document fails every check while looking correct to a reader.
+ */
+function toLocator(raw) {
+  if (raw == null) return undefined;
+  if (typeof raw === 'object') return raw.page || raw.heading || raw.line ? raw : undefined;
+  const text = String(raw).trim();
+  if (!text) return undefined;
+  const page = text.match(/(?:^|\bp\.?\s*|\bpage\s+)(\d{1,5})\b/i);
+  if (page) return { page: Number(page[1]) };
+  return { heading: text.slice(0, 200) };
+}
+
 /** `kind` in the contract, `type` here; doc sources carry a locator, web ones a url. */
 function toContractSource(s) {
   const out = {
@@ -37,7 +56,8 @@ function toContractSource(s) {
   if (out.kind === 'web') out.url = s.url;
   else {
     out.docId = s.doc_id || s.docId;
-    if (s.locator) out.locator = s.locator;
+    const locator = toLocator(s.locator);
+    if (locator) out.locator = locator;
   }
   if (s.branch != null) {
     const i = Number(String(s.branch).replace(/\D/g, ''));
@@ -168,4 +188,4 @@ export function contractStream({ send, depth, answerId }) {
   };
 }
 
-export const __testing = { toContractSource, toTerminated };
+export const __testing = { toContractSource, toTerminated, toLocator };

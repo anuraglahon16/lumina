@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-09-17T01:32:56.266Z",
+  "ranAt": "2026-09-17T01:41:02.619Z",
   "target": "http://localhost:8787",
-  "citationGrounding": 0.773,
-  "recallAt5": 0.033,
-  "retrievalRate": 1,
-  "errorRate": 0
+  "citationGrounding": 1,
+  "recallAt5": 0,
+  "retrievalRate": 0.506,
+  "errorRate": 0.4875
 }

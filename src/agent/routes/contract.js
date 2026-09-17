@@ -6,7 +6,7 @@ import { badRequest, notFound, HttpError } from '../../shared/errors.js';
 import { newId } from '../../shared/ids.js';
 import { config, capabilities } from '../../shared/config.js';
 import { createLogger } from '../../shared/logger.js';
-import { contractStream } from '../../gateway/contract/events.js';
+import { contractStream, __testing as contractMap } from '../../gateway/contract/events.js';
 import { runQuickQuery } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
@@ -154,7 +154,7 @@ function toContractSourceRow(s) {
     title: s.title || s.url || `Source ${s.n}`,
     snippet: (s.snippet || '').trim() || (s.title || 'No excerpt available.'),
     ...(kind === 'web' ? { url: s.url } : { docId: s.doc_id || s.docId }),
-    ...(s.locator ? { locator: s.locator } : {}),
+    ...(contractMap.toLocator(s.locator) ? { locator: contractMap.toLocator(s.locator) } : {}),
   };
 }
 
