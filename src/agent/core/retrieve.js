@@ -75,7 +75,7 @@ export function choosePages(results, { limit = 2, funnel = null } = {}) {
     try {
       host = new URL(r.url).hostname.replace(/^www\./, '');
     } catch {
-      funnel?.deduplicated({ url: r.url, reason: 'unparseable url' });
+      funnel?.deduplicated({ candidateId: r.candidate_id ?? null, url: r.url, reason: 'unparseable url' });
       continue;
     }
     const publisher = host.split('.').slice(-2).join('.');
@@ -83,7 +83,7 @@ export function choosePages(results, { limit = 2, funnel = null } = {}) {
       // Recorded where it happens. "Passed over because a sibling shares its
       // publisher" and "never reached because the budget ran out" are different
       // facts, and neither can be recovered from the other afterwards.
-      funnel?.deduplicated({ url: r.url, reason: 'same publisher as an earlier candidate', keptUrl: seen.get(publisher) });
+      funnel?.deduplicated({ candidateId: r.candidate_id ?? null, url: r.url, reason: 'same publisher as an earlier candidate', keptUrl: seen.get(publisher) });
       continue;
     }
     seen.set(publisher, r.url);
@@ -154,7 +154,9 @@ export async function gatherFromWeb({
     fetchPage: fetchFn,
     query,
     searchQuery,
-    candidates: choosePages(results, { limit: 8, funnel }),
+    // The funnel's own occurrences, so a fetch names the search and rank that
+    // supplied it rather than being matched back by url later.
+    candidates: choosePages(funnel ? funnel.searches.at(-1).results : results, { limit: 8, funnel }),
     ledger,
     budget,
     recorder,
@@ -211,12 +213,12 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     if (!budget.allows('fetch_page').ok) return;
     attempted.add(candidate.url);
     ledger.attempted?.add(candidate.url);
-    funnel?.attempted({ url: candidate.url });
+    const traced = funnel?.attempted({ candidateId: candidate.candidate_id ?? null, url: candidate.url });
     budget.consume('fetch_page');
     const began = performance.now();
     const promise = fetchFn(candidate.url, { recorder, signal: pool.signal })
       .catch((err) => ({ ok: false, url: candidate.url, error: err.message, aborted: err?.name === 'AbortError' }))
-      .then((page) => ({ page, candidate, rank, waited: Math.round(performance.now() - began) }));
+      .then((page) => ({ page, candidate, rank, traced, waited: Math.round(performance.now() - began) }));
     inFlight.set(candidate.url, promise);
   };
 
@@ -228,11 +230,11 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
 
   try {
     while (inFlight.size) {
-      const { page, candidate, rank, waited } = await Promise.race(inFlight.values());
+      const { page, candidate, rank, traced, waited } = await Promise.race(inFlight.values());
       inFlight.delete(candidate.url);
 
       const readable = page?.ok && (page.text?.length ?? 0) >= config.budgets.quick.minPageChars;
-      funnel?.fetched(candidate.url, {
+      funnel?.fetched({ eventId: traced?.event_id, candidateId: candidate.candidate_id ?? null, url: candidate.url }, {
         // A cancellation is not a failure. The pool aborts its losers on every
         // successful run, and counting those would make a healthy system look
         // like one whose fetches mostly fail.
@@ -247,6 +249,10 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
         // reviewer needs to tell an irrelevant page from a relevant one whose
         // extraction missed the answer, and it cannot be recovered afterwards.
         passages: readable ? chunkPassages(page.text).slice(0, 8) : undefined,
+        // A page that read and gave too little keeps its text too. Ninety
+        // characters of navigation, a paywall notice and a partly useful
+        // extraction are identical as a number and want different answers.
+        excerpt: !readable && page?.ok && page.text ? page.text.slice(0, 1000) : undefined,
       });
 
       if (readable) {

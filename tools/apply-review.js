@@ -2,7 +2,29 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import crypto from 'node:crypto';
 import { classifyRetrieval, RETRIEVAL_OUTCOME } from '../src/agent/core/funnel.js';
+
+/**
+ * A run's identity, so a review cannot be applied to a different one.
+ *
+ * Two runs at the same commit ask the same questions and get different pages,
+ * because the web moved. A review naming urls from the first, applied to the
+ * second, produces categories that look considered and describe nothing —
+ * relevant_urls that are not in the results at all read as query_miss, and a
+ * run that went perfectly well is recorded as a search failure.
+ *
+ * The questions are included in order, since a review is keyed by question, and
+ * `ran_at` because that is what separates two runs of the same set.
+ */
+export function fingerprint(run) {
+  const material = JSON.stringify({
+    commit: run.commit ?? null,
+    ran_at: run.ran_at ?? null,
+    questions: (run.runs ?? []).map((r) => r.query ?? null),
+  });
+  return `sha256:${crypto.createHash('sha256').update(material).digest('hex')}`;
+}
 
 /**
  * Turn a recorded run into retrieval outcomes, after a person has read it.
@@ -45,12 +67,15 @@ export function reviewTemplate(run) {
     _README: [
       'One entry per question. Fill these in by reading the funnel in the run file.',
       'relevant_urls: the results that could have answered the question. Judgement, not a score.',
-      'relevant_evidence_reached_ledger: did the extracted passages actually carry the answer?',
+      'extracted_passages_contain_answer: did the text actually extracted carry the answer?',
       'answer_addressed_question: did the answer address what was asked, whatever its citations say?',
       'answer_complete: did it cover the question, or only part of it?',
       'Leave a field null to say you have not decided; the outcome stays pending_review.',
+      'Each field is asked for only once the run reached the stage that needs it.',
     ],
+    run_fingerprint: fingerprint(run),
     commit: run.commit,
+    ran_at: run.ran_at,
     questions: (run.runs ?? [])
       .filter((r) => !r.error)
       .map((r) => ({
@@ -59,7 +84,7 @@ export function reviewTemplate(run) {
           s.results.map((x) => ({ search_attempt: s.attempt, rank: x.rank, url: x.url, title: x.title })),
         ),
         relevant_urls: null,
-        relevant_evidence_reached_ledger: null,
+        extracted_passages_contain_answer: null,
         answer_addressed_question: null,
         answer_complete: null,
         notes: '',
@@ -69,6 +94,17 @@ export function reviewTemplate(run) {
 
 /** Apply a review to a run, producing one primary outcome per question. */
 export function applyReview(run, review) {
+  const expected = fingerprint(run);
+  if (!review.run_fingerprint) {
+    throw new Error('this review carries no run_fingerprint, so there is no way to tell which run it describes');
+  }
+  if (review.run_fingerprint !== expected) {
+    throw new Error(
+      `this review belongs to a different run (${review.run_fingerprint} against ${expected}). ` +
+        'Two runs of the same questions at the same commit read different pages, so a review of one says nothing true about the other.',
+    );
+  }
+
   const byQuestion = new Map((review.questions ?? []).map((q) => [q.question, q]));
 
   const runs = (run.runs ?? []).map((r) => {

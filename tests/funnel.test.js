@@ -21,7 +21,7 @@ process.env.MONGODB_URI = '';
 process.env.EMBEDDING_PROVIDER = 'local';
 
 const { createFunnel, classifyRetrieval, RETRIEVAL_OUTCOME } = await import('../src/agent/core/funnel.js');
-const { applyReview, summarise } = await import('../tools/apply-review.js');
+const { applyReview, summarise, fingerprint: fp } = await import('../tools/apply-review.js');
 const { EvidenceLedger } = await import('../src/agent/core/evidence.js');
 const { Budget } = await import('../src/agent/core/budget.js');
 const { gatherFromWeb } = await import('../src/agent/core/retrieve.js');
@@ -51,21 +51,26 @@ const searchReturning = (results, extra = {}) => async () => ({ results, cached:
 /** A funnel with results and fetch outcomes already recorded. */
 function funnelWith(results, shape = () => ({})) {
   const f = createFunnel({ question: QUERY, enabled: true });
-  f.search({ query: QUERY, provider: 'tavily', cached: false, durationMs: 100, results });
-  for (const r of results) {
-    const spec = shape(r);
+  const recorded = f.search({ query: QUERY, provider: 'tavily', cached: false, durationMs: 100, results });
+  // Driven through the funnel's own occurrences, exactly as retrieval does, so
+  // each attempt carries the search and rank that supplied it.
+  for (const candidate of recorded.results) {
+    const spec = shape(candidate);
     if (!spec || !Object.keys(spec).length) continue;
-    f.attempted({ url: r.url });
+    const event = f.attempted({ candidateId: candidate.candidate_id, url: candidate.url });
     if (spec.status) {
-      f.fetched(r.url, {
-        status: spec.status,
-        httpStatus: spec.httpStatus ?? 200,
-        durationMs: 10,
-        chars: spec.chars ?? 0,
-        admitted: spec.status === 'usable',
-        reason: spec.status,
-        passages: spec.status === 'usable' ? ['extracted text about the topic'] : undefined,
-      });
+      f.fetched(
+        { eventId: event.event_id },
+        {
+          status: spec.status,
+          httpStatus: spec.httpStatus ?? 200,
+          durationMs: 10,
+          chars: spec.chars ?? 0,
+          admitted: spec.status === 'usable',
+          reason: spec.status,
+          passages: spec.status === 'usable' ? ['extracted text about the topic'] : undefined,
+        },
+      );
     }
   }
   return f;
@@ -139,7 +144,12 @@ test('a cancelled loser is not a fetch failure when another relevant page suppli
   const c = classifyRetrieval(f, {
     citedSentences: 3,
     supportedSentences: 3,
-    review: { relevant_urls: ['https://site1.example/p', 'https://site2.example/p'], answer_addressed_question: true },
+    review: {
+      relevant_urls: ['https://site1.example/p', 'https://site2.example/p'],
+      extracted_passages_contain_answer: true,
+      answer_addressed_question: true,
+      answer_complete: true,
+    },
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL);
 });
@@ -150,7 +160,7 @@ test('a relevant page read in full whose passages lacked the answer is a passage
   // passages the record kept.
   const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 9000 } : {}));
   const c = classifyRetrieval(f, {
-    review: reviewed({ relevant_evidence_reached_ledger: false }),
+    review: reviewed({ extracted_passages_contain_answer: false }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.PASSAGE_MISS);
 });
@@ -159,7 +169,7 @@ test('evidence that reached the ledger and went unused is a synthesis omission',
   const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
   const c = classifyRetrieval(f, {
     citedSentences: 0,
-    review: reviewed({ relevant_evidence_reached_ledger: true }),
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION);
 });
@@ -171,7 +181,7 @@ test('an answer that cites perfectly but addresses a different question is not a
   const c = classifyRetrieval(f, {
     citedSentences: 4,
     supportedSentences: 4,
-    review: reviewed({ relevant_evidence_reached_ledger: true, answer_addressed_question: false }),
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: false, answer_complete: false }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION);
   assert.notEqual(c.primary, RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL);
@@ -182,7 +192,7 @@ test('an answer that addresses the question with unsupported citations is a cita
   const c = classifyRetrieval(f, {
     citedSentences: 5,
     supportedSentences: 3,
-    review: reviewed({ relevant_evidence_reached_ledger: true, answer_addressed_question: true }),
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.CITATION_FAILURE);
 });
@@ -192,39 +202,22 @@ test('the whole path working is a successful retrieval', () => {
   const c = classifyRetrieval(f, {
     citedSentences: 4,
     supportedSentences: 4,
-    review: reviewed({ relevant_evidence_reached_ledger: true, answer_addressed_question: true }),
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true }),
   });
   assert.equal(c.primary, RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL);
 });
 
 /* --------------------------------------------- attribution across searches */
 
-test('the same url from two searches keeps the attempt and rank that supplied it', () => {
-  // Writing a fetch outcome onto "the first row with this url" loses which
-  // query produced the attempt, and with it any claim about ranking.
-  const f = createFunnel({ question: QUERY, enabled: true });
-  f.search({ query: 'first', provider: 'tavily', durationMs: 10, results: leads(5) });
-  f.search({ query: 'second', provider: 'tavily', durationMs: 10, results: [{ url: 'https://site4.example/p', title: 'again', snippet: '' }] });
-
-  f.attempted({ url: 'https://site4.example/p' });
-  f.fetched('https://site4.example/p', { status: 'usable', chars: 3000, admitted: true, durationMs: 20, passages: ['text'] });
-
-  assert.equal(f.searches.length, 2);
-  assert.equal(f.searches[0].results.length, 5, 'the first search is untouched');
-  assert.equal(f.searches[1].results.length, 1, 'and so is the second');
-
-  const [event] = f.fetch_events;
-  assert.equal(event.url, 'https://site4.example/p');
-  assert.equal(event.search_attempt, 1, 'located at its first appearance');
-  assert.equal(event.rank, 4, 'with the rank it held there');
-  assert.equal(event.status, 'usable');
-});
-
 test('search results are never modified by what happens to them afterwards', () => {
   const f = funnelWith(leads(3), () => ({ status: 'usable', chars: 2000 }));
   for (const s of f.searches) {
     for (const r of s.results) {
-      assert.deepEqual(Object.keys(r).sort(), ['rank', 'snippet', 'title', 'url'], 'a result stays a result');
+      assert.deepEqual(
+        Object.keys(r).sort(),
+        ['candidate_id', 'rank', 'search_attempt', 'snippet', 'title', 'url'],
+        'a result carries its identity and nothing about what later happened to it',
+      );
     }
   }
   assert.equal(f.fetch_events.length, 3, 'outcomes live in their own events');
@@ -310,13 +303,16 @@ test('applying a review makes no network or model call', async () => {
         },
       ],
     };
+    const { fingerprint } = await import('../tools/apply-review.js');
     const review = {
+      run_fingerprint: fingerprint(run),
       questions: [
         {
           question: QUERY,
           relevant_urls: ['https://site1.example/p'],
-          relevant_evidence_reached_ledger: true,
+          extracted_passages_contain_answer: true,
           answer_addressed_question: true,
+          answer_complete: true,
         },
       ],
     };
@@ -343,11 +339,13 @@ test('every reviewed run gets exactly one outcome, and the totals add up', () =>
       fetch_events: [{ search_attempt: 1, rank: 1, url: 'https://site1.example/p', status: 'usable', admitted_as_evidence: true }],
     },
   });
-  const run = { commit: 'abc', runs: [mk('q1', 3, 3), mk('q2', 4, 2), mk('q3', 0, 0)] };
+  const run = { commit: 'abc', ran_at: 'now', runs: [mk('q1', 3, 3), mk('q2', 4, 2), mk('q3', 0, 0)] };
+  const decided = { extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true };
   const review = {
+    run_fingerprint: fp(run),
     questions: [
-      { question: 'q1', relevant_urls: ['https://site1.example/p'], relevant_evidence_reached_ledger: true, answer_addressed_question: true },
-      { question: 'q2', relevant_urls: ['https://site1.example/p'], relevant_evidence_reached_ledger: true, answer_addressed_question: true },
+      { question: 'q1', relevant_urls: ['https://site1.example/p'], ...decided },
+      { question: 'q2', relevant_urls: ['https://site1.example/p'], ...decided },
       { question: 'q3', relevant_urls: [] },
     ],
   };
@@ -363,9 +361,10 @@ test('every reviewed run gets exactly one outcome, and the totals add up', () =>
 test('an unreviewed question stays pending rather than joining a failure category', () => {
   const run = {
     commit: 'abc',
+    ran_at: 'now',
     runs: [{ query: 'q1', cited_sentences: 2, supported_sentences: 2, funnel: { searches: [], fetch_events: [] } }],
   };
-  const s = summarise(applyReview(run, { questions: [] }));
+  const s = summarise(applyReview(run, { run_fingerprint: fp(run), questions: [] }));
   assert.equal(s.outcomes[RETRIEVAL_OUTCOME.PENDING_REVIEW], 1, 'unreviewed is not a kind of failure');
 });
 
@@ -507,4 +506,168 @@ test('a rewrite is recorded only when it changed the question', () => {
   assert.equal(f.toJSON().effective_question, undefined);
   f.rewrote('postgresql vacuum throughput');
   assert.equal(f.toJSON().effective_question, 'postgresql vacuum throughput');
+});
+
+/* --------------------------------- an unfinished review stays unfinished */
+
+test('a review that names relevant urls and nothing else stays pending', () => {
+  // "I have not decided" and "no" are different. Letting the missing one fall
+  // through manufactures a confident label out of a reviewer's silence — and
+  // this exact shape used to reach successful_retrieval.
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  const c = classifyRetrieval(f, {
+    citedSentences: 4,
+    supportedSentences: 4,
+    review: { relevant_urls: ['https://site1.example/p'] },
+  });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.PENDING_REVIEW);
+  assert.match(c.flags.join(' '), /extracted passages/);
+});
+
+test('a review missing only the answer judgements stays pending', () => {
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  const c = classifyRetrieval(f, {
+    citedSentences: 4,
+    supportedSentences: 4,
+    review: reviewed({ extracted_passages_contain_answer: true }),
+  });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.PENDING_REVIEW);
+  assert.match(c.flags.join(' '), /addressed the question/);
+});
+
+test('a judgement is only asked for once the run reached the stage that needs it', () => {
+  // A question whose search returned nothing relevant needs no opinion about
+  // its answer; demanding one would leave every such row unreviewable.
+  const f = funnelWith(leads(4));
+  const c = classifyRetrieval(f, { review: { relevant_urls: [] } });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.QUERY_MISS);
+  assert.equal(c.reviewed, true, 'and it is decided, not pending');
+});
+
+/* ------------------------------------------------ a partial answer is not a success */
+
+test('an answer that addressed the question but left part out is not a success', () => {
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  const c = classifyRetrieval(f, {
+    citedSentences: 4,
+    supportedSentences: 4,
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: false }),
+  });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION);
+  assert.match(c.flags.join(' '), /omitted a required part/);
+});
+
+test('a complete answer with supported citations is a success', () => {
+  const f = funnelWith(leads(4), (r) => (r.url.includes('site1.') ? { status: 'usable', chars: 5000 } : {}));
+  const c = classifyRetrieval(f, {
+    citedSentences: 4,
+    supportedSentences: 4,
+    review: reviewed({ extracted_passages_contain_answer: true, answer_addressed_question: true, answer_complete: true }),
+  });
+  assert.equal(c.primary, RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL);
+});
+
+/* ------------------------------- a fetch names the occurrence that supplied it */
+
+test('a fetch from the second search is attributed to the second search', () => {
+  // The previous version of this test asserted the opposite and I offered it as
+  // proof: locate(url) always returned the first occurrence, so a rescue fetch
+  // was permanently filed under the original search and any claim about ranking
+  // was fiction.
+  const f = createFunnel({ question: QUERY, enabled: true });
+  f.search({ query: 'first', provider: 'tavily', durationMs: 10, results: leads(5) });
+  f.search({ query: 'second', provider: 'tavily', durationMs: 10, results: [{ url: 'https://site4.example/p', title: 'again', snippet: '' }] });
+
+  // The occurrence actually queued is the one from the second search.
+  const fromSecond = f.searches[1].results[0];
+  assert.equal(fromSecond.candidate_id, 'search_2_rank_1');
+
+  const event = f.attempted({ candidateId: fromSecond.candidate_id, url: fromSecond.url });
+  f.fetched({ eventId: event.event_id }, { status: 'usable', chars: 3000, admitted: true, durationMs: 20, passages: ['text'] });
+
+  const [recorded] = f.fetch_events;
+  assert.equal(recorded.search_attempt, 2, 'the search that supplied it');
+  assert.equal(recorded.rank, 1, 'at the rank it held there');
+  assert.equal(recorded.candidate_id, 'search_2_rank_1');
+  assert.equal(recorded.status, 'usable');
+
+  // Both search rows are untouched.
+  assert.equal(f.searches[0].results.length, 5);
+  assert.equal(f.searches[0].results[3].rank, 4, 'the first occurrence keeps its own rank');
+  assert.equal(f.searches[1].results.length, 1);
+});
+
+test('a fetch from the first search is still attributed to the first', () => {
+  const f = createFunnel({ question: QUERY, enabled: true });
+  f.search({ query: 'first', provider: 'tavily', durationMs: 10, results: leads(5) });
+  f.search({ query: 'second', provider: 'tavily', durationMs: 10, results: [{ url: 'https://site4.example/p', title: 'again', snippet: '' }] });
+
+  const fromFirst = f.searches[0].results[3];
+  const event = f.attempted({ candidateId: fromFirst.candidate_id, url: fromFirst.url });
+  f.fetched({ eventId: event.event_id }, { status: 'usable', chars: 3000, admitted: true, passages: ['text'] });
+
+  assert.equal(f.fetch_events[0].search_attempt, 1, 'identity is carried, not guessed from the url');
+  assert.equal(f.fetch_events[0].rank, 4);
+});
+
+/* ------------------------------------------- a review belongs to one run */
+
+test('a review from a different run is refused', async () => {
+  const { applyReview: apply, fingerprint } = await import('../tools/apply-review.js');
+  const mkRun = (ranAt) => ({
+    commit: 'abc',
+    ran_at: ranAt,
+    runs: [{ query: 'q1', cited_sentences: 1, supported_sentences: 1, funnel: { searches: [], fetch_events: [] } }],
+  });
+
+  const first = mkRun('2026-01-01T00:00:00.000Z');
+  const second = mkRun('2026-01-02T00:00:00.000Z');
+  const reviewOfFirst = { run_fingerprint: fingerprint(first), questions: [{ question: 'q1', relevant_urls: [] }] };
+
+  // Same commit, same questions, different run. The web moved between them.
+  assert.throws(() => apply(second, reviewOfFirst), /different run/);
+  assert.doesNotThrow(() => apply(first, reviewOfFirst), 'and the run it was written for is fine');
+});
+
+test('a review with no fingerprint at all is refused', async () => {
+  const { applyReview: apply } = await import('../tools/apply-review.js');
+  const run = { commit: 'abc', ran_at: 'now', runs: [{ query: 'q1', funnel: { searches: [], fetch_events: [] } }] };
+  assert.throws(() => apply(run, { questions: [] }), /no run_fingerprint/);
+});
+
+test('a generated template carries the fingerprint of the run it came from', async () => {
+  const { reviewTemplate, applyReview: apply, fingerprint } = await import('../tools/apply-review.js');
+  const run = {
+    commit: 'abc',
+    ran_at: 'now',
+    runs: [{ query: 'q1', cited_sentences: 0, funnel: { searches: [], fetch_events: [] } }],
+  };
+  const template = reviewTemplate(run);
+  assert.equal(template.run_fingerprint, fingerprint(run));
+  assert.doesNotThrow(() => apply(run, template), 'a freshly generated review applies to its own run');
+});
+
+/* ------------------------------------ text from a page that read too thin */
+
+test('a page that read but gave too little keeps its text', async () => {
+  // Ninety characters of navigation, a paywall notice and a partly useful
+  // extraction are identical as a number and want different answers.
+  const funnel = createFunnel({ question: QUERY, enabled: true });
+  await gatherFromWeb({
+    query: QUERY,
+    ledger: new EvidenceLedger(),
+    budget: budget(),
+    emit: () => {},
+    pages: 2,
+    webSearch: searchReturning(leads(4)),
+    fetchPage: async (url) =>
+      url.includes('site1.') ? { ...page(url), text: 'Accept cookies. Sign in to continue reading this article.' } : page(url),
+    funnel,
+  });
+
+  const thin = funnel.fetch_events.find((e) => e.status === 'too_thin');
+  assert.ok(thin, 'the thin page has an event');
+  assert.ok(thin.extracted_excerpt, 'and the text it did return');
+  assert.match(thin.extracted_excerpt, /Sign in to continue/, 'so a reviewer can see it was a paywall');
+  assert.equal(thin.admitted_as_evidence, false, 'while still not being evidence');
 });

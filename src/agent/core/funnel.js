@@ -77,6 +77,13 @@ class Funnel {
       duration_ms: durationMs ?? null,
       ...(error ? { error } : {}),
       results: (results ?? []).map((r, i) => ({
+        // Identity belongs to the occurrence, not to the url. The same page
+        // comes back from two searches at two ranks, and a fetch that
+        // rediscovers "which row has this url" can only ever find the first
+        // one — which silently attributes every rescue fetch to the original
+        // search and makes any claim about ranking meaningless.
+        candidate_id: `search_${this.searches.length + 1}_rank_${i + 1}`,
+        search_attempt: this.searches.length + 1,
         rank: i + 1,
         title: r.title ?? null,
         url: r.url ?? null,
@@ -86,18 +93,14 @@ class Funnel {
     return this.searches.at(-1);
   }
 
-  /** Where a url sits: which search returned it, and at what rank. */
-  locate(url) {
-    for (const s of this.searches) {
-      const hit = s.results.find((r) => r.url === url);
-      if (hit) return { search_attempt: s.attempt, rank: hit.rank };
-    }
-    return { search_attempt: null, rank: null };
+  /** Every result occurrence, across every search. */
+  get candidates() {
+    return this.searches.flatMap((s) => s.results);
   }
 
-  /** Every result across every search, flattened, for counting. */
-  get candidates() {
-    return this.searches.flatMap((s) => s.results.map((r) => ({ ...r, search_attempt: s.attempt })));
+  /** The occurrence with this id, if it is one this funnel recorded. */
+  candidate(candidateId) {
+    return this.candidates.find((c) => c.candidate_id === candidateId) ?? null;
   }
 
   /**
@@ -108,15 +111,30 @@ class Funnel {
    * so are "skipped because a sibling page shares its publisher" and "never
    * reached because the budget ran out".
    */
-  deduplicated({ url, reason, keptUrl = null }) {
-    const where = this.locate(url);
-    this.deduplications.push({ ...where, url, reason, kept_url: keptUrl });
+  deduplicated({ candidateId = null, url, reason, keptUrl = null }) {
+    const c = candidateId ? this.candidate(candidateId) : null;
+    this.deduplications.push({
+      candidate_id: candidateId,
+      search_attempt: c?.search_attempt ?? null,
+      rank: c?.rank ?? null,
+      url,
+      reason,
+      kept_url: keptUrl,
+    });
   }
 
-  attempted({ url }) {
-    const where = this.locate(url);
-    this.fetch_events.push({ ...where, url, status: 'attempted', at: this.fetch_events.length + 1 });
-    return this.fetch_events.at(-1);
+  attempted({ candidateId = null, url }) {
+    const c = candidateId ? this.candidate(candidateId) : null;
+    const event = {
+      event_id: `fetch_${this.fetch_events.length + 1}`,
+      candidate_id: candidateId,
+      search_attempt: c?.search_attempt ?? null,
+      rank: c?.rank ?? null,
+      url: url ?? c?.url ?? null,
+      status: 'attempted',
+    };
+    this.fetch_events.push(event);
+    return event;
   }
 
   /**
@@ -131,9 +149,12 @@ class Funnel {
    * reviewer needs to tell an irrelevant page from a relevant page whose
    * extraction missed the answer.
    */
-  fetched(url, { status, httpStatus, durationMs, chars, admitted, reason, passages }) {
-    const event = [...this.fetch_events].reverse().find((e) => e.url === url && e.status === 'attempted');
-    const target = event ?? this.attempted({ url });
+  fetched({ eventId = null, candidateId = null, url }, { status, httpStatus, durationMs, chars, admitted, reason, passages, excerpt }) {
+    // Found by the event it belongs to, never by scanning for a matching url.
+    const target =
+      (eventId && this.fetch_events.find((e) => e.event_id === eventId)) ||
+      (candidateId && [...this.fetch_events].reverse().find((e) => e.candidate_id === candidateId && e.status === 'attempted')) ||
+      this.attempted({ candidateId, url });
     target.status = status;
     target.http_status = httpStatus ?? null;
     target.duration_ms = durationMs ?? null;
@@ -141,6 +162,10 @@ class Funnel {
     target.admitted_as_evidence = Boolean(admitted);
     target.reason = reason ?? null;
     if (passages?.length) target.extracted_passages = passages;
+    // Kept for a page that read but gave too little: ninety characters of
+    // navigation furniture, a paywall notice and a partially useful extraction
+    // all look identical as a number, and want different answers.
+    if (excerpt) target.extracted_excerpt = excerpt;
   }
 
   coverage({ afterUrl, sufficient, reasons }) {
@@ -167,32 +192,33 @@ class Funnel {
 /**
  * The one thing that went wrong, or that nothing did.
  *
- * Requires a review: which results were relevant, and whether the answer
- * actually addressed the question. Neither is derivable from what the run
- * recorded. Without them this returns `pending_review`, because the plausible
- * guesses available here are wrong in a specific and expensive direction — a
- * search returning pages about something else, followed by an answer that
- * honestly declines to use them, looks exactly like the answer ignoring good
- * evidence, and would send work at synthesis when the fault was the query.
+ * Each stage asks for exactly the judgement it needs, and asks only once the
+ * run has actually reached it. A question whose search returned nothing
+ * relevant needs no opinion about its answer, and demanding one would leave
+ * every such row unreviewable.
+ *
+ * A required judgement left null returns `pending_review`. That matters more
+ * than it looks: "I have not decided" and "no" are different, and letting the
+ * missing one fall through to a category manufactures a confident label out of
+ * a reviewer's silence. The earlier version required only `relevant_urls` and
+ * would happily reach `successful_retrieval` with every other field unfilled.
  *
  * Precedence, not flags: a run whose search found nothing relevant also cites
- * nothing, and counting it in both places makes twenty runs produce forty
- * outcomes and no way to read them.
+ * nothing, and counting it twice makes twenty runs produce forty outcomes.
  */
 export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentences = 0, review = null } = {}) {
-  if (!funnel) return { primary: RETRIEVAL_OUTCOME.PENDING_REVIEW, flags: ['no funnel was recorded'], reviewed: false };
+  const pending = (why) => ({ primary: RETRIEVAL_OUTCOME.PENDING_REVIEW, flags: [why], reviewed: false });
+  const done = (primary, note) => ({ primary, flags: note ? [note] : [], reviewed: true });
+  const decided = (v) => typeof v === 'boolean';
+
+  if (!funnel) return pending('no funnel was recorded');
   if (!review || !Array.isArray(review.relevant_urls)) {
-    return {
-      primary: RETRIEVAL_OUTCOME.PENDING_REVIEW,
-      flags: ['no relevance review; which results were relevant cannot be derived from the run'],
-      reviewed: false,
-    };
+    return pending('no relevance review; which results were relevant cannot be derived from the run');
   }
 
   const candidates = funnel.candidates ?? [];
   const events = funnel.fetch_events ?? [];
   const relevant = candidates.filter((c) => review.relevant_urls.includes(c.url));
-  const done = (primary, note) => ({ primary, flags: note ? [note] : [], reviewed: true });
 
   if (!relevant.length) {
     return done(RETRIEVAL_OUTCOME.QUERY_MISS, candidates.length ? 'no relevant url among the results' : 'the search returned nothing');
@@ -220,14 +246,28 @@ export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentenc
     );
   }
 
-  // The page read in full. Did what was extracted carry the answer? Only a
-  // reviewer can say, having read the passages the record keeps.
-  if (review.relevant_evidence_reached_ledger === false) {
+  // A relevant page read in full. Whether what was extracted carried the answer
+  // is a question only someone who read the passages can settle.
+  if (!decided(review.extracted_passages_contain_answer)) {
+    return pending('a relevant page was read; whether its extracted passages carry the answer has not been decided');
+  }
+  if (review.extracted_passages_contain_answer === false) {
     return done(RETRIEVAL_OUTCOME.PASSAGE_MISS, 'the page was read and the extracted passages did not carry the answer');
+  }
+
+  if (!decided(review.answer_addressed_question) || !decided(review.answer_complete)) {
+    return pending('evidence reached the answer; whether it addressed the question, and fully, has not been decided');
   }
 
   if (review.answer_addressed_question === false) {
     return done(RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, 'relevant evidence reached the ledger and the answer did not address the question');
+  }
+
+  if (review.answer_complete === false) {
+    // Addressed but partial. Not a success: the evidence was there and part of
+    // the question went unanswered, which is the same failure as ignoring it,
+    // in a smaller quantity.
+    return done(RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, 'the answer addressed the question but omitted a required part');
   }
 
   if (citedSentences === 0) {
