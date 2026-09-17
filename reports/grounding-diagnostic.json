@@ -1,0 +1,249 @@
+{
+  "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+  "ran_at": "2026-09-17T12:43:18.306Z",
+  "base": "http://localhost:8787",
+  "node": "v21.7.2",
+  "health": {
+    "model": "claude-haiku-4-5",
+    "searchProvider": "tavily",
+    "vectorStore": "mongo-cosine-scan"
+  },
+  "runs": [
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "model": "claude-haiku-4-5",
+      "answer": "The evidence provided does not cover how bloom filters trade memory for false positives in storage engines. \n\nThe evidence discusses AI-detection tools for identifying generated text [1], compliance screening solutions [2], and a PDF document on false positives and negatives [3] that appears corrupted or unreadable. None of these sources address bloom filters or their use in storage engines.\n\nTo answer your question properly, I would need evidence specifically about bloom filter data structures and their design tradeoffs in database or storage contexts.",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say",
+          "url": "https://www.businessinsider.com/ai-detection-tool-false-positives-student-writing-2024-1",
+          "snippet": "A new AI-detection tool may have solved the problem of false positives for student writing, researchers say\n\nGenerative AI tools such as ChatGPT have been wildly popular with students\n\nFrank Rumpenhorst/picture alliance via Getty Images\n\nA group of researchers say they've created a highly accurate tool for identifying text produced by generative artificial-intelligence applications and large langu"
+        },
+        {
+          "n": 2,
+          "kind": "web",
+          "title": "Descartes Helps Reduce False Positives with AI-Enabled Denied Party Screening Solution",
+          "url": "https://finance.yahoo.com/news/descartes-helps-reduce-false-positives-104500002.html",
+          "snippet": "Oops, something went wrong Skip to navigation Skip to main content Skip to right column This is a paid press release. Contact the press release distributor directly with any inquiries. Descartes Helps Reduce False Positives with AI-Enabled Denied Party Screening Solution The Descartes Systems Group Inc August 6, 2025 5 min read DSG.TO DSGX The Descartes Systems Group Inc LONDON and ATLANTA, Aug. 0"
+        },
+        {
+          "n": 3,
+          "kind": "web",
+          "title": "S0519_Impact_of_false_positives_and_negatives.pdf",
+          "url": "https://assets.publishing.service.gov.uk/media/5ef5de1486650c1295cb5ed2/S0519_Impact_of_false_positives_and_negatives.pdf",
+          "snippet": "%PDF-1.6\r%����\r\n193 0 obj\r<</Linearized 1/L 240657/O 195/E 134211/N 5/T 240275/H [ 521 269]>>\rendobj\r             \r\n216 0 obj\r<</DecodeParms<</Columns 5/Predictor 12>>/Filter/FlateDecode/ID[<9E37C12827A43141B68E1064E9F13336><D93FDB33A909844E86D4B4E8BFB9FF72>]/Index[193 38]/Info 192 0 R/Length 113/Prev 240276/Root 194 0 R/Size 231/Type/XRef/W[1 3 1]>>stream\r\nh�bbd`\u0010``b``f\u0003�\f3@$�\u000e�d�\u0001�L�`�\u0014D�-\u0001�?\u0005��"
+        }
+      ],
+      "cited_sentences": 3,
+      "supported_sentences": 3,
+      "cited_valid": 3,
+      "groundedness": 1,
+      "factual_sentences": 4,
+      "factual_sentences_cited": 1,
+      "weak_citations": [],
+      "sources_fetched": 3,
+      "warnings": [],
+      "ttft_ms": 6220,
+      "latency_ms": 7956,
+      "cost_usd": 0.006295,
+      "terminated": "done",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What does the Linux OOM killer use to score which process to terminate?",
+      "error": "terminated"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does TCP slow start decide the initial congestion window?",
+      "model": "claude-haiku-4-5",
+      "answer": "TCP",
+      "sources": [
+        {
+          "n": 1,
+          "kind": "web",
+          "title": "What Is TCP Slow Start - KeyCDN Support",
+          "url": "https://www.keycdn.com/support/tcp-slow-start",
+          "snippet": "SupportFind answers, guides, and tutorials to supercharge your content delivery.Getting StartedZonesPull ZonePush ZoneIntegrationsCMSFrameworksAccount ManagementTroubleshootingTutorialsGlossaryCategoriesGetting StartedZonesPull ZonePush ZoneIntegrationsCMSFrameworksAccount ManagementTroubleshootingTutorialsGlossaryWhat Is TCP Slow StartUpdated on October 4, 2018What is TCP slow start?TCP slow star"
+        }
+      ],
+      "cited_sentences": 0,
+      "supported_sentences": null,
+      "cited_valid": 0,
+      "groundedness": null,
+      "factual_sentences": 0,
+      "factual_sentences_cited": 0,
+      "weak_citations": [],
+      "sources_fetched": 1,
+      "warnings": [
+        "uncited_answer"
+      ],
+      "ttft_ms": 3058,
+      "latency_ms": 943986,
+      "cost_usd": 0,
+      "terminated": "cap",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What is the difference between a clustered and a non-clustered database index?",
+      "model": "claude-haiku-4-5",
+      "answer": "The search for evidence on this topic returned no usable results. I cannot answer your question from retrieved sources. Please try a Deep Search to locate technical documentation on database index types.",
+      "sources": [],
+      "cited_sentences": 0,
+      "supported_sentences": null,
+      "cited_valid": 0,
+      "groundedness": null,
+      "factual_sentences": 3,
+      "factual_sentences_cited": 0,
+      "weak_citations": [],
+      "sources_fetched": 0,
+      "warnings": [
+        "evidence_limited"
+      ],
+      "ttft_ms": 213401,
+      "latency_ms": 215216,
+      "cost_usd": 0.000946,
+      "terminated": "cap",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does the DNS resolver decide when a cached record has expired?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What does a Merkle tree let a distributed system verify cheaply?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does write amplification arise in solid state drives?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does HTTP content negotiation choose a response representation?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What does the borrow checker in Rust prevent at compile time?",
+      "error": "terminated"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "model": "claude-haiku-4-5",
+      "answer": "The retrieval found no usable evidence on this topic. I cannot answer your question from the available sources. Try a Deep Search to locate material on JIT compiler heuristics and hotness thresholds.",
+      "sources": [],
+      "cited_sentences": 0,
+      "supported_sentences": null,
+      "cited_valid": 0,
+      "groundedness": null,
+      "factual_sentences": 3,
+      "factual_sentences_cited": 0,
+      "weak_citations": [],
+      "sources_fetched": 0,
+      "warnings": [
+        "evidence_limited"
+      ],
+      "ttft_ms": 1046475,
+      "latency_ms": 1048024,
+      "cost_usd": 0.00098,
+      "terminated": "cap",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What is the purpose of a write-ahead log in database crash recovery?",
+      "model": "claude-haiku-4-5",
+      "answer": "The retrieval found no usable evidence to answer this question. Try Deep Search to locate sources on database crash recovery and write-ahead logging mechanisms.",
+      "sources": [],
+      "cited_sentences": 0,
+      "supported_sentences": null,
+      "cited_valid": 0,
+      "groundedness": null,
+      "factual_sentences": 2,
+      "factual_sentences_cited": 0,
+      "weak_citations": [],
+      "sources_fetched": 0,
+      "warnings": [
+        "evidence_limited"
+      ],
+      "ttft_ms": 202871,
+      "latency_ms": 203440,
+      "cost_usd": 0.000914,
+      "terminated": "cap",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does consistent hashing limit the keys that move when a node leaves?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What does TLS certificate pinning protect against, and what does it break?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How does a vector clock differ from a Lamport timestamp?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What does the CAP theorem actually claim about partition tolerance?",
+      "model": "claude-haiku-4-5",
+      "answer": "I cannot answer this question. The retrieval found no usable evidence on the CAP theorem or its claims about partition tolerance. Try Deep Search to locate relevant sources on distributed systems theory.",
+      "sources": [],
+      "cited_sentences": 0,
+      "supported_sentences": null,
+      "cited_valid": 0,
+      "groundedness": null,
+      "factual_sentences": 2,
+      "factual_sentences_cited": 0,
+      "weak_citations": [],
+      "sources_fetched": 0,
+      "warnings": [
+        "evidence_limited"
+      ],
+      "ttft_ms": 199853,
+      "latency_ms": 200905,
+      "cost_usd": 0.000951,
+      "terminated": "cap",
+      "search_cached": false
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "How do columnar storage formats achieve better compression than row formats?",
+      "error": "the run was not recorded"
+    },
+    {
+      "commit": "a02283232533fa2a8ed3dd87df822330322a5002",
+      "query": "What is false sharing, and why does it slow down multicore code?",
+      "error": "the run was not recorded"
+    }
+  ]
+}

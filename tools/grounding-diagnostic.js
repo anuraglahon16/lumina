@@ -230,9 +230,18 @@ async function main() {
        * disagree with the system for reasons of its own making.
        */
       const { listRuns } = await import('../src/agent/store/runLog.js');
-      const { items } = await listRuns({ userId }, { limit: 1 });
-      const record = items[0];
-      if (!record) throw new Error('the run was not recorded');
+      // The run is persisted after the stream closes, and the write is not
+      // awaited on the request path — deliberately, so a reader is not kept
+      // waiting on bookkeeping. Reading it the instant `done` arrives is a race
+      // this diagnostic loses, and losing it silently recorded twelve of twenty
+      // questions as failures of the system rather than of the measurement.
+      let record = null;
+      for (let attempt = 0; attempt < 12 && !record; attempt += 1) {
+        const { items } = await listRuns({ userId }, { limit: 1 });
+        record = items[0] ?? null;
+        if (!record) await new Promise((r) => setTimeout(r, 250));
+      }
+      if (!record) throw new Error('the run was never persisted, after three seconds of waiting');
       const citations = record.citations ?? {};
 
       const factual = factualSentences(answer);
