@@ -6,24 +6,32 @@ import { config } from '../../shared/config.js';
  * A run that answers badly can fail in seven different places: the query found
  * nothing relevant, something relevant ranked below what was tried, a good
  * candidate was never attempted, a good page would not load, the page loaded
- * but the needed passage was not in what was extracted, the evidence arrived
- * and the answer ignored it, or the answer used it and cited it wrongly. The
- * end state looks similar in most of those cases — a thin answer, or an honest
- * refusal — and the repairs are completely different.
+ * but what was extracted did not carry the answer, the evidence arrived and the
+ * answer ignored it, or the answer used it and cited it wrongly. The end state
+ * looks alike in most of those — a thin answer, or an honest refusal — and the
+ * repairs are completely different.
  *
- * This records the path so the difference is visible. It is observation only:
- * off by default, no extra searches, no extra fetches, no model calls, nothing
- * requested that the run was not already requesting. With it off, a run is
- * exactly what it was before and carries nothing extra.
+ * This records the path. It is observation only: off by default, and with it on
+ * nothing is searched, fetched or asked of a model that the run was not already
+ * doing.
  *
- * What it cannot do is decide relevance. Whether a result was the one that
- * would have answered the question is a judgement, and the lexical score
- * available here is a weak proxy for it. Every relevance label is marked
- * provisional and every input to it is kept, so the rows that matter can be
- * read rather than trusted.
+ * Two things it deliberately does not do.
+ *
+ * It does not decide relevance. Whether a result was the one that would have
+ * answered the question is a judgement, and the lexical score here is a weak
+ * proxy. Classification without a relevance annotation returns `pending_review`
+ * rather than a plausible guess — a guess would have filed an honest refusal to
+ * use irrelevant pages as a synthesis failure, and sent work at synthesis when
+ * the search was at fault.
+ *
+ * And search results are never modified after they are recorded. The same URL
+ * can come back from two searches at two ranks; writing a fetch outcome onto
+ * "the first row with this URL" loses which query produced the attempt. Fetches
+ * are their own events, naming the search and rank they came from.
  */
 
 export const RETRIEVAL_OUTCOME = {
+  PENDING_REVIEW: 'pending_review',
   QUERY_MISS: 'query_miss',
   RANKING_MISS: 'ranking_miss',
   SELECTION_MISS: 'selection_miss',
@@ -33,18 +41,6 @@ export const RETRIEVAL_OUTCOME = {
   CITATION_FAILURE: 'citation_failure',
   SUCCESSFUL_RETRIEVAL: 'successful_retrieval',
 };
-
-/** In precedence order: the earliest thing that went wrong is the outcome. */
-const PRECEDENCE = [
-  RETRIEVAL_OUTCOME.QUERY_MISS,
-  RETRIEVAL_OUTCOME.RANKING_MISS,
-  RETRIEVAL_OUTCOME.SELECTION_MISS,
-  RETRIEVAL_OUTCOME.FETCH_FAILURE,
-  RETRIEVAL_OUTCOME.PASSAGE_MISS,
-  RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION,
-  RETRIEVAL_OUTCOME.CITATION_FAILURE,
-  RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL,
-];
 
 export const tracingEnabled = () => config.diagnostics?.trace === true;
 
@@ -57,22 +53,26 @@ export function createFunnel({ question, enabled = tracingEnabled() } = {}) {
 class Funnel {
   constructor(question) {
     this.original_question = question ?? null;
-    this.effective_question = null; // only set when a rewrite actually happened
+    this.effective_question = null; // set only when a rewrite changed it
+    /** Immutable once recorded. */
     this.searches = [];
+    /** Every attempt, naming where it came from. */
+    this.fetch_events = [];
+    /** Every candidate passed over, and why. */
+    this.deduplications = [];
     this.coverage_events = [];
     this.stop_reason = null;
   }
 
-  /** A rewrite, recorded only when it changed the question. */
   rewrote(effective) {
     if (effective && effective !== this.original_question) this.effective_question = effective;
   }
 
   search({ query, provider, cached, durationMs, results, error }) {
-    const record = {
+    this.searches.push({
+      attempt: this.searches.length + 1,
       query,
       provider: provider ?? null,
-      attempt: this.searches.length + 1,
       cached: Boolean(cached),
       duration_ms: durationMs ?? null,
       ...(error ? { error } : {}),
@@ -81,61 +81,66 @@ class Funnel {
         title: r.title ?? null,
         url: r.url ?? null,
         snippet: r.snippet ?? null,
-        deduplicated: false,
-        deduplication_reason: null,
-        fetch_attempted: false,
-        fetch_status: null,
-        fetch_duration_ms: null,
-        http_status: null,
-        extracted_chars: null,
-        selected_as_evidence: false,
-        selection_reason: null,
       })),
-    };
-    this.searches.push(record);
-    return record;
+    });
+    return this.searches.at(-1);
   }
 
-  /** Every result, across every search, as one list to look things up in. */
-  get candidates() {
-    return this.searches.flatMap((s) => s.results);
-  }
-
-  find(url) {
-    return this.candidates.find((r) => r.url === url) ?? null;
-  }
-
-  /** A candidate passed over before anything was attempted. */
-  deduplicated(url, reason) {
-    const row = this.find(url);
-    if (row) {
-      row.deduplicated = true;
-      row.deduplication_reason = reason;
+  /** Where a url sits: which search returned it, and at what rank. */
+  locate(url) {
+    for (const s of this.searches) {
+      const hit = s.results.find((r) => r.url === url);
+      if (hit) return { search_attempt: s.attempt, rank: hit.rank };
     }
+    return { search_attempt: null, rank: null };
   }
 
-  attempted(url) {
-    const row = this.find(url);
-    if (row) row.fetch_attempted = true;
+  /** Every result across every search, flattened, for counting. */
+  get candidates() {
+    return this.searches.flatMap((s) => s.results.map((r) => ({ ...r, search_attempt: s.attempt })));
   }
 
   /**
-   * How a fetch ended.
+   * A candidate passed over before it was ever tried.
+   *
+   * Recorded where it happens rather than inferred later: "not attempted" and
+   * "attempted and failed" are different questions with different answers, and
+   * so are "skipped because a sibling page shares its publisher" and "never
+   * reached because the budget ran out".
+   */
+  deduplicated({ url, reason, keptUrl = null }) {
+    const where = this.locate(url);
+    this.deduplications.push({ ...where, url, reason, kept_url: keptUrl });
+  }
+
+  attempted({ url }) {
+    const where = this.locate(url);
+    this.fetch_events.push({ ...where, url, status: 'attempted', at: this.fetch_events.length + 1 });
+    return this.fetch_events.at(-1);
+  }
+
+  /**
+   * How an attempt ended.
    *
    * A cancellation is kept apart from a failure. The pool aborts its losers on
    * every successful run, so counting those as failures would make a healthy
    * system look like one whose fetches mostly fail.
+   *
+   * `passages` is the text that was actually extracted, kept for every usable
+   * page including ones nothing ended up citing — that is precisely the set a
+   * reviewer needs to tell an irrelevant page from a relevant page whose
+   * extraction missed the answer.
    */
-  fetched(url, { status, httpStatus, durationMs, chars, selected, reason }) {
-    const row = this.find(url);
-    if (!row) return;
-    row.fetch_attempted = true;
-    row.fetch_status = status;
-    row.http_status = httpStatus ?? null;
-    row.fetch_duration_ms = durationMs ?? null;
-    row.extracted_chars = chars ?? null;
-    row.selected_as_evidence = Boolean(selected);
-    row.selection_reason = reason ?? null;
+  fetched(url, { status, httpStatus, durationMs, chars, admitted, reason, passages }) {
+    const event = [...this.fetch_events].reverse().find((e) => e.url === url && e.status === 'attempted');
+    const target = event ?? this.attempted({ url });
+    target.status = status;
+    target.http_status = httpStatus ?? null;
+    target.duration_ms = durationMs ?? null;
+    target.extracted_chars = chars ?? null;
+    target.admitted_as_evidence = Boolean(admitted);
+    target.reason = reason ?? null;
+    if (passages?.length) target.extracted_passages = passages;
   }
 
   coverage({ afterUrl, sufficient, reasons }) {
@@ -151,6 +156,8 @@ class Funnel {
       original_question: this.original_question,
       ...(this.effective_question ? { effective_question: this.effective_question } : {}),
       searches: this.searches,
+      fetch_events: this.fetch_events,
+      deduplications: this.deduplications,
       coverage_events: this.coverage_events,
       stop_reason: this.stop_reason,
     };
@@ -160,83 +167,76 @@ class Funnel {
 /**
  * The one thing that went wrong, or that nothing did.
  *
- * Precedence rather than a set of flags: a run whose search found nothing
- * relevant will also have no citations, and counting it in both places makes
- * twenty runs produce forty outcomes and no way to read them. Secondary
- * observations are kept alongside, so nothing is lost by choosing one.
+ * Requires a review: which results were relevant, and whether the answer
+ * actually addressed the question. Neither is derivable from what the run
+ * recorded. Without them this returns `pending_review`, because the plausible
+ * guesses available here are wrong in a specific and expensive direction — a
+ * search returning pages about something else, followed by an answer that
+ * honestly declines to use them, looks exactly like the answer ignoring good
+ * evidence, and would send work at synthesis when the fault was the query.
  *
- * `relevantUrls` is the caller's judgement about which candidates could have
- * answered the question. Where it is absent the classification falls back to
- * what the run did, and says so.
+ * Precedence, not flags: a run whose search found nothing relevant also cites
+ * nothing, and counting it in both places makes twenty runs produce forty
+ * outcomes and no way to read them.
  */
-export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentences = 0, evidenceCount = 0, relevantUrls = null } = {}) {
-  const candidates = funnel?.candidates ?? [];
-  const flags = [];
-
-  if (!candidates.length) {
-    return { primary: RETRIEVAL_OUTCOME.QUERY_MISS, flags: ['no results returned'], provisional: true };
-  }
-
-  // Relevance, when the caller has an opinion about it. Without one, every
-  // candidate is treated as possibly relevant, which makes query_miss and
-  // ranking_miss unavailable rather than guessed at.
-  const known = Array.isArray(relevantUrls);
-  const relevant = known ? candidates.filter((c) => relevantUrls.includes(c.url)) : null;
-
-  if (known) {
-    if (!relevant.length) return { primary: RETRIEVAL_OUTCOME.QUERY_MISS, flags: ['no relevant candidate in the results'], provisional: true };
-
-    const attemptedAny = relevant.some((c) => c.fetch_attempted);
-    if (!attemptedAny) {
-      // Below what was tried, or inside the pool and passed over. The
-      // difference is whether anything ranked lower was attempted.
-      const deepestAttempt = Math.max(0, ...candidates.filter((c) => c.fetch_attempted).map((c) => c.rank));
-      const bestRelevantRank = Math.min(...relevant.map((c) => c.rank));
-      const primary = bestRelevantRank > deepestAttempt ? RETRIEVAL_OUTCOME.RANKING_MISS : RETRIEVAL_OUTCOME.SELECTION_MISS;
-      return {
-        primary,
-        flags: [`best relevant candidate at rank ${bestRelevantRank}; deepest attempt rank ${deepestAttempt}`],
-        provisional: true,
-      };
-    }
-
-    const usable = relevant.filter((c) => c.fetch_status === 'usable');
-    if (!usable.length) {
-      const cancelled = relevant.some((c) => c.fetch_status === 'cancelled');
-      return {
-        primary: RETRIEVAL_OUTCOME.FETCH_FAILURE,
-        flags: [cancelled ? 'the relevant page was cancelled rather than failing' : 'every relevant page that was attempted failed'],
-        provisional: true,
-      };
-    }
-
-    if (!usable.some((c) => c.selected_as_evidence)) {
-      return { primary: RETRIEVAL_OUTCOME.PASSAGE_MISS, flags: ['the page was read but produced no usable passage'], provisional: true };
-    }
-  }
-
-  // From here the question is what happened to evidence that did arrive.
-  if (evidenceCount === 0) {
-    const attempted = candidates.filter((c) => c.fetch_attempted);
-    if (!attempted.length) return { primary: RETRIEVAL_OUTCOME.SELECTION_MISS, flags: ['results were returned and none were attempted'], provisional: true };
-    const anyUsable = attempted.some((c) => c.fetch_status === 'usable');
+export function classifyRetrieval(funnel, { citedSentences = 0, supportedSentences = 0, review = null } = {}) {
+  if (!funnel) return { primary: RETRIEVAL_OUTCOME.PENDING_REVIEW, flags: ['no funnel was recorded'], reviewed: false };
+  if (!review || !Array.isArray(review.relevant_urls)) {
     return {
-      primary: anyUsable ? RETRIEVAL_OUTCOME.PASSAGE_MISS : RETRIEVAL_OUTCOME.FETCH_FAILURE,
-      flags: [anyUsable ? 'pages were read but nothing became evidence' : 'no attempted page produced readable text'],
-      provisional: true,
+      primary: RETRIEVAL_OUTCOME.PENDING_REVIEW,
+      flags: ['no relevance review; which results were relevant cannot be derived from the run'],
+      reviewed: false,
     };
   }
 
+  const candidates = funnel.candidates ?? [];
+  const events = funnel.fetch_events ?? [];
+  const relevant = candidates.filter((c) => review.relevant_urls.includes(c.url));
+  const done = (primary, note) => ({ primary, flags: note ? [note] : [], reviewed: true });
+
+  if (!relevant.length) {
+    return done(RETRIEVAL_OUTCOME.QUERY_MISS, candidates.length ? 'no relevant url among the results' : 'the search returned nothing');
+  }
+
+  const attemptsFor = (url) => events.filter((e) => e.url === url);
+  const attemptedRelevant = relevant.filter((c) => attemptsFor(c.url).length > 0);
+
+  if (!attemptedRelevant.length) {
+    const deepest = Math.max(0, ...events.map((e) => e.rank ?? 0));
+    const best = Math.min(...relevant.map((c) => c.rank));
+    return best > deepest
+      ? done(RETRIEVAL_OUTCOME.RANKING_MISS, `the best relevant result is rank ${best}; nothing past rank ${deepest} was tried`)
+      : done(RETRIEVAL_OUTCOME.SELECTION_MISS, `a relevant result at rank ${best} was inside the tried range and passed over`);
+  }
+
+  const usableRelevant = attemptedRelevant.filter((c) => attemptsFor(c.url).some((e) => e.status === 'usable'));
+  if (!usableRelevant.length) {
+    // A cancelled loser is not a failure — unless it was the only relevant page
+    // and nothing else supplied the evidence.
+    const onlyCancelled = attemptedRelevant.every((c) => attemptsFor(c.url).every((e) => e.status === 'cancelled'));
+    return done(
+      RETRIEVAL_OUTCOME.FETCH_FAILURE,
+      onlyCancelled ? 'the only relevant page was cancelled before any other supplied evidence' : 'every relevant page attempted failed or read too thin',
+    );
+  }
+
+  // The page read in full. Did what was extracted carry the answer? Only a
+  // reviewer can say, having read the passages the record keeps.
+  if (review.relevant_evidence_reached_ledger === false) {
+    return done(RETRIEVAL_OUTCOME.PASSAGE_MISS, 'the page was read and the extracted passages did not carry the answer');
+  }
+
+  if (review.answer_addressed_question === false) {
+    return done(RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, 'relevant evidence reached the ledger and the answer did not address the question');
+  }
+
   if (citedSentences === 0) {
-    return { primary: RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, flags: [`${evidenceCount} source(s) available and nothing cited`], provisional: false };
+    return done(RETRIEVAL_OUTCOME.SYNTHESIS_OMISSION, 'evidence was available and nothing was cited');
   }
 
   if (supportedSentences < citedSentences) {
-    flags.push(`${citedSentences - supportedSentences} of ${citedSentences} cited sentences unsupported`);
-    return { primary: RETRIEVAL_OUTCOME.CITATION_FAILURE, flags, provisional: false };
+    return done(RETRIEVAL_OUTCOME.CITATION_FAILURE, `${citedSentences - supportedSentences} of ${citedSentences} cited sentences unsupported`);
   }
 
-  return { primary: RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL, flags, provisional: false };
+  return done(RETRIEVAL_OUTCOME.SUCCESSFUL_RETRIEVAL, null);
 }
-
-export { PRECEDENCE as RETRIEVAL_PRECEDENCE };

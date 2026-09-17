@@ -5,7 +5,6 @@ import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import dotenv from 'dotenv';
 import { acquireLock } from './diagnostic-lock.js';
-import { classifyRetrieval } from '../src/agent/core/funnel.js';
 
 dotenv.config();
 
@@ -332,18 +331,17 @@ async function collectAll(commit) {
             scored_against: r.scored_against,
             ...classify({ sentence: r.sentence, refs: r.refs, scoredAgainst: r.scored_against, sources, support: r.best_score }),
           })),
-        // The whole path, when tracing was on: every candidate, what was tried,
-        // what came back, and where it stopped. Kept raw so every classification
-        // below can be read against the rows that produced it.
+        // The whole path, when tracing was on: every candidate, what was
+        // tried, what came back, and where it stopped. Kept raw, because the
+        // classification that reads it happens later and by hand.
         funnel: record.funnel ?? null,
-        retrieval_outcome: classifyRetrieval(
-          record.funnel ? { candidates: (record.funnel.searches ?? []).flatMap((x) => x.results ?? []) } : null,
-          {
-            citedSentences: citations.cited_sentences ?? 0,
-            supportedSentences: citations.supported_sentences ?? 0,
-            evidenceCount: record.sources?.fetched ?? 0,
-          },
-        ),
+        // Deliberately not classified here. Which results were relevant, and
+        // whether the answer addressed the question, are judgements this run
+        // cannot make — and the plausible guess is wrong in an expensive
+        // direction: a search returning pages about something else, followed by
+        // an answer that honestly declines to use them, records identically to
+        // an answer ignoring good evidence.
+        retrieval_outcome: { primary: 'pending_review', reviewed: false, flags: ['apply tools/apply-review.js'] },
         sources_fetched: record.sources?.fetched ?? null,
         warnings: (record.warnings ?? []).map((x) => x.code),
         /**
@@ -445,20 +443,16 @@ function render({ commit, ran_at, node, health, runs }) {
   A('citing a single safe sentence and leaving everything else uncited.\n');
 
   A('## Where retrieval ended up\n');
-  const outcomes = {};
-  for (const r of ok) {
-    const key = r.retrieval_outcome?.primary ?? 'unclassified';
-    outcomes[key] = (outcomes[key] ?? 0) + 1;
-  }
-  A('| outcome | runs |');
-  A('|---|---:|');
-  for (const [k, v] of Object.entries(outcomes).sort((a, b) => b[1] - a[1])) A(`| ${k} | ${v} |`);
-  A(`| **total** | **${ok.length}** |`);
+  A('Not yet classified. Which results were relevant, and whether each answer');
+  A('addressed the question, are judgements this run cannot make; guessing them');
+  A('would file an honest refusal to use irrelevant pages as a synthesis');
+  A('failure, and send work at the part that behaved correctly.');
   A('');
-  A('One outcome per run, by precedence, so the totals add up. Rows marked');
-  A('provisional rest on a relevance judgement the scorer cannot make reliably;');
-  A('the candidates, titles and snippets behind each are in the JSON and the');
-  A('ambiguous ones want reading rather than trusting.');
+  A('The funnel for every question is in the JSON. Run:');
+  A('');
+  A('    node tools/apply-review.js --run reports/grounding-diagnostic.json');
+  A('');
+  A('to produce a blank review, fill it in, and run it again for the outcomes.');
   A('');
 
   A('## Why cited sentences failed\n');

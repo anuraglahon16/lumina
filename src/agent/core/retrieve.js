@@ -4,6 +4,7 @@ import { webSearch } from '../services/search/index.js';
 import { fetchPage } from '../services/fetcher.js';
 import { searchChunks } from '../services/ragStore.js';
 import { assessCoverage } from './coverage.js';
+import { chunkPassages } from '../services/chunker.js';
 import { deadlineSignal, abortReason } from './budget.js';
 // Recording only; null whenever tracing is off, and every call below is guarded.
 
@@ -65,20 +66,27 @@ export function searchQueryFor(query) {
  * fetch budget is small. Order is the search engine's — it is better at
  * relevance than any reordering available here without reading the pages first.
  */
-export function choosePages(results, { limit = 2 } = {}) {
+export function choosePages(results, { limit = 2, funnel = null } = {}) {
   const chosen = [];
-  const seen = new Set();
+  const seen = new Map();
   for (const r of results || []) {
     if (!r?.url) continue;
     let host;
     try {
       host = new URL(r.url).hostname.replace(/^www\./, '');
     } catch {
+      funnel?.deduplicated({ url: r.url, reason: 'unparseable url' });
       continue;
     }
     const publisher = host.split('.').slice(-2).join('.');
-    if (seen.has(publisher)) continue;
-    seen.add(publisher);
+    if (seen.has(publisher)) {
+      // Recorded where it happens. "Passed over because a sibling shares its
+      // publisher" and "never reached because the budget ran out" are different
+      // facts, and neither can be recovered from the other afterwards.
+      funnel?.deduplicated({ url: r.url, reason: 'same publisher as an earlier candidate', keptUrl: seen.get(publisher) });
+      continue;
+    }
+    seen.set(publisher, r.url);
     chosen.push(r);
     if (chosen.length === limit) break;
   }
@@ -146,7 +154,7 @@ export async function gatherFromWeb({
     fetchPage: fetchFn,
     query,
     searchQuery,
-    candidates: choosePages(results, { limit: 8 }),
+    candidates: choosePages(results, { limit: 8, funnel }),
     ledger,
     budget,
     recorder,
@@ -203,7 +211,7 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     if (!budget.allows('fetch_page').ok) return;
     attempted.add(candidate.url);
     ledger.attempted?.add(candidate.url);
-    funnel?.attempted(candidate.url);
+    funnel?.attempted({ url: candidate.url });
     budget.consume('fetch_page');
     const began = performance.now();
     const promise = fetchFn(candidate.url, { recorder, signal: pool.signal })
@@ -232,8 +240,13 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
         httpStatus: page?.status ?? null,
         durationMs: page?.duration_ms ?? waited,
         chars: page?.text?.length ?? 0,
-        selected: Boolean(readable),
+        admitted: Boolean(readable),
         reason: readable ? 'usable_text' : page?.aborted ? 'cancelled' : page?.error || 'insufficient text',
+        // The text that was actually extracted, for every page that read —
+        // including ones nothing ends up citing. That is exactly the set a
+        // reviewer needs to tell an irrelevant page from a relevant one whose
+        // extraction missed the answer, and it cannot be recovered afterwards.
+        passages: readable ? chunkPassages(page.text).slice(0, 8) : undefined,
       });
 
       if (readable) {
@@ -358,7 +371,7 @@ export async function rescueRetrieval({ query, route, ledger, budget, recorder, 
       return await gatherFromDocuments({ query: terms, ledger, budget, recorder, emit, userId, spaceId, signal: bound.signal });
     }
 
-    const untried = choosePages(candidates, { limit: 8 }).filter((c) => !ledger.byUrl?.has(c.url) && !triedUrls(ledger).has(c.url));
+    const untried = choosePages(candidates, { limit: 8, funnel }).filter((c) => !ledger.byUrl?.has(c.url) && !triedUrls(ledger).has(c.url));
     if (untried.length) {
       const coverage = await fetchUntilCovered({
         funnel,
