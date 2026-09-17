@@ -1,0 +1,124 @@
+{
+  "_README": [
+    "relevant_urls: the results that could have answered the question. Judgement, not a score.",
+    "extracted_passages_contain_answer: did the text actually extracted carry the answer?",
+    "Leave a field null to say you have not decided; the outcome stays pending_review."
+  ],
+  "ran_at": "2026-09-17T23:36:05.675Z",
+  "questions": [
+    {
+      "question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "candidates": [
+        {
+          "rank": 1,
+          "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+          "title": "The Latency Cost of HTTP/2 Head-of-Line Blocking",
+          "fetch_status": "usable"
+        },
+        {
+          "rank": 2,
+          "url": "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+          "title": "Mitigating Head-of-Line Blocking in HTTP/2 and HTTP/3",
+          "fetch_status": "cancelled"
+        },
+        {
+          "rank": 3,
+          "url": "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+          "title": "Head-of-Line Blocking: TCP vs QUIC / HTTP/3 - tinycto.tv",
+          "fetch_status": "cancelled"
+        },
+        {
+          "rank": 4,
+          "url": "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking",
+          "title": "Head-of-Line Blocking Explained (HTTP/1.1, HTTP/2, HTTP/3)",
+          "fetch_status": "not_attempted"
+        },
+        {
+          "rank": 5,
+          "url": "https://developer.mozilla.org/en-US/docs/Glossary/Head_of_line_blocking",
+          "title": "Head-of-line blocking - Glossary | MDN - MDN Web Docs",
+          "fetch_status": "not_attempted"
+        },
+        {
+          "rank": 6,
+          "url": "https://www.linkedin.com/pulse/addressing-tcp-limitations-head-of-line-blocking-journey-mohit-mishra-xmrhc",
+          "title": "Addressing TCP Limitations of Head-of-Line Blocking: The ... - LinkedIn",
+          "fetch_status": "not_attempted"
+        }
+      ],
+      "relevant_urls": [
+        "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+        "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+        "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+        "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking"
+      ],
+      "extracted_passages_contain_answer": false,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "The extracted passages are the page's real content: a TL;DR, a socket example and a latency comparison, all about HTTP/2. The page simply does not cover HTTP/3. Ranks 2 and 3, both of which compare HTTP/2 with HTTP/3 in their titles, were cancelled by the coverage stop while in flight.",
+      "extraction_faithful": true
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it not?",
+      "candidates": [
+        {
+          "rank": 1,
+          "url": "https://learn.microsoft.com/en-us/azure/security/fundamentals/certificate-pinning",
+          "title": "Certificate pinning - Certificate pinning and Azure services",
+          "fetch_status": "cancelled"
+        },
+        {
+          "rank": 2,
+          "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+          "title": "What Is Certificate Pinning? Benefits, Risks & Best Practices",
+          "fetch_status": "usable"
+        },
+        {
+          "rank": 3,
+          "url": "https://www.sslvigil.com/ssl-certificate-pinning-what-it-is-and-why-it-matters/",
+          "title": "SSL Certificate Pinning: What It Is and Why It Matters",
+          "fetch_status": "cancelled"
+        },
+        {
+          "rank": 4,
+          "url": "https://learn.versa-networks.com/docs/certificate-pinning",
+          "title": "Certificate Pinning | Versa Learn",
+          "fetch_status": "not_attempted"
+        },
+        {
+          "rank": 5,
+          "url": "https://sslinsights.com/what-is-ssl-pinning/",
+          "title": "SSL Pinning: Everything You Need to Know About It",
+          "fetch_status": "not_attempted"
+        },
+        {
+          "rank": 6,
+          "url": "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning",
+          "title": "Certificate and Public Key Pinning - OWASP Foundation",
+          "fetch_status": "not_attempted"
+        }
+      ],
+      "relevant_urls": [
+        "https://learn.microsoft.com/en-us/azure/security/fundamentals/certificate-pinning",
+        "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+        "https://www.sslvigil.com/ssl-certificate-pinning-what-it-is-and-why-it-matters/",
+        "https://sslinsights.com/what-is-ssl-pinning/",
+        "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning"
+      ],
+      "extracted_passages_contain_answer": false,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "19,911 characters read from the Palo Alto cyberpedia page and the extracted passages are the site navigation: \"Machine Identity Security: The Definitive Guide\", \"What Is Cert-Manager?\". The page holds the answer; extraction returned the menu around it.",
+      "extraction_faithful": false
+    },
+    {
+      "question": "What is the purpose of a write-ahead log in database crash recovery?",
+      "candidates": [],
+      "relevant_urls": null,
+      "extracted_passages_contain_answer": null,
+      "answer_addressed_question": null,
+      "answer_complete": null,
+      "notes": "Search returned no results (provider quota exhausted); nothing to judge."
+    }
+  ]
+}

@@ -1,0 +1,354 @@
+{
+  "_LIMITATIONS": [
+    "Retrieval only. No synthesis and no model call, so it says nothing about answers.",
+    "Three questions, one run each. It tests whether two mechanisms work, not how often they fire.",
+    "Live web: the pages are whatever is served today, not the ones the e2e0e46 run saw."
+  ],
+  "commit": "0d2575f",
+  "ran_at": "2026-09-17T23:36:05.675Z",
+  "probes": [
+    {
+      "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "duration_ms": 134,
+      "funnel": {
+        "original_question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+        "searches": [
+          {
+            "attempt": 1,
+            "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+            "provider": "duckduckgo",
+            "cached": true,
+            "duration_ms": 1,
+            "results": [
+              {
+                "candidate_id": "search_1_rank_1",
+                "search_attempt": 1,
+                "rank": 1,
+                "title": "The Latency Cost of HTTP/2 Head-of-Line Blocking",
+                "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+                "snippet": "Explore why HTTP/2 can still suffer from head‑of‑line blocking, how it adds latency to modern web pages, and what developers can do to mitigate the impact."
+              },
+              {
+                "candidate_id": "search_1_rank_2",
+                "search_attempt": 1,
+                "rank": 2,
+                "title": "Mitigating Head-of-Line Blocking in HTTP/2 and HTTP/3",
+                "url": "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+                "snippet": "TCP head-of-line blocking stalls every stream on a connection when a single packet is lost. Learn how HTTP/2 multiplexing and HTTP/3 QUIC streams isolate failures, and how to diagnose, configure, and validate each approach."
+              },
+              {
+                "candidate_id": "search_1_rank_3",
+                "search_attempt": 1,
+                "rank": 3,
+                "title": "Head-of-Line Blocking: TCP vs QUIC / HTTP/3 - tinycto.tv",
+                "url": "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+                "snippet": "Why does HTTP/2 suffer from transport-level head-of-line blocking under packet loss while HTTP/3 does not?"
+              },
+              {
+                "candidate_id": "search_1_rank_4",
+                "search_attempt": 1,
+                "rank": 4,
+                "title": "Head-of-Line Blocking Explained (HTTP/1.1, HTTP/2, HTTP/3)",
+                "url": "https://speedtesthq.com/guides/fundamentals/head-of-line-blocking",
+                "snippet": "What head-of-line blocking is, how it appears at the HTTP and TCP layers, why HTTP/2 only half-solved it, and how HTTP/3 over QUIC finally removes transport-level blocking."
+              },
+              {
+                "candidate_id": "search_1_rank_5",
+                "search_attempt": 1,
+                "rank": 5,
+                "title": "Head-of-line blocking - Glossary | MDN - MDN Web Docs",
+                "url": "https://developer.mozilla.org/en-US/docs/Glossary/Head_of_line_blocking",
+                "snippet": "In computer networking, head-of-line blocking (HOL blocking) refers to a performance bottleneck that occurs when a queue of packets is held up by the first packet in the queue, even though other packets in the queue could be processed."
+              },
+              {
+                "candidate_id": "search_1_rank_6",
+                "search_attempt": 1,
+                "rank": 6,
+                "title": "Addressing TCP Limitations of Head-of-Line Blocking: The ... - LinkedIn",
+                "url": "https://www.linkedin.com/pulse/addressing-tcp-limitations-head-of-line-blocking-journey-mohit-mishra-xmrhc",
+                "snippet": "This article explores these limitations in detail, focusing particularly on the head-of-line blocking problem that led to the development of HTTP/3."
+              }
+            ]
+          }
+        ],
+        "fetch_events": [
+          {
+            "event_id": "fetch_1",
+            "candidate_id": "search_1_rank_1",
+            "search_attempt": 1,
+            "rank": 1,
+            "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+            "status": "usable",
+            "http_status": 200,
+            "duration_ms": 129,
+            "extracted_chars": 9551,
+            "admitted_as_evidence": true,
+            "reason": "usable_text",
+            "extracted_passages": [
+              "Table of ContentsTL;DR — HTTP/2’s multiplexed streams eliminate classic TCP head‑of‑line blocking, but the protocol’s own framing rules can re‑introduce blocking at the application layer, adding measurable latency. Understanding the root causes and applying mitigations—such as proper stream prioritization, avoiding large server‑push payloads, or moving to HTTP/3—keeps modern sites fast.Modern browsers and CDNs tout HTTP/2 as the cure for the “one request per TCP connection” problem that plagued HTTP/1.1. In practice, however, many developers still see unexpected latency spikes, especially on pages that load many small assets or rely heavily on server push. The culprit is a subtle form of head‑of‑line (HoL) blocking that occurs inside the HTTP/2 connection rather than at the TCP layer. This article unpacks why the problem exists, how to measure it, and what you can do today to keep your users’ experiences snappy.Understanding HTTP/2 MultiplexingHTTP/2 replaces the sequential request/response model of HTTP/1.1 with multiplexed streams that share a single TCP connection. Each stream is identified by a 31‑bit stream identifier and carries its own sequence of frames (HEADERS, DATA, SETTINGS, etc.). The protocol’s framing layer interleaves frames from many streams, allowing the client and server to send and receive data concurrently without opening additional TCP sockets.Streams and PrioritizationWhen a client opens a stream, it can attach a priority weight (1‑256) and a dependency tree that tells the server which streams are more important. The server is expected to honor these hints when scheduling frames, but the spec only recommends—not mandates—strict adherence. In real‑world implementations, the scheduler often falls back to a simple round‑robin or FIFO approach, especially when the dependency tree is flat.“The priority mechanism was designed to give applications a way to express relative importance, but it is not a guarantee of ordering.” — as explained in the HTTP/2 RFC 7540, Section 5.3.Because streams share the same underlying TCP flow control windows, a blocked stream can indirectly affect others if the server’s scheduler does not separate them cleanly.What is Head‑of‑Line Blocking?Head‑of‑line blocking occurs when a packet at the front of a queue prevents later packets from being processed, even if those later packets are unrelated to the blocked one. In TCP, HoL blocking manifests when a lost segment stalls the entire connection until the missing data is retransmitted. HTTP/2’s design was intended to eliminate this at the transport layer by allowing independent streams.Classic TCP HoL BlockingIn HTTP/1.1, a single lost packet on a connection that carries a large CSS file, for example, blocks the delivery of all subsequent images that share the same socket. The browser must wait for the retransmission before it can render any of the blocked resources, inflating page load time.How HTTP/2 Reintroduces HoL BlockingEven though HTTP/2 removes the TCP‑level bottleneck, it introduces a protocol‑level bottleneck in two primary ways:Frame Interleaving Limits – The spec requires that frames from a given stream be sent in order. If a large DATA frame on Stream 3 is being transmitted and the server’s write buffer is full, the scheduler may be forced to pause sending frames from Stream 4, even though Stream 4’s payload is already available in memory.Flow Control Stalls – Each stream and the connection have separate flow‑control windows. If the client advertises a small window for Stream 5 (perhaps because it has not yet processed earlier frames), the server cannot send more DATA for that stream until the window is updated. While the server can continue sending on other streams, many implementations serialize window updates, causing indirect HoL blocking.Real‑World ExampleConsider a page that loads a tiny JSON configuration (Stream 1), a 150 KB image (Stream 2), and a 2 MB video chunk (Stream 3). If the client’s flow‑control window for Stream 3 is exhausted early, the server must wait for a WINDOW_UPDATE before sending more video data. Some HTTP/2 libraries (e.g., older versions of nghttp2) will pause all outbound frames while waiting for that update, even though Streams 1 and 2 are ready. The result: the JSON and image experience an artificial delay.Code illustration (Python, hyper-h2)import h2.connection",
+              "# Simplified server that sends a large DATA frame on stream 3 first\n\nsock = socket.create_connection(('localhost', 8443))\n\nconn.send_data(stream_id, data, end_stream=False)\n\n# Now send small JSON on stream 1 (will be queued behind stream 3)\n\nIn this contrived example, the JSON payload is blocked behind the massive video payload because the server writes frames sequentially. Modern servers mitigate this by interleaving smaller frames, but not all do.Measuring the Latency ImpactQuantifying HTTP/2 HoL blocking requires a combination of network tracing and application‑level timing. Here’s a practical methodology:Enable Chrome’s “Network” panel and record the waterfall view for a page served over HTTP/2.Look for staggered start times on resources that should be parallel (e.g., multiple small CSS files starting after a large video request).Capture a TCP dump (tcpdump -i eth0 -w capture.pcap) and analyze it with Wireshark, filtering on the HTTP/2 stream IDs.Use nghttp2’s nghttp client with the -v flag to print per‑stream timing:nghttp -v https://example.com/asset.css",
+              "Compare the first-byte latency of each stream to a baseline where the large payload is removed.Sample ResultsStreamSizeFirst‑Byte latency (ms)Observed delay vs. baseline1 (JSON)1 KB120+452 (Image)150 KB130+303 (Video)2 MB115baseline4 (CSS)3 KB155+70The small JSON and CSS files suffered up to 70 ms extra latency when a large video stream occupied the connection, confirming protocol‑level HoL blocking.Mitigation Strategies1. Prioritize Small, Critical ResourcesAssign higher priority weights (e.g., 256) to streams that carry above‑the‑fold assets. In nghttp2, you can set this with the --priority flag:nghttp --priority 1:0:256 https://example.com/style.css\n\nBy informing the server of the importance, you increase the chance that the scheduler will interleave frames appropriately.2. Limit Server Push PayloadsServer push can unintentionally create large streams that dominate the connection. Follow the “push only what you need” rule:Push only critical CSS or small JS bundles.Avoid pushing large images or videos; let the client request them explicitly.3. Tune Flow‑Control WindowsIncrease the initial window size for both the connection and individual streams. In Apache HTTP Server:H2InitialWindowSize 65535",
+              "Larger windows reduce the frequency of WINDOW_UPDATE frames, decreasing the chance of a stall.4. Use HTTP/3 (QUIC) When PossibleHTTP/3 runs over QUIC, which provides independent streams at the transport layer, eliminating both TCP‑level and HTTP/2‑level HoL blocking. Many CDNs (e.g., Cloudflare, Fastly) now serve HTTP/3 by default. If your audience uses browsers that support QUIC, enable it in your server configuration:listen 443 http2;",
+              "5. Adopt Adaptive Scheduling LibrariesModern HTTP/2 libraries like nghttp2 1.46+ include priority‑aware schedulers that automatically interleave frames based on weight. Upgrade your server stack to benefit from these improvements without code changes.Real‑World Case StudiesCase Study A: E‑commerce Checkout PageAn online retailer observed a 200 ms slowdown on the checkout page after upgrading from HTTP/1.1 to HTTP/2. Investigation revealed that a 3 MB promotional video was being pushed to the client, blocking the delivery of a 5 KB checkout.js file required for form validation. By disabling server push for the video and adjusting stream priorities, the checkout latency dropped back to pre‑upgrade levels.Case Study B: News Site with Heavy ImagesA news outlet serving a photo‑heavy article noticed intermittent delays in loading caption text (≈2 KB) when a 5 MB hero image was in the same connection. Using Wireshark, they identified that the server’s HTTP/2 implementation serialized frames for the image, causing HoL blocking. Switching to nghttp2’s priority‑aware scheduler and increasing the connection window size resolved the issue, shaving ≈80 ms off the Time‑to‑First‑Byte (TTFB) for the captions.Key TakeawaysHTTP/2 eliminates TCP‑level HoL blocking but can re‑introduce it at the protocol layer through frame ordering and flow‑control stalls.Large streams (videos, server‑pushed assets) can unintentionally delay small, critical resources if the server’s scheduler is not priority‑aware.Measuring impact requires correlating network traces with application timing; look for staggered start times in the browser waterfall.Mitigations include prioritizing critical streams, limiting server push, tuning flow‑control windows, and adopting HTTP/3 where feasible.Upgrading to modern HTTP/2 libraries that respect priority weights often resolves hidden latency without architectural changes.Further ReadingHTTP/2 Specification (RFC 7540) – The official protocol definition, including priority and flow‑control details.Google QUIC and HTTP/3 Overview – Explains how QUIC removes HoL blocking entirely.Mozilla Developer Network: HTTP/2 Guide – Practical advice for developers implementing HTTP/2.Cloudflare Blog: “Understanding HTTP/2 Server Push” – Discusses pitfalls of server push that can cause latency.nghttp2 Project – Priority‑Aware Scheduler – Source and documentation for the library’s advanced scheduling features."
+            ]
+          },
+          {
+            "event_id": "fetch_2",
+            "candidate_id": "search_1_rank_2",
+            "search_attempt": 1,
+            "rank": 2,
+            "url": "https://network-priority.com/http2-http3-multiplexing-connection-optimization/mitigating-head-of-line-blocking/",
+            "status": "cancelled",
+            "http_status": null,
+            "duration_ms": 128,
+            "extracted_chars": 0,
+            "admitted_as_evidence": false,
+            "reason": "cancelled"
+          },
+          {
+            "event_id": "fetch_3",
+            "candidate_id": "search_1_rank_3",
+            "search_attempt": 1,
+            "rank": 3,
+            "url": "https://tinycto.tv/learn/head-of-line-blocking-http2-vs-http3",
+            "status": "cancelled",
+            "http_status": null,
+            "duration_ms": 128,
+            "extracted_chars": 0,
+            "admitted_as_evidence": false,
+            "reason": "cancelled"
+          }
+        ],
+        "deduplications": [],
+        "coverage_events": [
+          {
+            "after_url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/",
+            "sufficient": true,
+            "reasons": []
+          }
+        ],
+        "stop_reason": "coverage_sufficient"
+      },
+      "sources": [
+        {
+          "n": 1,
+          "title": "The Latency Cost of HTTP/2 Head-of-Line Blocking",
+          "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/"
+        }
+      ],
+      "coverage_ok": null,
+      "stop_reason": "coverage_sufficient",
+      "fetch_status_counts": {
+        "usable": 1,
+        "cancelled": 2
+      },
+      "events_total": 3,
+      "events_terminal": 3,
+      "events_still_attempted": 0,
+      "events_cancelled": 2,
+      "usable": true
+    },
+    {
+      "query": "What does TLS certificate pinning protect against, and what does it not?",
+      "duration_ms": 573,
+      "funnel": {
+        "original_question": "What does TLS certificate pinning protect against, and what does it not?",
+        "searches": [
+          {
+            "attempt": 1,
+            "query": "What does TLS certificate pinning protect against, and what does it not?",
+            "provider": "duckduckgo",
+            "cached": true,
+            "duration_ms": 1,
+            "results": [
+              {
+                "candidate_id": "search_1_rank_1",
+                "search_attempt": 1,
+                "rank": 1,
+                "title": "Certificate pinning - Certificate pinning and Azure services",
+                "url": "https://learn.microsoft.com/en-us/azure/security/fundamentals/certificate-pinning",
+                "snippet": "Azure recommends against static pinning of publicly trusted TLS server certificates. Applications that connect to Azure services should rely on standard TLS validation, platform-managed trust stores, Certificate Transparency, and other modern Web PKI protections rather than pinning publicly trusted certificates or certificate authorities."
+              },
+              {
+                "candidate_id": "search_1_rank_2",
+                "search_attempt": 1,
+                "rank": 2,
+                "title": "What Is Certificate Pinning? Benefits, Risks & Best Practices",
+                "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+                "snippet": "When a certificate pinning validation fails, it triggers a security protocol designed to protect the integrity of the data exchange. This process is immediate and uncompromising, ensuring that the application does not default to a vulnerable state."
+              },
+              {
+                "candidate_id": "search_1_rank_3",
+                "search_attempt": 1,
+                "rank": 3,
+                "title": "SSL Certificate Pinning: What It Is and Why It Matters",
+                "url": "https://www.sslvigil.com/ssl-certificate-pinning-what-it-is-and-why-it-matters/",
+                "snippet": "Since Let's Encrypt certificates renew every 60-90 days, pinning the certificate directly would break your app constantly. Pin your key pair, reuse it across renewals, and keep a backup key ready. Can pinning protect against all SSL certificate errors? No. Pinning only verifies that the server presents the expected key."
+              },
+              {
+                "candidate_id": "search_1_rank_4",
+                "search_attempt": 1,
+                "rank": 4,
+                "title": "Certificate Pinning | Versa Learn",
+                "url": "https://learn.versa-networks.com/docs/certificate-pinning",
+                "snippet": "In a typical SSL/TLS connection, the server presents a digital certificate to prove its identity to the client. The client, in turn, verifies the authenticity of the certificate by checking its signature against a trusted certificate authority (CA). If the verification is successful, the client proceeds with the secure communication."
+              },
+              {
+                "candidate_id": "search_1_rank_5",
+                "search_attempt": 1,
+                "rank": 5,
+                "title": "SSL Pinning: Everything You Need to Know About It",
+                "url": "https://sslinsights.com/what-is-ssl-pinning/",
+                "snippet": "What is SSL Pinning & How Does It Work? SSL pinning, also known as certificate pinning, is a security mechanism used to prevent man-in-the-middle (MITM) attacks that can intercept and decrypt sensitive information sent over SSL/TLS connections. SSL pinning provides an extra layer of protection by binding an application to the specific certificate or public key of a host. This prevents the app ..."
+              },
+              {
+                "candidate_id": "search_1_rank_6",
+                "search_attempt": 1,
+                "rank": 6,
+                "title": "Certificate and Public Key Pinning - OWASP Foundation",
+                "url": "https://owasp.org/www-community/controls/Certificate_and_Public_Key_Pinning",
+                "snippet": "Background Certificate and Public Key Pinning is a guide to understanding the current state of PKI security and significant changes in the threat model for TLS connections. Pinning was discussed at the Virginia chapter's presentation Securing Wireless Channels in the Mobile Space. The previous version of this guide was focused on providing clear, simple, actionable guidance for securing the ..."
+              }
+            ]
+          }
+        ],
+        "fetch_events": [
+          {
+            "event_id": "fetch_1",
+            "candidate_id": "search_1_rank_1",
+            "search_attempt": 1,
+            "rank": 1,
+            "url": "https://learn.microsoft.com/en-us/azure/security/fundamentals/certificate-pinning",
+            "status": "cancelled",
+            "http_status": null,
+            "duration_ms": 572,
+            "extracted_chars": 0,
+            "admitted_as_evidence": false,
+            "reason": "cancelled"
+          },
+          {
+            "event_id": "fetch_2",
+            "candidate_id": "search_1_rank_2",
+            "search_attempt": 1,
+            "rank": 2,
+            "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+            "status": "usable",
+            "http_status": 200,
+            "duration_ms": 567,
+            "extracted_chars": 19911,
+            "admitted_as_evidence": true,
+            "reason": "usable_text",
+            "extracted_passages": [
+              "Machine Identity Security: The Definitive Guide\n\nFour Pillars of Machine Identity Architecture\n\nMachine Identity in the Attacker Workflow: Unit 42 Observations\n\nCloud Security Implications and Identity Sprawl\n\nImplementing a Machine Identity Security Program\n\nStructural Components of a Certificate Chain\n\nHow the Cryptographic Validation Process Works\n\nCommon Weaknesses and Operational Pitfalls\n\nAdvanced Strategies for Enterprise Chain Management\n\nTypes of Digital Certificates Issued by CAs\n\nValidation Levels: Understanding Trust Thresholds\n\nChallenges in Modern Certificate Management\n\nTLS Certificate Risks: Vulnerabilities and Mitigation Strategies\n\nPrimary Vulnerabilities in TLS Certificate Management\n\nThe Impact of AI and Emerging Technologies\n\nImplementation Guide: Securing Your TLS Environment\n\nWhat Is a TLS/SSL Port? Port 443 and HTTPS Explained\n\nWhat Is Certificate Pinning? Benefits, Risks & Best Practices\n\nListiche: Key Stages of a Pinning Failure\n\nRisks and Limitations of Certificate Pinning\n\nCertificate Pinning and Machine Identity Security\n\nACME Across The Machine Identity Lifecycle\n\nWhy ACME Matters For Machine Identity Security\n\nWhat Is Workload Identity? Securing Non-Human Identities\n\nThe Core Components of Workload Identity Architecture\n\nWorkload Identity in the Zero Trust Framework\n\nDisrupting the Attack Lifecycle with Workload Identity",
+              "Workload Identity and the AI Agent Security Challenge\n\nWhat Is a Non-Human Identity (NHI)? Machine Identity Security Explained\n\nThe Critical Distinction: Standing vs. Non-Standing Privileges\n\nNon-Human Identity and Zero Trust Alignment\n\nCIEM, IAM, and PAM Relationships in NHI Security\n\nWhat is Code Signing? Benefits, Risks & Implementation\n\nCritical Benefits for Enterprise Security\n\nThe Technical Mechanism: How Code Signing Works\n\nStandard vs. EV Code Signing Certificates\n\nAddressing Vulnerabilities in the Signing Process\n\nTLS/SSL Offloading: Definition & Decision Checklist\n\nUnit 42 Perspective: Risks of Uninspected Traffic\n\nBenefits for Security and Infrastructure Teams\n\nCISO Decision Checklist: SSL Termination vs. SSL Bridging for Compliance\n\nWhat Is a Multi-Domain SSL Certificate? SAN & UC Explained\n\nHow Multi-Domain SSL Works: The Power of SAN\n\nStrategic Benefits for Modern Enterprises\n\nSecurity Risks and Lateral Movement Considerations\n\nImplementation and Lifecycle Best Practices\n\nWhat Is a TLS Decryption? Methods, Risks & Best Practices\n\nMethods of Decryption: Passive vs. Active\n\nTechnical Challenges: TLS 1.3 and Performance\n\nMachine Identity Management (MIM) vs. Human IAM\n\nArchitecture Components and Identity Types\n\nSecrets Management vs. Machine Identity Management\n\nImplementation Steps for Machine Identity Security",
+              "What Is Cert-Manager? Kubernetes Certificate Management Explained\n\nCore Components: Issuers and Certificates\n\nHow cert-manager Automates Machine Identity\n\nZero Trust and Kubernetes Security Alignment\n\nIntegrating cert-manager into DevSecOps Workflows\n\nWhat Is an X.509 Certificate? Definition, Standards, and Role\n\nMachine Identity And Management Challenges\n\nWhat Is TLS Certificate Renewal? Process, Risks & Automation\n\nTLS Certificate Renewal: The Shift from Maintenance to Mission-Critical\n\nWhy the 47-Day Mandate Redefines Renewal Strategy\n\nCritical Risks: The High Cost of Renewal Failure\n\nBest Practices for Enterprise-Scale Renewal\n\nWhat Is Certificate Validation? Guide to Best Practices\n\nThe Role of Certificate Authorities and the Chain of Trust\n\nUnit 42 Insights: The Risk of Identity Exposure\n\nTroubleshooting Common Validation Failures\n\nWhat is SPIFFE? Universal Workload Identity Framework Guide\n\nSPIFFE Explained: Solving the Workload Identity Problem\n\nWhy Traditional Secret Management Fails in Cloud-Native Environments\n\nVulnerabilities of Static Credentials and Long-Lived Tokens\n\nIP-Based Security vs. Identity-Based Security\n\nHow SPIFFE Implementation Works: The Attestation Process\n\nThe Role of SPIRE as the Reference Implementation\n\nCritical Use Cases for Enterprise Security\n\nCore Capabilities of Certificate Management\n\nCommon Challenges: The “Red Flag” Checklist",
+              "How Certificate Management Supports Zero Trust\n\nCertificate Management vs. TLS Certificate Lifecycle\n\nWhat Is a Self-Signed Certificate? Risks, Uses & Best Practices\n\nWhat Is a TLS Certificate? How TLS Secures Web Communication\n\nTLS Machine Identity Security Best Practices\n\nUnit 42 Threat Insights: Certificate Abuse\n\nWhat is Cloud Workload Security? Protection & Best Practices\n\nKey Components of a Cloud Workload Security Strategy\n\nBenefits of Strong Cloud Workload Security\n\nWhat Is the TLS Certificate Lifecycle? Implementation Guide\n\nThe 6 Core Stages of the TLS Certificate Lifecycle\n\nHow Automation Improves TLS Certificate Lifecycle\n\nWhat Is PKI? Public Key Infrastructure & Authentication Guide\n\nCommon Risks and Implementation Challenges\n\nSecurity Standards and Compliance: SSL/TLS Best Practices\n\nSSL/TLS Security Standards and Compliance Explained\n\nSSL/TLS Security Standards and Compliance FAQs\n\nWhat Is the TLS Handshake? Process, Steps, and Best Practices\n\nThe Strategic Importance of the TLS Handshake\n\nHow the TLS Handshake Works: Step-by-Step\n\nTLS 1.2 vs. TLS 1.3: Evolution of Speed and Security\n\nThe Role of Cipher Suites and Digital Certificates\n\nIdentifying and Resolving TLS Handshake Failures\n\nAdvanced Security: TLS Fingerprinting and Threat Detection\n\nWhy SSL Stripping Belongs in Identity Security\n\nListiche: Key Stages of a Pinning Failure",
+              "Risks and Limitations of Certificate Pinning\n\nCertificate Pinning and Machine Identity Security\n\nListiche: Key Stages of a Pinning Failure\n\nRisks and Limitations of Certificate Pinning\n\nCertificate Pinning and Machine Identity Security\n\nCertificate pinning is a security technique that associates a specific cryptographic identity, either a digital certificate or a public key, with a client application to ensure it only communicates with a predetermined server. By bypassing the default trust in global Certificate Authorities (CAs), pinning prevents attackers from using fraudulent certificates to intercept encrypted traffic.\n\nTrust Anchor: Pinning limits trust to a specific certificate rather than any CA-signed certificate.\n\nMITM Prevention: Hardens TLS trust by rejecting connections that use unexpected certificates, even if CA-signed and otherwise valid.\n\nMobile Security: Widely used in mobile apps to verify server identity beyond basic SSL checks.\n\nReduced Attack Surface: Eliminates the risk of a compromised or rogue CA issuing fake credentials.\n\nHardcoded Integrity: Pins can be embedded in app code (static) or delivered through a controlled update mechanism (dynamic).",
+              "Under standard TLS validation, a client trusts a server certificate if it chains up to a trusted CA and passes validity checks. Certificate pinning adds another check: the certificate, public key, and intermediate CA presented by the server must also match what the client already expects, typically verified by comparing a hash computed from the presented key against a stored pin value. If the pinned identity does not match, the connection fails even if the certificate would otherwise be considered valid by the system trust store.\n\nThis matters because PKI is built on broad trust. A normal client may trust hundreds of root and intermediate CAs. Pinning narrows that trust window. In other words, instead of saying “I trust any certificate the system accepts,” the client says, “I trust only this server identity or this defined set of keys.”\n\nThat is why certificate pinning can be valuable for high-assurance communication between apps, APIs, and services that handle sensitive data.\n\nUnit 42 threat research indicates that attackers frequently exploit misconfigured trust stores to perform lateral movement. In these scenarios, an attacker may install a malicious root certificate on a device to bypass encryption.",
+              "Certificate pinning effectively breaks this attack lifecycle because the application will reject any certificate, even those marked as \"trusted\" by the OS, if they do not match the expected pin.\n\nThe process occurs during the initial connection between the client (such as a mobile app) and the server. Instead of simply checking whether the certificate is expired or signed by a known root, the app compares the server's public key or certificate hash against a value stored locally in the app.\n\nClient Request: The application initiates a connection to the server.\n\nServer Response: The server presents its digital certificate and public key.\n\nStandard Validation: The client performs basic checks (expiration, revocation, and signature).\n\nPin Comparison: The client extracts the public key or hash and compares it to the hardcoded \"pin.\"\n\nConnection Decision: If the values match, the connection is established. If they differ, the app terminates the connection immediately.\n\nFigure 1: Side-by-side comparison: Standard TLS Handshake vs. Pinned TLS Handshake\n\nListiche: Key Stages of a Pinning Failure\n\nWhen a certificate pinning validation fails, it triggers a security protocol designed to protect the integrity of the data exchange. This process is immediate and uncompromising, ensuring that the application does not default to a vulnerable state.",
+              "Below are the key stages of a pinning failure and how they safeguard the user's connection.\n\nDetection: The app identifies a mismatch between the presented certificate and the PIN.\n\nTermination: The TLS handshake is aborted before any sensitive data is transmitted.\n\nAlerting: High-security apps often log these failures to detect potential MITM attempts.\n\nPrevention: User credentials and session tokens remain protected from interception.\n\nOrganizations choose between pinning the entire certificate or just the public key, depending on their security needs versus operational flexibility. Certificate pinning can be implemented in several ways depending on what the client is designed to trust, how often certificates change, and how much operational flexibility the environment requires.\n\nThe client trusts a defined public key rather than an exact leaf certificate\n\nMore flexible than leaf-certificate pinning because certificates can be renewed without breaking trust, as long as the same key remains in use\n\nStill requires careful backup key planning; if the pinned key changes unexpectedly, connections can fail\n\nA specific certificate, often the leaf certificate\n\nThe client only trusts one exact certificate presented by the server\n\nMore precise and restrictive, which can strengthen trust in tightly controlled environments"
+            ]
+          },
+          {
+            "event_id": "fetch_3",
+            "candidate_id": "search_1_rank_3",
+            "search_attempt": 1,
+            "rank": 3,
+            "url": "https://www.sslvigil.com/ssl-certificate-pinning-what-it-is-and-why-it-matters/",
+            "status": "cancelled",
+            "http_status": null,
+            "duration_ms": 571,
+            "extracted_chars": 0,
+            "admitted_as_evidence": false,
+            "reason": "cancelled"
+          }
+        ],
+        "deduplications": [],
+        "coverage_events": [
+          {
+            "after_url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning",
+            "sufficient": true,
+            "reasons": []
+          }
+        ],
+        "stop_reason": "coverage_sufficient"
+      },
+      "sources": [
+        {
+          "n": 1,
+          "title": "What Is Certificate Pinning? Benefits, Risks & Best Practices",
+          "url": "https://www.paloaltonetworks.com/cyberpedia/what-is-certificate-pinning"
+        }
+      ],
+      "coverage_ok": null,
+      "stop_reason": "coverage_sufficient",
+      "fetch_status_counts": {
+        "cancelled": 2,
+        "usable": 1
+      },
+      "events_total": 3,
+      "events_terminal": 3,
+      "events_still_attempted": 0,
+      "events_cancelled": 2,
+      "usable": true
+    },
+    {
+      "query": "What is the purpose of a write-ahead log in database crash recovery?",
+      "duration_ms": 596,
+      "funnel": {
+        "original_question": "What is the purpose of a write-ahead log in database crash recovery?",
+        "searches": [
+          {
+            "attempt": 1,
+            "query": "What is the purpose of a write-ahead log in database crash recovery?",
+            "provider": null,
+            "cached": false,
+            "duration_ms": 596,
+            "results": []
+          }
+        ],
+        "fetch_events": [],
+        "deduplications": [],
+        "coverage_events": [],
+        "stop_reason": "candidates_exhausted"
+      },
+      "sources": [],
+      "coverage_ok": null,
+      "stop_reason": "candidates_exhausted",
+      "fetch_status_counts": {},
+      "events_total": 0,
+      "events_terminal": 0,
+      "events_still_attempted": 0,
+      "events_cancelled": 0,
+      "usable": false,
+      "unusable_reason": "the search returned no results"
+    }
+  ],
+  "reviewed_at": "2026-09-17T23:37:34.895Z",
+  "outcomes": [
+    {
+      "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "primary": "coverage_miss",
+      "flags": [
+        "extraction was faithful and coverage cancelled 2 relevant page(s) still in flight"
+      ],
+      "reviewed": true
+    },
+    {
+      "query": "What does TLS certificate pinning protect against, and what does it not?",
+      "primary": "passage_miss",
+      "flags": [
+        "the page was read and the extracted passages did not carry the answer"
+      ],
+      "reviewed": true
+    },
+    {
+      "query": "What is the purpose of a write-ahead log in database crash recovery?",
+      "primary": "pending_review",
+      "flags": [
+        "no relevance review; which results were relevant cannot be derived from the run"
+      ],
+      "reviewed": false
+    }
+  ]
+}

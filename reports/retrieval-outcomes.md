@@ -1,15 +1,14 @@
 # Retrieval outcomes, after review
 
 > **Not the official benchmark.** One observational run, n=1 per question.
-> Citation figures here are superseded by `reports/rescored.md`: a sentence-splitter
-> defect split claims from their citation markers. Outcomes derived from citation
-> counts are provisional. `agent_direct_ttft_ms` is not the gate metric. See
-> `reports/README.md`.
-
+> Citation figures here are superseded by `rescored.md`: a sentence-splitter
+> defect split claims from their citation markers. Outcomes derived from
+> citation counts are provisional, and `agent_direct_ttft_ms` is not the gate
+> metric. See `README.md` in this directory.
 
 - commit: `e2e0e4652a4283a5fcaef037a28f2e85d79335a3`
 - run: 2026-09-17T14:25:29.887Z
-- reviewed: 2026-09-17T14:27:50.883Z
+- reviewed: 2026-09-17T23:38:02.353Z
 - questions: 20
 
 ## Three dimensions, measured separately

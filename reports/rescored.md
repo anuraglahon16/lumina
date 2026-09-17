@@ -1,7 +1,7 @@
 # Rescored offline against the corrected citation validator
 
 - run: `e2e0e4652a4283a5fcaef037a28f2e85d79335a3` at 2026-09-17T14:25:29.887Z
-- rescored: 2026-09-17T23:12:40.412Z
+- rescored: 2026-09-17T23:37:49.550Z
 - questions: 20 (20 rescored, 0 not rescorable, 0 errored)
 - no network or model call: this reads the saved run and nothing else
 

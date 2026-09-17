@@ -16,6 +16,8 @@ Everything in this directory describes commit `e2e0e46`, run 2026-09-17.
 | `retrieval-outcomes.json` / `.md` | the run with the review applied — **citation figures superseded, see below** |
 | `rescored.json` / `.md` | the same run re-scored offline against the corrected citation validator |
 | `uncited-audit.json` | every uncited factual sentence, classified by hand |
+| `prompt-ab.json` / `.md` | citation contract A/B, 120 answers on evidence replayed from this run |
+| `retrieval-probe.json` / `.md` / `probe-review.json` | a live retrieval-only probe verifying the instrumentation fix |
 
 ## Limitations
 
@@ -45,6 +47,15 @@ instrumentation gap described below. The category is reachable only in runs made
 after fetch outcomes moved to the settlement path. Both files therefore still
 say `passage_miss` for that question, and the classification is wrong in a way
 the saved data cannot fix — it is recorded here instead.
+
+`retrieval-probe.md` re-ran the same question live and it classified as
+`coverage_miss`, so the category does work on a run that can reach it. That
+probe also corrected the rule: the TLS run turned out to have two relevant pages
+cancelled under a coverage stop as well, so cancellation cannot be what
+separates the two cases. What separates them is whether extraction gave up what
+the page it read actually contained, and the review now asks that — but only
+where relevant pages were cancelled, so no existing review is invalidated by it.
+The e2e0e46 outcome counts are unchanged.
 
 **Retrieval outcomes that depend on citation counts are provisional.**
 `citation_failure` is decided by cited and supported sentence totals, so every
