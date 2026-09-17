@@ -6,6 +6,32 @@
 const REFUNDABLE_TOOLS = new Set(['fetch_page', 'web_search']);
 
 /**
+ * A cancellation reason that every layer recognises as one.
+ *
+ * `new Error('retrieval_complete')` is not an abort to anything that inspects
+ * it. A fetch rejects with whatever reason it was given, the host circuit
+ * breaker asks whether the failure was the host's fault by checking for an
+ * AbortError, sees a plain Error, and counts it. Cancelling the losing fetches
+ * of a healthy pool would then trip the breaker for the very hosts that
+ * answered fastest — the opposite of what the breaker is for.
+ *
+ * DOMException is what the platform itself raises on abort, so it is what
+ * everything downstream already knows how to read. `code` is set too, because
+ * not every library checks `name`.
+ */
+export function abortReason(message) {
+  if (typeof DOMException === 'function') {
+    // Its name is already AbortError and is read-only, which is the point: this
+    // is the same object the platform raises, not an imitation of one.
+    return new DOMException(message, 'AbortError');
+  }
+  const reason = new Error(message);
+  reason.name = 'AbortError';
+  reason.code = 'ABORT_ERR';
+  return reason;
+}
+
+/**
  * A cancellation that fires when `remainingMs` elapses, composed with a
  * caller's own signal so whichever comes first wins.
  *
@@ -18,7 +44,7 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     onExpire?.();
-    controller.abort(new Error('wall_clock_exceeded'));
+    controller.abort(abortReason('wall_clock_exceeded'));
   }, Math.max(0, remainingMs));
 
   // The caller's signal is forwarded by hand rather than composed with

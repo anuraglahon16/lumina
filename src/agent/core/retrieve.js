@@ -4,7 +4,7 @@ import { webSearch } from '../services/search/index.js';
 import { fetchPage } from '../services/fetcher.js';
 import { searchChunks } from '../services/ragStore.js';
 import { assessCoverage } from './coverage.js';
-import { deadlineSignal } from './budget.js';
+import { deadlineSignal, abortReason } from './budget.js';
 
 const log = createLogger('retrieve');
 
@@ -176,8 +176,8 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
    * sent.
    */
   const pool = new AbortController();
-  const bound = deadlineSignal(deadlineMs, signal, () => pool.abort(new Error('retrieval_deadline')));
-  const forwardAbort = () => pool.abort(bound.signal.reason);
+  const bound = deadlineSignal(deadlineMs, signal, () => pool.abort(abortReason('retrieval_deadline')));
+  const forwardAbort = () => pool.abort(bound.signal.reason ?? abortReason('cancelled'));
   if (bound.signal.aborted) forwardAbort();
   else bound.signal.addEventListener('abort', forwardAbort, { once: true });
 
@@ -247,7 +247,7 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     // settling it before returning is what guarantees nothing lands afterwards
     // — a fetch that resolved during the gap would otherwise add a source to a
     // ledger the answer had already been written from.
-    pool.abort(new Error('retrieval_complete'));
+    pool.abort(abortReason('retrieval_complete'));
     bound.release();
     await Promise.allSettled([...inFlight.values()]);
     inFlight.clear();

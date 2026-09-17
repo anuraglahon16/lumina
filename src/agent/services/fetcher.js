@@ -2,7 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import * as cheerio from 'cheerio';
 import { config } from '../../shared/config.js';
-import { deadlineSignal } from '../core/budget.js';
+import { deadlineSignal, abortReason } from '../core/budget.js';
 import { cached } from './cache.js';
 import { createLogger } from '../../shared/logger.js';
 import { breaker } from '../../shared/circuitBreaker.js';
@@ -47,7 +47,7 @@ const robotsCache = new Map();
 
 async function robotsAllows(parsed, { signal } = {}) {
   if (!config.fetcher.respectRobots) return true;
-  if (signal?.aborted) throw Object.assign(new Error('aborted before robots.txt'), { name: 'AbortError' });
+  if (signal?.aborted) throw abortReason('aborted before robots.txt');
   const origin = parsed.origin;
   if (!robotsCache.has(origin)) {
     robotsCache.set(
@@ -88,10 +88,17 @@ async function robotsAllows(parsed, { signal } = {}) {
       })(),
     );
   }
-  const rules = await robotsCache.get(origin);
-  // The lookup is shared between concurrent runs and cached per origin, so it
-  // is not cancelled on one caller's behalf — but that caller stops here.
-  if (signal?.aborted) throw Object.assign(new Error('aborted after robots.txt'), { name: 'AbortError' });
+  /**
+   * One lookup per origin, shared; one wait per caller, not shared.
+   *
+   * The lookup is cached per origin and several concurrent runs wait on the
+   * same promise, so cancelling it on one caller's behalf would cancel it for
+   * the others. But that caller should not keep waiting either: it raced the
+   * shared promise against its own signal, so it leaves immediately while the
+   * lookup carries on and still populates the cache for everyone else.
+   */
+  const shared = robotsCache.get(origin);
+  const rules = await (signal ? raceSignal(shared, signal, 'aborted while waiting for robots.txt') : shared);
   const path = parsed.pathname + parsed.search;
   // Longest-match wins, as per the robots.txt convention.
   let best = null;
@@ -99,6 +106,36 @@ async function robotsAllows(parsed, { signal } = {}) {
     if (path.startsWith(rule.path) && (!best || rule.path.length > best.path.length)) best = rule;
   }
   return !best || best.type === 'allow';
+}
+
+/**
+ * Resolve with `promise`, or reject as soon as `signal` aborts.
+ *
+ * The promise is left running on purpose: this is for work that is shared with
+ * other callers, where leaving is the caller's business and cancelling would be
+ * everyone's. The listener is removed either way so a long-lived signal does
+ * not accumulate them.
+ */
+export function raceSignal(promise, signal, message) {
+  if (signal.aborted) return Promise.reject(abortReason(message));
+  let onAbort;
+  const cancelled = new Promise((_resolve, reject) => {
+    onAbort = () => reject(abortReason(message));
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+  return Promise.race([promise, cancelled]).finally(() => signal.removeEventListener('abort', onAbort));
+}
+
+/**
+ * Was this failure the host's fault?
+ *
+ * A cancellation is this system changing its mind, not the host failing, and
+ * counting it would let a run that found its evidence early trip the breaker
+ * against the very hosts that answered fastest. Exported because it is the rule
+ * the breaker is configured with, and a rule worth testing directly.
+ */
+export function isHostFault(err) {
+  return !(err?.name === 'AbortError' || err?.code === 'ABORT_ERR');
 }
 
 /** Strip chrome and pull the main readable text out of an HTML document. */
@@ -167,7 +204,7 @@ async function readLimited(res, maxBytes, signal) {
   while (true) {
     if (signal?.aborted) {
       await reader.cancel().catch(() => {});
-      throw Object.assign(new Error('aborted while reading the body'), { name: 'AbortError' });
+      throw abortReason('aborted while reading the body');
     }
     const { done, value } = await reader.read();
     if (done) break;
@@ -229,10 +266,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
   const hostBreaker = breaker(`fetch:${parsed.hostname}`, {
     failureThreshold: 3,
     cooldownMs: 120000,
-    // A cancellation is this system changing its mind, not the host failing.
-    // Counting it would let a run that found its evidence early trip the
-    // breaker for every later run against that host.
-    countsAsFailure: (err) => !(err?.name === 'AbortError' || err?.code === 'ABORT_ERR'),
+    countsAsFailure: isHostFault,
   });
 
   const { value, cached: wasCached } = await cached(
