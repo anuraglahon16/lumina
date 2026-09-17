@@ -113,3 +113,73 @@ test('a run’s token totals sum across models', () => {
   assert.equal(snap.tokens.input, 300);
   assert.equal(snap.tokens.output, 30);
 });
+
+/* --------------------------------------------- precedence and visibility */
+
+test('a legacy LUMINA_MODEL does not drag the split roles back with it', async () => {
+  // The failure this prevents shipped: a deployment already carrying
+  // LUMINA_MODEL=claude-sonnet-5 read the new role-aware code, logged the new
+  // role names, and routed every one of them back to Sonnet. The split existed
+  // only in environments that had never configured anything.
+  const before = process.env.LUMINA_MODEL;
+  process.env.LUMINA_MODEL = 'claude-sonnet-5';
+  try {
+    const fresh = await import(`../src/shared/config.js?precedence=${Date.now()}`);
+    assert.match(fresh.config.llm.quickModel, /haiku/i, 'quick stays small');
+    assert.match(fresh.config.llm.plannerModel, /haiku/i, 'planning stays small');
+    assert.match(fresh.config.llm.branchModel, /haiku/i, 'branches stay small');
+    assert.match(fresh.config.llm.deepSynthesisModel, /sonnet/i, 'but the answer model is still honoured where it means something');
+  } finally {
+    if (before === undefined) delete process.env.LUMINA_MODEL;
+    else process.env.LUMINA_MODEL = before;
+  }
+});
+
+test('an explicit role variable wins over everything', async () => {
+  const before = process.env.LUMINA_QUICK_MODEL;
+  process.env.LUMINA_QUICK_MODEL = 'claude-opus-5';
+  try {
+    const fresh = await import(`../src/shared/config.js?explicit=${Date.now()}`);
+    assert.equal(fresh.config.llm.quickModel, 'claude-opus-5');
+  } finally {
+    if (before === undefined) delete process.env.LUMINA_QUICK_MODEL;
+    else process.env.LUMINA_QUICK_MODEL = before;
+  }
+});
+
+test('the role map reports what this process is configured to do', async () => {
+  // Health and the done event read from here, so the deployment's real routing
+  // is observable rather than inferred from the code's defaults.
+  const { modelRoles } = await import('../src/agent/core/quick.js');
+  const roles = modelRoles();
+  assert.deepEqual(Object.keys(roles).sort(), ['branch', 'deepSynthesis', 'memory', 'planner', 'queryRewrite', 'quick']);
+  for (const [role, model] of Object.entries(roles)) {
+    assert.ok(typeof model === 'string' && model.length > 0, `${role} names a model`);
+  }
+  assert.equal(roles.quick, config.llm.quickModel);
+  assert.equal(roles.deepSynthesis, config.llm.deepSynthesisModel);
+});
+
+/* ------------------------------------------- degradation is not failure */
+
+test('a recovered degradation is a warning, not an error', async () => {
+  // The benchmark computes an error rate from runs that failed. A plan that was
+  // repaired and then answered perfectly well is not one of those, and folding
+  // it in would report the system as broken for recovering cleanly.
+  const r = recorder();
+  r.recordWarning('plan', 'plan_repaired', 'the first attempt returned one question');
+  const snap = r.snapshot();
+  assert.equal(snap.errors.length, 0, 'nothing was counted as an error');
+  assert.equal(snap.warnings.length, 1);
+  assert.equal(snap.warnings[0].code, 'plan_repaired');
+  assert.equal(snap.warnings[0].where, 'plan');
+  assert.equal(typeof snap.warnings[0].at_ms, 'number');
+});
+
+test('a real failure is still an error', () => {
+  const r = recorder();
+  r.recordError('llm:synthesis', new Error('the provider refused'));
+  const snap = r.snapshot();
+  assert.equal(snap.errors.length, 1);
+  assert.equal(snap.warnings.length, 0, 'and is not quietly downgraded');
+});

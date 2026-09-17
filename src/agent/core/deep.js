@@ -283,11 +283,14 @@ async function buildPlan({ query, history, memories, recorder, deadline, signal,
     // One repair, with the problems named. Only worth attempting if there is
     // time left to attempt it in.
     log.warn('plan_invalid', { problems: result.problems.slice(0, 4) });
-    if (!bound.signal.aborted) {
+    // A repair needs time to land in. Starting one with a second left spends a
+    // call to be cancelled, and delays the fallback the run will use anyway.
+    const REPAIR_NEEDS_MS = 1200;
+    if (!bound.signal.aborted && deadline - Date.now() > REPAIR_NEEDS_MS) {
       try {
         const repaired = await attempt(repairInstruction(result.problems, { min, max }));
         if (repaired.ok) {
-          recorder.recordError('plan_repaired', new Error(result.problems[0] || 'invalid plan'));
+          recorder.recordWarning('plan', 'plan_repaired', result.problems[0]);
           return { ...repaired.plan, origin: PLAN_ORIGIN.REPAIR, degraded: false };
         }
         result = repaired;
@@ -298,7 +301,7 @@ async function buildPlan({ query, history, memories, recorder, deadline, signal,
 
     // The harness decomposes it. A degraded run that answers beats a failed one.
     log.warn('plan_fallback', { query: query.slice(0, 120), problems: result.problems?.slice(0, 3) });
-    recorder.recordError('plan_fallback', new Error(result.problems?.[0] || 'planner produced no usable plan'));
+    recorder.recordWarning('plan', 'plan_fallback', result.problems?.[0] || 'planner produced no usable plan');
     return { ...fallbackPlan(query, { min, max }), origin: PLAN_ORIGIN.FALLBACK, degraded: true };
   } finally {
     bound.release();
@@ -316,14 +319,21 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
       {
         role: 'user',
         content: [
-          history.length ? `<conversation_so_far>\n${history.map((m) => `${m.role}: ${m.content}`).join('\n')}\n</conversation_so_far>\n` : '',
-          memories.length ? `<about_the_user>\n${memories.map((m) => `- ${m.content}`).join('\n')}\n</about_the_user>\n` : '',
+          // Trimmed hard. Planning is the run's first paint and every token in
+          // front of it is latency the reader waits through; a planner does not
+          // need the whole conversation to split one question into parts.
+          history.length
+            ? `<recent_turns>\n${history.slice(-2).map((m) => `${m.role}: ${String(m.content).slice(0, 300)}`).join('\n')}\n</recent_turns>\n`
+            : '',
+          memories.length
+            ? `<about_the_user>\n${memories.slice(0, 3).map((m) => `- ${String(m.content).slice(0, 160)}`).join('\n')}\n</about_the_user>\n`
+            : '',
           `<question>${query}</question>`,
           repair ? `\n\n${repair}` : '',
         ].join(''),
       },
     ],
-    maxTokens: 600,
+    maxTokens: 400,
     effort: 'low',
   });
 

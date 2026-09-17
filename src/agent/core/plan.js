@@ -118,12 +118,16 @@ export function validatePlan(raw, { query, min = 3, max = 5 } = {}) {
  */
 export function fallbackPlan(query, { min = 3, max = 5 } = {}) {
   const subject = String(query ?? '').trim().replace(/\s+/g, ' ').slice(0, 160) || 'the question';
+  // Each angle carries its own search terms. Handing every branch the same
+  // query would send them all to the same results and return one branch's
+  // worth of evidence at four branches' cost — which the deep/quick source
+  // ratio is precisely the gate for catching.
   const angles = [
-    { question: `What is directly established about ${subject}?`, why: 'the primary evidence the answer has to rest on' },
-    { question: `What specific findings, figures or examples support ${subject}?`, why: 'concrete evidence rather than general claims' },
-    { question: `What limitations, disagreements or contrary findings apply to ${subject}?`, why: 'a one-sided answer to a researchable question is an incomplete one' },
-    { question: `What has changed recently regarding ${subject}?`, why: 'evidence that may have been superseded' },
-    { question: `In what context or by whom is ${subject} discussed?`, why: 'who is making the claims and on what basis' },
+    { question: `What is directly established about ${subject}?`, why: 'the primary evidence', terms: `${subject} evidence findings` },
+    { question: `What specific findings, figures or examples support ${subject}?`, why: 'concrete rather than general', terms: `${subject} statistics data study results` },
+    { question: `What limitations, disagreements or contrary findings apply to ${subject}?`, why: 'a one-sided answer is incomplete', terms: `${subject} limitations criticism counterevidence` },
+    { question: `What has changed recently regarding ${subject}?`, why: 'evidence may be superseded', terms: `${subject} recent developments update` },
+    { question: `In what context or by whom is ${subject} discussed?`, why: 'who is claiming what', terms: `${subject} background context overview` },
   ];
 
   return {
@@ -133,7 +137,7 @@ export function fallbackPlan(query, { min = 3, max = 5 } = {}) {
       id: `q${i + 1}`,
       question: a.question,
       why: a.why,
-      search_queries: [subject],
+      search_queries: [a.terms],
     })),
   };
 }

@@ -166,6 +166,11 @@ export function contractStream({ send, depth, answerId }) {
           latencyMs: data?.latency_ms ?? 0,
           ttftMs: data?.ttft_ms ?? data?.latency_ms ?? 0,
           model: data?.model || 'unknown',
+          // The contract asks for one model name; a run uses several. The map
+          // is carried alongside so a cost figure can be read against what
+          // actually produced it, and so the deployed routing is visible rather
+          // than inferred from the code's defaults.
+          ...(data?.models ? { models: data.models } : {}),
           tokens: { in: data?.tokens?.input ?? 0, out: data?.tokens?.output ?? 0 },
           costUsd: data?.cost_usd ?? 0,
           searchCached: everyCachedSoFar === true,

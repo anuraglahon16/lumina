@@ -7,7 +7,7 @@ import { newId } from '../../shared/ids.js';
 import { config, capabilities } from '../../shared/config.js';
 import { createLogger } from '../../shared/logger.js';
 import { contractStream, __testing as contractMap } from '../../gateway/contract/events.js';
-import { runQuickQuery } from '../core/quick.js';
+import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
@@ -282,14 +282,7 @@ contractRouter.get('/health', async (req, res) => {
     // the full split is alongside it, since a cost figure is not interpretable
     // without knowing which model produced which part of the run.
     model: config.llm.quickModel,
-    models: {
-      quick: config.llm.quickModel,
-      planner: config.llm.plannerModel,
-      branch: config.llm.branchModel,
-      deep_synthesis: config.llm.deepSynthesisModel,
-      query_rewrite: config.llm.queryRewriteModel,
-      memory: config.llm.memoryModel,
-    },
+    models: modelRoles(),
     // The provider actually first in line, not merely one that is configured:
     // a recall or latency number is not comparable without knowing which.
     searchProvider: resolveProviders()[0] || 'none',

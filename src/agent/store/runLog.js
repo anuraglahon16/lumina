@@ -58,6 +58,8 @@ export class RunRecorder {
       llm_calls: [],
       tool_calls: [],
       errors: [],
+      // Degradations the run recovered from. Never counted as failures.
+      warnings: [],
       tokens: { input: 0, output: 0, cache_read: 0, cache_write: 0 },
       cost_usd: 0,
       cache: { hits: 0, misses: 0, writes: 0, by_namespace: {} },
@@ -159,6 +161,18 @@ export class RunRecorder {
       this.run.cache.misses += 1;
       bucket.misses += 1;
     }
+  }
+
+  /**
+   * Something degraded, but the run carried on and answered.
+   *
+   * Kept apart from errors on purpose. A repaired plan and a provider throwing
+   * mid-answer are not the same event, and the benchmark computes an error rate
+   * from runs that failed — folding degradations into that would report a
+   * system as broken for recovering from something well.
+   */
+  recordWarning(where, code, detail = null) {
+    this.run.warnings.push({ where, code, ...(detail ? { detail: String(detail).slice(0, 300) } : {}), at_ms: this.elapsedMs() });
   }
 
   recordError(where, err) {

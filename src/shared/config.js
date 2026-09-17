@@ -114,17 +114,25 @@ export const config = {
      * Most calls in a run are not writing the answer. Choosing which page to
      * read, decomposing a question, rewriting a follow-up into something
      * searchable, noticing a durable fact about the user: all of them are
-     * mechanical, none of them reaches the reader as prose, and all of them were
-     * being served by the model chosen for the one job that does. Deep synthesis
-     * keeps Sonnet — merging fifteen sources into one honest answer is where
-     * capability is actually spent.
+     * mechanical, none reaches the reader as prose, and all of them were served
+     * by the model chosen for the one job that does.
      *
-     * Each falls back to the older single-model settings, so an existing
-     * environment keeps working and can be moved one role at a time.
+     * These deliberately do NOT inherit `LUMINA_MODEL`. That was the first
+     * shape of this and it was wrong in the place it mattered: a deployment
+     * with `LUMINA_MODEL=claude-sonnet-5` already set — which is what ours had
+     * — would read the new code, log the new role names, and route every one of
+     * them straight back to Sonnet. The split would have existed only in
+     * environments that had never configured anything. A setting whose whole
+     * purpose is to separate roles cannot be silently overridden by the setting
+     * it exists to separate them from.
+     *
+     * `deepSynthesisModel` is the exception, and honestly so: `LUMINA_MODEL`
+     * has always meant "the model that writes answers", and deep synthesis is
+     * the call that writes them.
      */
-    quickModel: process.env.LUMINA_QUICK_MODEL || process.env.LUMINA_MODEL || 'claude-haiku-4-5',
-    plannerModel: process.env.LUMINA_PLANNER_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
-    branchModel: process.env.LUMINA_BRANCH_MODEL || process.env.LUMINA_MODEL || 'claude-haiku-4-5',
+    quickModel: process.env.LUMINA_QUICK_MODEL || 'claude-haiku-4-5',
+    plannerModel: process.env.LUMINA_PLANNER_MODEL || 'claude-haiku-4-5',
+    branchModel: process.env.LUMINA_BRANCH_MODEL || 'claude-haiku-4-5',
     deepSynthesisModel: process.env.LUMINA_DEEP_SYNTHESIS_MODEL || process.env.LUMINA_MODEL || 'claude-sonnet-5',
     queryRewriteModel: process.env.LUMINA_QUERY_REWRITE_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     memoryModel: process.env.LUMINA_MEMORY_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
@@ -200,7 +208,16 @@ export const config = {
       synthesisCeilingMs: num(process.env.QUICK_SYNTHESIS_CEILING_MS, 90000),
     },
     deep: {
-      maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
+      /**
+       * Four, not five.
+       *
+       * The gate asks for at least three, and the fifth sub-question was
+       * costing twice: roughly fifty output tokens on a call whose latency is
+       * almost entirely output tokens, and a whole extra branch in a run with a
+       * ninety second ceiling. Four still decomposes a question properly and
+       * still reads more sources than a quick run by a wide margin.
+       */
+      maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 4),
       /**
        * The benchmark scores the *minimum* sub-question count across runs, so a
        * single thin plan is worth as much as a run that never happened. Three is

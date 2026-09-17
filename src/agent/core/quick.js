@@ -191,6 +191,18 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
   }
 }
 
+/** Which model served which role, as the running process is configured. */
+export function modelRoles() {
+  return {
+    quick: config.llm.quickModel,
+    planner: config.llm.plannerModel,
+    branch: config.llm.branchModel,
+    deepSynthesis: config.llm.deepSynthesisModel,
+    queryRewrite: config.llm.queryRewriteModel,
+    memory: config.llm.memoryModel,
+  };
+}
+
 /** The metrics block the UI shows in the run footer. */
 export function summarizeRun(run, extra = {}) {
   return {
@@ -199,6 +211,7 @@ export function summarizeRun(run, extra = {}) {
     // The contract's done event names the model that served the answer, and a
     // grader reading a cost figure cannot interpret it without one.
     model: run.model,
+    models: modelRoles(),
     status: run.status,
     termination_reason: run.termination_reason,
     termination_explanation: CAP_REASONS[run.termination_reason] || null,
