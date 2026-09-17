@@ -272,7 +272,10 @@ async function main() {
 }
 
 async function collectAll(commit) {
-  const health = await fetch(new URL('/health', BASE)).then((r) => r.json());
+  // From the process the questions go to. Reading health from the gateway
+  // while asking the agent describes a configuration that may not be the one
+  // under test.
+  const health = await fetch(new URL('/v1/health', AGENT)).then((r) => r.json()).catch(() => ({}));
   const runs = [];
 
   for (const query of QUERIES.slice(0, LIMIT)) {
@@ -329,7 +332,15 @@ async function collectAll(commit) {
           })),
         sources_fetched: record.sources?.fetched ?? null,
         warnings: (record.warnings ?? []).map((x) => x.code),
-        ttft_ms: result.ttftMs,
+        /**
+         * Named for what it is. These questions go straight to the agent, so
+         * this excludes the gateway, the translation into the contract's
+         * events, the proxy's streaming and anything the deployment adds. It
+         * is useful for comparing one diagnostic run with another and is not
+         * the number the 2.5 second gate is about; that one has to come through
+         * the deployed contract path.
+         */
+        agent_direct_ttft_ms: result.ttftMs,
         latency_ms: done?.latencyMs ?? null,
         cost_usd: done?.costUsd ?? null,
         terminated: done?.terminated ?? null,
@@ -377,8 +388,8 @@ function render({ commit, ran_at, node, health, runs }) {
   A(`- commit: \`${commit}\``);
   A(`- ran at: ${ran_at}`);
   A(`- node: ${node}`);
-  A(`- answer model: ${health?.models?.quick ?? health?.model}`);
-  A(`- search provider: ${health?.searchProvider}`);
+  A(`- answer model: ${health?.model ?? 'unknown'}`);
+  A(`- search provider: ${health?.checks?.search_provider ?? health?.searchProvider ?? 'unknown'}`);
   A(`- questions: ${ok.length} answered, ${runs.length - ok.length} failed\n`);
   A('Nothing was changed to produce this: no prompt, no threshold, no passage');
   A('selection, no model. It measures the state at the commit named above.\n');
@@ -430,6 +441,9 @@ function render({ commit, ran_at, node, health, runs }) {
   A('');
   A('## Caveats\n');
   A('- One pass per question, one machine, one network. Not the official benchmark.');
+  A('- Questions go straight to the agent, so `agent_direct_ttft_ms` excludes the');
+  A('  gateway and the contract translation. It is not the gated TTFT and must not');
+  A('  be compared with the 2.5 second target.');
   A('- The scorer is lexical overlap against the passages a source carried, not entailment.');
   A('- Questions were chosen to need a page read and are not drawn from the benchmark or the gold set.');
   return `${L.join('\n')}\n`;

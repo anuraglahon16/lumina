@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync, spawn } from 'node:child_process';
+import { spawn } from 'node:child_process';
 import { acquireLock } from '../tools/diagnostic-lock.js';
 
 /**
@@ -132,43 +132,94 @@ test('an unsupported sentence appears in both the weak list and the decisions', 
 
 /* ------------------------------------------------- reading across processes */
 
-test('an in-process reader never sees a run another process wrote, which is why the diagnostic uses HTTP', () => {
-  // The JSON collection reads its file once at construction and holds the
-  // result, so an in-process reader sees the snapshot it began with and never
-  // anything written afterwards. Polling harder cannot help. The diagnostic
-  // reads over HTTP for this reason; this test is what establishes that the
-  // import-and-poll approach it used before genuinely could not work.
+test('a live reader never sees a run another process writes while it is running', async () => {
+  // Concurrent, not sequential. The earlier version ran the reader to
+  // completion before the writer started, which proves nothing about two
+  // processes sharing a store — it only shows that a process which exits
+  // before a write cannot see it.
+  //
+  // Here the reader stays alive across the write, is asked again afterwards,
+  // and still sees nothing; a reader constructed after the write sees it. That
+  // is the property that made importing the store into the diagnostic
+  // unworkable, and it is why the diagnostic reads over HTTP.
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-xproc-'));
-  const writer = `
-    process.env.DATA_DIR = ${JSON.stringify(dir)};
-    process.env.MONGODB_URI = '';
-    const { collection } = await import('${path.resolve('src/agent/store/jsonStore.js')}');
-    const runs = collection('runs');
-    await runs.put({ id: 'run_from_other_process', user_id: 'u_x', created_at: new Date().toISOString() });
-    await runs.flush();
-  `;
-  const reader = `
-    process.env.DATA_DIR = ${JSON.stringify(dir)};
-    process.env.MONGODB_URI = '';
-    const { collection } = await import('${path.resolve('src/agent/store/jsonStore.js')}');
-    const runs = collection('runs');            // loaded before the write
-    const before = (await runs.list({}, { limit: 10 })).items.length;
-    ${JSON.stringify('')};
-    await new Promise((r) => setTimeout(r, 400));
-    const after = (await runs.list({}, { limit: 10 })).items.length;
-    console.log(JSON.stringify({ before, after }));
-  `;
+  const store = path.resolve('src/agent/store/jsonStore.js');
 
-  // Reader first, so its snapshot predates the write.
-  const readerProc = execFileSync('node', ['--input-type=module', '-e', reader.replace('${JSON.stringify(\'\')};', '')], {
-    encoding: 'utf8',
-    env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' },
-  });
-  execFileSync('node', ['--input-type=module', '-e', writer], { encoding: 'utf8', env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' } });
+  const reader = spawn(
+    process.execPath,
+    [
+      '--input-type=module',
+      '-e',
+      `import { collection } from ${JSON.stringify(store)};
+       const runs = collection('runs');                    // snapshot taken now
+       process.stdout.write('READY' + String.fromCharCode(10));
+       process.stdin.on('data', async () => {
+         const { items } = await runs.list({}, { limit: 10 });
+         process.stdout.write('SEEN:' + items.length + String.fromCharCode(10));
+       });`,
+    ],
+    { env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' }, stdio: ['pipe', 'pipe', 'ignore'] },
+  );
 
-  const { before, after } = JSON.parse(readerProc.trim().split('\n').pop());
-  assert.equal(before, 0, 'the reader started with an empty snapshot');
-  assert.equal(after, 0, 'and never saw the write, however long it waited');
+  const lines = [];
+  reader.stdout.on('data', (d) => lines.push(...String(d).trim().split(String.fromCharCode(10))));
+  const waitFor = async (prefix, ms = 5000) => {
+    const until = Date.now() + ms;
+    while (Date.now() < until) {
+      const hit = lines.find((l) => l.startsWith(prefix));
+      if (hit) return hit;
+      await new Promise((r) => setTimeout(r, 25));
+    }
+    throw new Error(`timed out waiting for ${prefix}; saw ${JSON.stringify(lines)}`);
+  };
+
+  try {
+    await waitFor('READY');
+
+    // A different process writes, while the reader is still alive.
+    await new Promise((resolve, reject) => {
+      const writer = spawn(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { collection } from ${JSON.stringify(store)};
+           const runs = collection('runs');
+           await runs.put({ id: 'run_written_elsewhere', user_id: 'u_x', created_at: new Date().toISOString() });
+           await runs.flush();`,
+        ],
+        { env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' }, stdio: 'ignore' },
+      );
+      writer.on('exit', (code) => (code === 0 ? resolve() : reject(new Error(`writer exited ${code}`))));
+    });
+
+    // Ask the still-running reader again.
+    reader.stdin.write('poll' + String.fromCharCode(10));
+    const seen = await waitFor('SEEN:');
+    assert.equal(seen, 'SEEN:0', 'the live reader holds the snapshot it started with and never sees the write');
+
+    // A reader constructed after the write does see it, which proves the write
+    // landed and the staleness is the snapshot rather than a failed write.
+    const fresh = await new Promise((resolve, reject) => {
+      let out = '';
+      const child = spawn(
+        process.execPath,
+        [
+          '--input-type=module',
+          '-e',
+          `import { collection } from ${JSON.stringify(store)};
+           const { items } = await collection('runs').list({}, { limit: 10 });
+           console.log(items.length);`,
+        ],
+        { env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' }, stdio: ['ignore', 'pipe', 'ignore'] },
+      );
+      child.stdout.on('data', (d) => (out += d));
+      child.on('exit', (code) => (code === 0 ? resolve(Number(out.trim())) : reject(new Error(`exited ${code}`))));
+    });
+    assert.equal(fresh, 1, 'a reader started after the write sees it');
+  } finally {
+    reader.kill();
+  }
 });
 
 /* --------------------------------------------------------------- the lock */
