@@ -46,14 +46,14 @@ test('the prompt forbids a citation carrying over to the next sentence', () => {
 test('the prompt names one canonical marker placement', () => {
   const prompt = quickPrompt();
   assert.match(prompt, /just before the full stop/i, 'it says where the marker goes');
-  assert.match(prompt, /row formats \[1\]\./, 'and shows the form rather than only describing it');
+  assert.match(prompt, /gradually \[1\]\./, 'and shows the form rather than only describing it');
   assert.match(prompt, /never leave a marker standing on its own/i);
   assert.match(prompt, /never start a sentence with one/i);
 });
 
 test('the prompt extends the rule to list items', () => {
   // The other half of the pattern: a cited stem followed by uncited bullets.
-  assert.match(quickPrompt(), /each item carries its own marker/i);
+  assert.match(quickPrompt(), /each list item carries its own marker/i);
   assert.match(quickPrompt(), /does not cover the items under it/i);
 });
 
@@ -203,4 +203,90 @@ test('a citation on a sentence the cited block does not support still fails', ()
   assert.equal(m.cited, 2, 'both sentences are cited');
   assert.equal(m.completeness, 1, 'and completeness is satisfied');
   assert.equal(m.supported, 1, 'but grounding catches the invented one');
+});
+
+/* ------------------------------------- the second iteration: lists and formulas */
+
+/**
+ * Structures the first contract named but did not demonstrate.
+ *
+ * Classifying all fifty-one remaining misses by shape corrected a guess I had
+ * made from fourteen of them: three are list items, thirty-seven are ordinary
+ * continuation sentences in prose. Both rules are stated, and the examples show
+ * the prose case first because that is where the misses are.
+ */
+
+test('the prompt requires a marker on formulas, variables and numeric values', () => {
+  assert.match(quickPrompt(), /every formula, variable definition, numeric value and specification/i);
+});
+
+test('the prompt refuses citations on headings and announcements', () => {
+  // A cited heading inflates completeness without citing a claim, and a line
+  // that only announces what follows asserts nothing to support.
+  assert.match(quickPrompt(), /do not cite a heading/i);
+  assert.match(quickPrompt(), /only job is to announce what follows/i);
+});
+
+test('the prompt demonstrates the rule rather than only stating it', () => {
+  const prompt = quickPrompt();
+  // Consecutive prose sentences, which is 37 of the 51 remaining misses.
+  assert.match(prompt, /repeat or change gradually \[1\]\. That repetition is what compression exploits \[1\]\./);
+  // And a list whose stem is cited and whose items are cited separately.
+  assert.match(prompt, /- If SMSS is above 2190 bytes, the initial window is 2 \* SMSS \[2\]\./);
+});
+
+test('a cited stem with uncited items is measured as incomplete', () => {
+  const stem = 'The evidence gives two reasons for the difference [1].';
+  const withItems = `${stem}\n- ${COL_B} [1].\n- ${ROW_A} [2].`;
+  const withoutItems = `${stem}\n- ${COL_B}.\n- ${ROW_A}.`;
+
+  assert.equal(measure(withItems).completeness, 1, 'each item carrying its own marker is complete');
+  assert.ok(measure(withoutItems).completeness < 1, 'a cited stem does not cover the items below it');
+});
+
+test('a nested list item carries its own citation', () => {
+  const answer = `The layout differs [1].\n- ${COL_B} [1].\n  - ${ROW_A} [2].`;
+  const m = measure(answer);
+  assert.equal(m.orphans, 0);
+  assert.equal(m.factualCited, m.factual, 'the nested item is cited too');
+});
+
+test('a numbered list of specifications is measured item by item', () => {
+  const answer = `Three cases apply [1].\n1. ${COL_B} [1].\n2. ${ROW_A} [2].`;
+  const m = measure(answer);
+  assert.equal(m.orphans, 0);
+  assert.equal(m.factualCited, m.factual);
+});
+
+test('a formula line and its variable definition each count as a cited sentence', () => {
+  // Specification lines are short, so they sit near the six-word threshold that
+  // decides what counts as factual. What must hold either way is that a cited
+  // one is never counted as uncited.
+  const answer = 'The initial window depends on the sender maximum segment size [1].\n- If SMSS is above 2190 bytes, the initial window is 2 * SMSS [1].\n- Otherwise the initial window is 4 times SMSS [1].';
+  const m = measure(answer);
+  assert.equal(m.orphans, 0);
+  assert.equal(m.factualCited, m.factual, 'no specification line reads as uncited');
+});
+
+test('a markdown table row with a citation is not read as an orphan', () => {
+  const answer = `Two layouts differ [1].\n\n| layout | behaviour |\n|---|---|\n| columnar | ${COL_B} [1]. |\n| row | ${ROW_A} [2]. |`;
+  const validation = ledger().validate(answer);
+  assert.equal(validation.orphan_citations.length, 0);
+  assert.equal(validation.sentence_results.length, validation.cited_sentences);
+});
+
+test('a list mixing supported and unsupported items scores each on its own', () => {
+  // The guard rail inside a list. Citing every item is only worth anything if
+  // an item the block does not support still fails.
+  const answer = `Two findings [1].\n- ${COL_B} [1].\n- The format was ratified by the standards committee in 1994 [1].`;
+  const m = measure(answer);
+  assert.equal(m.completeness, 1, 'both items are cited');
+  assert.ok(m.supported < m.cited, 'and the invented one is still caught');
+});
+
+test('the prompt did not grow much for this', () => {
+  // Prompt length is paid on every Quick request, before the first token.
+  const legacy = synthesisSystem({ mode: 'quick', capped: false, capReason: null, budget: {}, memories: [], evidenceCount: 2, evidenceLimited: false, evidenceGaps: '', contract: 'legacy' });
+  const growth = quickPrompt().length - legacy.length;
+  assert.ok(growth < 1200, `the citation contract adds ${growth} characters, which is more than it should`);
 });

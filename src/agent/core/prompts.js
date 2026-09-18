@@ -64,6 +64,22 @@ ${renderMemoryBlock(memories)}`;
  * sentence and stops there buys completeness with unsupported citations, which
  * is a worse answer measuring better.
  *
+ * The second iteration added the two examples and the list-and-formula rule.
+ * Classifying all fifty-one remaining misses by shape is what chose them, and
+ * it corrected a guess: reading fourteen of them, three of which were a run of
+ * specification bullets, I had reported the residue as concentrated in lists.
+ * Three of fifty-one are list items. Thirty-seven are ordinary continuation
+ * sentences in prose — the thing the rule already forbids, still happening —
+ * which is why the example shows two consecutive prose sentences rather than
+ * only a list.
+ *
+ * Worth knowing before reading the next number: prompt work cannot reach the
+ * 0.95 completeness target from here. Citing every supported-but-uncited
+ * sentence in the measured sample would give 0.878, and the hard ceiling with
+ * the 44 sentences no source supports never cited is 0.909. Those 44 either
+ * should not have been written or are paraphrase the lexical bar cannot see,
+ * and no amount of citation instruction resolves that.
+ *
  * Quick only for now. Deep keeps the prompt it was measured with, so the next
  * comparison has one variable in it.
  */
@@ -97,10 +113,15 @@ Citations:
     mode === 'deep' || contract === 'legacy'
       ? ''
       : `
-- Put the marker inside the sentence it supports, just before the full stop: "Columnar formats compress better than row formats [1]." Never leave a marker standing on its own, and never start a sentence with one.
-- One marker per sentence. Every sentence stating a verifiable fact carries its own, including when the sentence before it cited the same block. A citation never carries over from one sentence to the next.
-- The same inside lists: each item carries its own marker. A cited line introducing a list does not cover the items under it.
-- Do not add a marker to a sentence merely to satisfy this rule. If no block supports the sentence, do not write the sentence.`
+- Put the marker inside the sentence it supports, just before the full stop. Never leave a marker standing on its own, and never start a sentence with one.
+- One marker per sentence. Every sentence stating a verifiable fact carries its own, including when the sentence before it cited the same block. A citation never carries over from one sentence to the next:
+    A column holds values of one type that repeat or change gradually [1]. That repetition is what compression exploits [1].
+- Each list item carries its own marker, and so does every formula, variable definition, numeric value and specification. A cited line introducing a list does not cover the items under it:
+    The initial window depends on the sender maximum segment size [2]:
+    - If SMSS is above 2190 bytes, the initial window is 2 * SMSS [2].
+    - Otherwise the initial window is 4 * SMSS [2].
+- Do not cite a heading, or a line whose only job is to announce what follows.
+- Do not add a marker to a sentence merely to satisfy this rule. If no block supports the sentence, do not write the sentence at all.`
   }
 - An answer drawn from evidence and carrying no bracketed number at all is wrong, whatever it says. If you used a block, cite it; if no block supports a sentence, do not write that sentence.
 - Cite the block you actually took the claim from. A citation that does not support its sentence is a failure, worse than no citation.
