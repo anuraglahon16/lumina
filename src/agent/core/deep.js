@@ -135,7 +135,7 @@ export async function runDeepQuery({
 
     // ---- broader evidence sweep ------------------------------------------
     recorder.startPhase('sweep');
-    const swept = await sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits });
+    const swept = await sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn });
     recorder.endPhase('sweep', { fetched: swept.length });
 
     const cappedBranches = branchResults.filter((b) => b.capped);
@@ -494,7 +494,11 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
  * usually the cross-cutting sources. Fetch the best few, so the merged answer
  * rests on more than the per-branch picks.
  */
-async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits }) {
+async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn = null }) {
+  // Same narrow seam the branches use: the real fetcher unless a caller injects
+  // one. Without this the sweep reached the network directly, which is why no
+  // test could drive it and why its sources went unchecked.
+  const fetch = fetchPageFn || fetchPage;
   const budgetMs = Math.min(30000, deadline - Date.now());
   if (budgetMs < 3000) return [];
 
@@ -511,9 +515,18 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits 
   for (const candidate of candidates) {
     if (Date.now() >= sweepDeadline || fetched.length >= 3) break;
     try {
-      const page = await fetchPage(candidate.url, { recorder });
+      const page = await fetch(candidate.url, { recorder });
       if (!page.ok) continue;
-      const source = ledger.addWebSource(page, { branch: 'sweep', query: 'cross-branch sweep' });
+      /**
+       * Attributed to the sub-question that surfaced it, not to 'sweep'.
+       *
+       * The contract derives `subQuestion` by stripping non-digits, so 'sweep'
+       * produced nothing and these sources reached the grader without an index
+       * — 3 of 14 on the deployed preview. The page is genuinely cross-cutting,
+       * but it entered this run through one branch's search, and first
+       * discoverer is the rule the rest of the ledger already follows.
+       */
+      const source = ledger.addWebSource(page, { branch: candidate.discovered_by_branch || 'sweep', query: 'cross-branch sweep' });
       recorder.recordToolCall({
         name: 'fetch_page',
         input: { url: candidate.url },

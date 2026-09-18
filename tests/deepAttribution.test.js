@@ -213,3 +213,67 @@ test('the benchmark assertion, stated as the grader states it', async () => {
     assert.deepEqual(offenders, [], `run ${i + 1} left subQuestion off: ${offenders.join(', ')}`);
   }
 });
+
+/* ------------------------------------------- the sweep, which the fixtures above never reach */
+
+/**
+ * The cross-branch sweep adds sources too, and they were the ones left over.
+ *
+ * Measured on the deployed preview: 11 of 14 sources carried a subQuestion and
+ * 3 did not. The sweep fetches at most 3 pages — "candidates several branches
+ * surfaced but none read" — and tagged them `branch: 'sweep'`. The contract
+ * mapper derives the index by stripping non-digits, so 'sweep' yields nothing
+ * and those three sources reached the grader bare.
+ *
+ * The tests above never caught it because their stub search returns one result
+ * per query and the branch fetches it, so no candidate is ever left unread and
+ * the sweep has nothing to do. This one leaves candidates on the table.
+ */
+
+/** Three leads per search, on distinct domains; the branch reads only the first. */
+const sweepSearch = async (query) => ({
+  results: [
+    { url: `https://read-${encodeURIComponent(query).slice(0, 12)}.test/a`, title: query, snippet: 'lead' },
+    { url: 'https://unread-one.test/x', title: 'cross-cutting one', snippet: 'lead' },
+    { url: 'https://unread-two.test/y', title: 'cross-cutting two', snippet: 'lead' },
+  ],
+  provider: 'stub',
+  cached: false,
+});
+
+/** Searches first, so candidates exist, then reads only its own top result. */
+function searchingModel() {
+  const seen = new Map();
+  return async (params) => {
+    const purpose = params.purpose || '';
+    if (purpose === 'plan') return { content: [{ type: 'text', text: JSON.stringify(PLAN) }], stop_reason: 'end_turn', usage: {} };
+    if (purpose.startsWith('research:')) {
+      const branch = purpose.slice('research:'.length);
+      const n = (seen.get(branch) ?? 0) + 1;
+      seen.set(branch, n);
+      if (n === 1) return { content: [{ type: 'tool_use', id: `s_${branch}`, name: 'web_search', input: { query: `lead for ${branch}` } }], stop_reason: 'tool_use', usage: {} };
+      if (n === 2) return { content: [{ type: 'tool_use', id: `f_${branch}`, name: 'fetch_page', input: { url: `https://read-lead%20for%20${branch}.test/a` } }], stop_reason: 'tool_use', usage: {} };
+      return { content: [{ type: 'text', text: `notes for ${branch}` }], stop_reason: 'end_turn', usage: {} };
+    }
+    params.onText?.('The merged answer [1].');
+    return { content: [{ type: 'text', text: 'The merged answer [1].' }], stop_reason: 'end_turn', usage: {} };
+  };
+}
+
+test('the sweep actually runs under this fixture', async () => {
+  // Otherwise the next test proves nothing, the way the ones above did not.
+  const { raw } = await runDeep({ model: {}, run: { webSearch: sweepSearch, complete: searchingModel() } });
+  const swept = raw.filter((e) => e.event === 'source_added' && e.data?.branch === 'sweep');
+  assert.ok(swept.length > 0, 'the sweep fetched at least one cross-branch page');
+});
+
+test('a source the sweep added still says which sub-question found it', async () => {
+  const { sources } = await runDeep({ model: {}, run: { webSearch: sweepSearch, complete: searchingModel() } });
+  assert.ok(sources.length > 0, 'the run produced sources');
+  const bare = sources.filter((s) => !Number.isInteger(s.subQuestion));
+  assert.deepEqual(
+    bare.map((s) => `[${s.n}] ${s.url}`),
+    [],
+    'every source carries an integer subQuestion, sweep sources included',
+  );
+});

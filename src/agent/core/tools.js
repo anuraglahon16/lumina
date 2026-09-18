@@ -189,7 +189,7 @@ export function createToolExecutor({
   async function runWebSearch({ query, recency }) {
     const q = recency === 'recent' ? `${query} ${new Date().getFullYear()}` : query;
     const { results, provider, cached, degraded, provider_errors } = await searchFn(q, { recorder });
-    ledger.noteCandidates(results);
+    ledger.noteCandidates(results, { branch });
     if (!results.length) {
       return {
         ok: false,

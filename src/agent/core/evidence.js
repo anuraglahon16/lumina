@@ -232,10 +232,18 @@ export class EvidenceLedger {
     this.attempted = new Set();
   }
 
-  /** Record search hits so the trace shows what was considered but not read. */
-  noteCandidates(results) {
+  /**
+   * Record search hits so the trace shows what was considered but not read.
+   *
+   * The branch that surfaced a candidate is kept with it, first discoverer
+   * wins, because a candidate read later by the cross-branch sweep still came
+   * from some sub-question's search and the grader asks every source which one.
+   */
+  noteCandidates(results, { branch = null } = {}) {
     for (const r of results) {
-      if (!this.candidates.has(r.url) && !this.byUrl.has(r.url)) this.candidates.set(r.url, r);
+      if (!this.candidates.has(r.url) && !this.byUrl.has(r.url)) {
+        this.candidates.set(r.url, branch ? { ...r, discovered_by_branch: branch } : r);
+      }
     }
   }
 
