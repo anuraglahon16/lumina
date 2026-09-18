@@ -54,9 +54,18 @@ export async function synthesizeAnswer({
     ...(contract ? { contract } : {}),
   });
 
+  // Ordered by the question before the per-source cap applies. Without the
+  // question the cap keeps whatever the extractor emitted first, which is how
+  // three questions were answered "the evidence does not cover this" while the
+  // text that answered them sat in the ledger past the cut.
+  const evidence = ledger.renderForPrompt({ query });
+  if (evidence.dropped_sources?.length) {
+    recorder?.note?.('evidence_truncated', evidence.dropped_sources);
+  }
+
   const userMessage = buildSynthesisUserMessage({
     query,
-    evidence: ledger.renderForPrompt(),
+    evidence: String(evidence),
     threadContext,
     researchNotes,
     plan,

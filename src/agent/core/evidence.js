@@ -1,5 +1,6 @@
 import { tokenize } from '../services/embeddings.js';
 import { chunkPassages } from '../services/chunker.js';
+import { reorderPassages } from './passageOrder.js';
 
 const STOPWORDS = new Set(
   'the a an and or but if then than that this these those of in on at to for with from by as is are was were be been being it its it\'s they them their there here what which who whom how why when where can could should would may might will shall do does did not no yes we you i he she his her our your my me us also more most some any each other into over under about after before between during such only very'.split(' '),
@@ -368,17 +369,55 @@ export class EvidenceLedger {
   }
 
   /** Numbered evidence blocks handed to the synthesis prompt. */
-  renderForPrompt({ maxCharsPerSource = 4500 } = {}) {
-    return this.sources
+  /**
+   * The evidence as the model sees it, best passages first.
+   *
+   * There is a cap of 4500 characters per source, and the pages this system
+   * reads run to ten thousand. More than half of every long source was
+   * therefore never shown to the model — and *which* half was decided by
+   * extraction order, which is the order text appears on the page and has
+   * nothing to do with the question.
+   *
+   * That is not a subtle loss. Three questions in a twenty-question replay were
+   * answered with "the evidence does not cover this": certificate pinning,
+   * what the borrow checker prevents, and why HTTP/3 avoids head-of-line
+   * blocking. In all three the answer was *correct about its prompt* and the
+   * text that answered the question was sitting in the ledger, past the cut.
+   * The page's navigation menu made it in; the answer did not.
+   *
+   * So the passages are ordered by how much of the question they speak to
+   * before the cap applies. The cap still applies — a Quick request pays for
+   * every character of it in time to first token — but what survives it is now
+   * chosen by relevance rather than by where the extractor happened to stop.
+   *
+   * Ordering changes nothing about scoring. `_terms` is built from the whole
+   * passage set and is order-independent, so groundedness measures exactly what
+   * it measured before.
+   *
+   * `query` is optional only so that a caller with no question still gets
+   * sensible output; without it this is the old behaviour, and the returned
+   * `dropped_chars` says what that cost.
+   */
+  renderForPrompt({ maxCharsPerSource = 4500, query = null } = {}) {
+    const dropped = [];
+    const text = this.sources
       .map((s) => {
         const head =
           s.type === 'web'
             ? `[${s.n}] ${s.title}\nURL: ${s.url}${s.published_at ? `\nPublished: ${s.published_at}` : ''}`
             : `[${s.n}] ${s.title}, ${s.locator}\nSource: uploaded document`;
-        const body = s.passages.join('\n\n').slice(0, maxCharsPerSource);
+        const ordered = query ? reorderPassages(s.passages, query, 'relevance').map((p) => p.text) : s.passages;
+        const whole = ordered.join('\n\n');
+        const body = whole.slice(0, maxCharsPerSource);
+        if (whole.length > body.length) dropped.push({ n: s.n, kept: body.length, dropped: whole.length - body.length });
         return `${head}\nEVIDENCE:\n${body}`;
       })
       .join('\n\n---\n\n');
+
+    // Attached rather than returned separately, so an existing caller that
+    // treats this as a string keeps working and one that wants to know what was
+    // thrown away can ask.
+    return Object.assign(new String(text), { dropped_sources: dropped });
   }
 
   /** Shape sent to the client in the `sources` SSE event (no internals). */
