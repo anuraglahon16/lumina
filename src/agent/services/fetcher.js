@@ -2,6 +2,7 @@ import dns from 'node:dns/promises';
 import net from 'node:net';
 import * as cheerio from 'cheerio';
 import { config } from '../../shared/config.js';
+import { safeSlice } from '../../shared/text.js';
 import { deadlineSignal, abortReason } from '../core/budget.js';
 import { cached } from './cache.js';
 import { createLogger } from '../../shared/logger.js';
@@ -203,11 +204,11 @@ function extractArticle(html, url) {
     .filter((p) => p.length > 40);
 
   return {
-    title: title.replace(/\s+/g, ' ').trim().slice(0, 300),
+    title: safeSlice(title.replace(/\s+/g, ' ').trim(), 300),
     published_at: published,
     author,
     description,
-    text: paragraphs.join('\n\n').slice(0, config.fetcher.maxChars),
+    text: safeSlice(paragraphs.join('\n\n'), config.fetcher.maxChars),
     paragraphs,
   };
 }

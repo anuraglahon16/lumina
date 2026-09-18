@@ -1,6 +1,7 @@
 import { tokenize } from '../services/embeddings.js';
 import { chunkPassages } from '../services/chunker.js';
 import { reorderPassages } from './passageOrder.js';
+import { safeSlice } from '../../shared/text.js';
 
 const STOPWORDS = new Set(
   'the a an and or but if then than that this these those of in on at to for with from by as is are was were be been being it its it\'s they them their there here what which who whom how why when where can could should would may might will shall do does did not no yes we you i he she his her our your my me us also more most some any each other into over under about after before between during such only very'.split(' '),
@@ -271,7 +272,7 @@ export class EvidenceLedger {
       // reader who follows a citation to check a claim must land on the words
       // the claim was drawn from. Scoring already used the fetched passages;
       // this makes what the reader is shown agree with what was measured.
-      snippet: (page.text || '').trim().slice(0, 400),
+      snippet: safeSlice((page.text || '').trim(), 400),
       passages: chunkPassages(page.text || '').slice(0, 8),
       fetched_at: page.fetched_at || new Date().toISOString(),
       from_cache: Boolean(page.cached),
@@ -408,7 +409,7 @@ export class EvidenceLedger {
             : `[${s.n}] ${s.title}, ${s.locator}\nSource: uploaded document`;
         const ordered = query ? reorderPassages(s.passages, query, 'relevance').map((p) => p.text) : s.passages;
         const whole = ordered.join('\n\n');
-        const body = whole.slice(0, maxCharsPerSource);
+        const body = safeSlice(whole, maxCharsPerSource);
         if (whole.length > body.length) dropped.push({ n: s.n, kept: body.length, dropped: whole.length - body.length });
         return `${head}\nEVIDENCE:\n${body}`;
       })
