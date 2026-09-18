@@ -59,23 +59,29 @@ the page it read actually contained, and the review now asks that — but only
 where relevant pages were cancelled, so no existing review is invalidated by it.
 The e2e0e46 outcome counts are unchanged.
 
-**Two retrieval classifications in these files are wrong, and adjudication is
-how we found out.** The TLS question is filed as `passage_miss` and the
-HTTP/2-versus-HTTP/3 question was going to be `coverage_miss`. In both, the
-extracted passages contain exactly what the answer said was missing: `[1].3` of
-the HTTP run reads "HTTP/3 runs over QUIC, which provides independent streams at
-the transport layer, eliminating both TCP..." and passages `[1].5` to `[1].7` of
-the TLS run define pinning and state what it breaks. The evidence was gathered
-and extracted; the answer declined to use it. Both are `synthesis_omission`.
+**The three "refused when it had the evidence" cases were not refusals at all,
+and the second correction is mine too.** I reported that the TLS, HTTP/3 and
+borrow-checker answers declined to use evidence they had. They did not have it.
 
-`coverage_miss` consequently has **no confirmed instance on real data**. The
-category is logically sound and fixture-tested, and the run it was built from
-turns out not to be an example of it.
+`renderForPrompt` caps each source at 4500 characters. Those pages extracted to
+9,551, 10,249 and 10,584 characters, so more than half of each never reached the
+model — and which half survived was decided by extraction order, which is the
+order text appears on the page. Measured directly: the passage answering each
+question is in the ledger and **not in the prompt** in all three cases. The
+answers were correct about the evidence they were given. There is no
+over-refusal defect and there was never an unsupported-generation one.
 
-The error was mine and it was a specific one: in the review step, I took the
-answer's own statement about the evidence as ground truth about the evidence.
-The passages were in the file the whole time. Any future review of a refusal has
-to read the passages, not the refusal.
+What the classifications should say: TLS and HTTP/2-versus-HTTP/3 are neither
+`passage_miss` nor `coverage_miss`. Extraction worked and retrieval worked; the
+evidence was discarded between the ledger and the prompt. That is a stage the
+eight retrieval outcomes do not name, because nothing had looked there.
+
+`coverage_miss` still has **no confirmed instance on real data**.
+
+Both errors were the same error, made twice: I took a downstream artifact as
+evidence about an upstream stage. First the answer's claim about the evidence,
+then the ledger's contents as a claim about the prompt. Check the artifact the
+stage actually produced.
 
 **Retrieval outcomes that depend on citation counts are provisional.**
 `citation_failure` is decided by cited and supported sentence totals, so every
