@@ -6,6 +6,9 @@ import { matchesFilter } from './filter.js';
 import { mongoEnabled } from './mongo.js';
 import { MongoCollection } from './mongoCollection.js';
 
+/** Codes that mean "this disk will not take writes", not "this write was wrong". */
+const UNWRITABLE = new Set(['ENOENT', 'EROFS', 'EACCES', 'EPERM', 'ENOTDIR', 'ENOSPC']);
+
 /**
  * Tiny persistent document store: one JSON file per collection, loaded into
  * memory at boot, written back atomically and debounced. Deliberately
@@ -20,11 +23,34 @@ export class Collection {
     this.items = new Map();
     this.dirty = false;
     this.flushTimer = null;
+    // Set before #load, which is what discovers it.
+    this.memoryOnly = false;
     this.#load();
   }
 
   #load() {
-    fs.mkdirSync(this.dir, { recursive: true });
+    try {
+      fs.mkdirSync(this.dir, { recursive: true });
+    } catch (err) {
+      /**
+       * A filesystem that refuses to be written to costs persistence, not the
+       * process.
+       *
+       * `runLog.js` already states this intent and then defeats it by building
+       * its collection at module scope: on a serverless bundle without
+       * MONGODB_URI, everything outside /tmp is read-only, the constructor
+       * threw `ENOENT: mkdir '/var/task/data'` during import, and the function
+       * died before any route ran. The deployment reported READY and answered
+       * FUNCTION_INVOCATION_FAILED on every path.
+       *
+       * Degrading to memory is honest here because the rows were never going
+       * to outlive the instance anyway — a serverless disk is per-invocation.
+       * It is not a substitute for Mongo, and the warning says so once.
+       */
+      this.memoryOnly = true;
+      process.stderr.write(`[store] ${this.name} is memory-only: cannot write ${this.dir} (${err.code})\n`);
+      return;
+    }
     if (!fs.existsSync(this.file)) return;
     try {
       const parsed = JSON.parse(fs.readFileSync(this.file, 'utf8'));
@@ -47,12 +73,21 @@ export class Collection {
   }
 
   async flush() {
-    if (!this.dirty) return;
+    if (!this.dirty || this.memoryOnly) return;
     this.dirty = false;
     const tmp = `${this.file}.tmp.${process.pid}`;
-    await fsp.mkdir(this.dir, { recursive: true });
-    await fsp.writeFile(tmp, JSON.stringify([...this.items.values()], null, 0));
-    await fsp.rename(tmp, this.file);
+    try {
+      await fsp.mkdir(this.dir, { recursive: true });
+      await fsp.writeFile(tmp, JSON.stringify([...this.items.values()], null, 0));
+      await fsp.rename(tmp, this.file);
+    } catch (err) {
+      // A directory that was writable at boot and is not now. Same bargain as
+      // above: keep serving from memory rather than reject into a caller that
+      // only wanted to save a row.
+      if (!UNWRITABLE.has(err.code)) throw err;
+      this.memoryOnly = true;
+      process.stderr.write(`[store] ${this.name} is memory-only: cannot write ${this.dir} (${err.code})\n`);
+    }
   }
 
   async get(id) {
