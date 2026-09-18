@@ -10,6 +10,7 @@ import { contractStream, __testing as contractMap } from '../../gateway/contract
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
+import { vectorBackend } from '../services/vectorStore.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
 import { listDocuments } from '../services/ragStore.js';
 import { enqueueDocument } from '../services/ingest.js';
@@ -286,7 +287,14 @@ contractRouter.get('/health', async (req, res) => {
     // The provider actually first in line, not merely one that is configured:
     // a recall or latency number is not comparable without knowing which.
     searchProvider: resolveProviders()[0] || 'none',
-    vectorStore: config.vector?.backend || 'mongo-cosine-scan',
+    // `vectorBackend()`, the same function /v1/health uses. This read
+    // `config.vector?.backend`, a path that does not exist on config: the
+    // optional chain yielded undefined every time and the route fell through to
+    // the hardcoded default, so it reported "mongo-cosine-scan" on an Atlas
+    // deployment and on every other one. The benchmark prints this field as its
+    // record of the stack under test, which means the wrong backend was written
+    // into the header of every run.
+    vectorStore: vectorBackend(),
     db,
     version: '1.0.0',
   });

@@ -431,3 +431,32 @@ test('a stale recovery mutex stops every process rather than being taken', async
   assert.ok(results.every((r) => r.startsWith('REFUSED')), 'and each was told why');
   assert.ok(results.some((r) => /stale recovery mutex/.test(r)), 'naming the stale mutex so it can be removed');
 });
+
+/* ------------------------------- what the health routes assert about the stack */
+
+test('the two health routes agree about the vector backend', async () => {
+  // `/contract/health` read `config.vector?.backend`, which is not a path on
+  // config. The optional chain yielded undefined every time and the route fell
+  // through to a hardcoded 'mongo-cosine-scan', so it reported that on an Atlas
+  // deployment and on every other one.
+  //
+  // The benchmark prints this field as its record of the stack under test, so a
+  // wrong value is written into the header of every run and is indistinguishable
+  // afterwards from a real configuration.
+  const source = await import('node:fs').then((fs) =>
+    fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8'),
+  );
+
+  assert.match(source, /vectorStore: vectorBackend\(\)/, 'the contract route asks the same function /v1/health asks');
+
+  // Comments stripped first. The comment above the fix names the old path in
+  // order to explain it, and a grep over the whole file matches that prose and
+  // reports the bug as still present.
+  const code = source.replace(/\/\*[\s\S]*?\*\//g, '').replace(/^\s*\/\/.*$/gm, '');
+  assert.ok(!/config\.vector\?\.backend/.test(code), 'and no longer reads a path that does not exist');
+
+  // The path that does not exist, stated as a fixture so it cannot creep back.
+  const { config } = await import('../src/shared/config.js');
+  assert.equal(config.vector, undefined, 'there is no config.vector');
+  assert.ok(config.mongo.vectorBackend, 'the setting lives at config.mongo.vectorBackend');
+});
