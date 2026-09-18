@@ -22,3 +22,8 @@ hf-space/
 .DS_Store
 .vercel
 .env*
+
+# Exported run trajectories: regenerate with `node tools/export-runlogs.mjs`.
+# They are a snapshot of a live database, not source, and 400 files of it
+# would bury every real diff in this repository.
+runs/

@@ -1,0 +1,431 @@
+{
+  "assignment": "Assignment 1: LUMINA",
+  "student": "UNNAMED — pass --student \"Your Name\"",
+  "deployedAt": "2026-09-18T03:28:11.850Z",
+  "design": {
+    "components": "Two Express services and five pieces of state that are not services.\n\n**Gateway** (`src/gateway`) is the only process the browser reaches. It serves the\nReact UI, validates every request against the zod contract, mints request and user\nids, rate-limits, forwards SSE, and holds the shared-password gate. It has no\nprovider keys at all.\n\n**Agent** (`src/agent`) binds to loopback and, when `INTERNAL_TOKEN` is set,\nrefuses anything that did not come through the gateway. It runs the two answer\npaths (Quick and Deep), web search, page fetching, RAG, memory, and the job\nworker. Every provider key lives here.\n\n**MongoDB Atlas** holds `chunks` (document text plus its embedding, searched by\n`$vectorSearch`), `runs`, `threads`, `memories`, `spaces`, `documents` and `jobs`.\n\n**The job queue** is the `jobs` collection plus an in-process worker. Ingestion is\naccepted with a 202 and finished in the background, which is why a 60-page PDF\ndoes not block a search.\n\n**The search cache** keys on a normalised query rather than the raw string,\nbecause the model rephrases the same intent three ways and each rephrasing was a\npaid API call.\n\n**The evidence ledger** is not stored anywhere — it lives for one run — but it\nmakes decisions, so it belongs on this list. It is the only thing that can say a\nsource is citable.\n\n**The funnel** is a diagnostic trace, off by default, that records what happened\nto every candidate from the query to the citation.",
+    "responsibilities": "The interesting lines are the exclusions.\n\n**Only the agent may hold a provider key.** The gateway proxies; it never calls\nAnthropic, Tavily or Voyage. A key that reaches the browser is a key that has\nleaked, so the gateway is not given one to leak.\n\n**Only the gateway may talk to the browser.** The agent binds to 127.0.0.1 and\nchecks `x-internal-token`. A request that reaches the agent without having passed\nthe gateway's validation is refused rather than repaired.\n\n**Only the evidence ledger may decide what is citable.** A search result is a\n*candidate*. It becomes evidence when a page has been fetched and its text\nextracted, and at no other moment. The synthesis prompt is never given a snippet\nit did not read, so an answer cannot cite one — this is enforced by what is in\nthe prompt, not by asking the model nicely.\n\n**Only the budget may decide a run is over its cap.** It counts tool calls,\nsearches, fetches, turns and wall clock, and every stop carries a named reason\nthat reaches the run log and the user. Tools do not decide to stop; the harness\nstops them.\n\n**Only the validator may report groundedness**, and it runs after the answer is\nwritten, against the same passages the model saw.",
+    "communication": "**Browser to gateway:** HTTP and SSE. The `sources` event is emitted before the\nfirst answer token, always — not as a timing accident but because synthesis emits\nit before the model call starts. A reader never sees a claim before the list it\nwas drawn from.\n\n**Gateway to agent:** HTTP, with the SSE stream piped straight through. If the\nagent is down the gateway answers `ai: { status: 'down' }` on `/health` and the\nask fails with a contract error rather than a hung stream.\n\n**Agent to providers:** HTTP behind a per-host circuit breaker. The breaker\ndistinguishes a host fault from a caller cancellation — the fetch pool aborts its\nlosers on every healthy run, and counting those as failures would trip the\nbreaker against the hosts that answered fastest.\n\n**Agent to the worker:** the `jobs` collection. Ingestion returns 202 immediately;\nthe worker embeds and indexes. If the worker dies mid-job the document stays\n`processing` and is visible as such, rather than silently appearing complete.\n\n**In-flight requests when something is down:** an abort is a real\n`DOMException('…', 'AbortError')` propagated through an owned `AbortController`.\nA cancelled synthesis that has already streamed text keeps the text, because the\nreader watched those words appear and replacing them with an error is the worse\noutcome.",
+    "state": "**Authoritative:** `chunks` (the only copy of an uploaded document's text),\n`threads`, `memories`, `spaces`, `documents`, `jobs`. Losing any of these loses\nuser data.\n\n**Cache, deletable:** the search cache, the page cache, and every `reports/*.json`.\nDeleting them costs latency and money, not information.\n\n**Per-run and never stored:** the evidence ledger and the budget counters.\n\n**Consistency for a document written but not yet searchable:** the upload returns\n202 with the document in `processing`. It is not in `chunks`, so it cannot be\nretrieved and cannot be cited. `GET /spaces/:id/documents` reports the state\nhonestly, and the UI shows it. There is no window in which a document is\nhalf-searchable: a chunk exists with its embedding or it does not exist.\n\n**Embedding namespaces** are part of the state story. Every vector is stored under\n`provider:model:dim:vN`, and vectors from different namespaces are never compared.\nWhen Voyage is unavailable the local lexical embedder serves under its own\nnamespace, so a corpus half-indexed by each does not silently produce nonsense\nsimilarities — it produces two searchable namespaces.",
+    "tradeoffs": "**A per-source character cap in the synthesis prompt, and I got the cost wrong.**\nEach source is capped at 4500 characters so Quick's prompt stays small, since\nevery character is paid for before the first token. The pages this system reads\nrun past ten thousand characters, so more than half of a long source was never\nshown to the model — and which half survived was decided by extraction order,\nwhich has nothing to do with the question. Three questions in a twenty-question\ndiagnostic were answered \"the evidence does not cover this\" while the text that\nanswered them sat in the ledger past the cut. Passages are now ranked by the\nquestion before the cap applies, which fixed two of the three. I am still unsure\nthe cap is in the right place at all; raising it trades directly against TTFT,\nwhich is the gate with the least headroom.\n\n**Lexical overlap as the grounding validator instead of an entailment model.**\nIt is cheap, deterministic, and runs on every answer without a second model call.\nIt also cannot tell a paraphrase from a fabrication. Adjudicating all 35 sentences\nit flagged as unsupported found that **none** of them were: 26 were evidence-gap\ndisclosures the prompt requires to be uncited, and 9 were paraphrase the bar\ncannot see. The measure is useful as a guard against a citation pointing at the\nwrong source, which is what it was chosen for, and it should not be read as a\nmeasure of truthfulness. A reasonable engineer would have added a semantic layer;\nI did not, because changing the ruler while trying to improve the product makes\nboth unmeasurable.\n\n**Haiku for Quick, Sonnet only for Deep synthesis.** Quick costs $0.0036 an answer\nagainst a $0.05 cap, which is most of the reason the cost gates are not close.\nThe cost is instruction-following: the citation-granularity work moved\ncompleteness from 0.625 to 0.806 and then stalled, and a larger model would\nprobably follow the contract better. I chose the cost headroom.\n\n**One search, then a coverage-driven fetch pool, rather than an agentic loop for\nQuick.** The pool reads pages until the evidence covers the question and then\nstops, cancelling the rest. It is fast and bounded. It also stopped too early on a\nquestion with two halves, satisfying coverage from a page that answered one of\nthem. I added a `coverage_miss` retrieval category for exactly that shape and then\ncould not confirm a single real instance of it, which is a fair warning that I\nbuilt the category before I understood the failure.\n\n**The thing I am least sure about:** TTFT is 4029ms against a 2500ms target and I\nhave accepted it as a design limitation rather than a miss. Quick searches the web\nand reads pages before its first token, by construction, and no amount of tuning\ninside that shape reaches 2.5 seconds. Reaching it means streaming something\nbefore the evidence exists — a plan, a restatement, an acknowledgement — and every\nversion of that I considered is a progress indicator dressed as an answer. I chose\nan honest four seconds over a fast two, and a reasonable engineer would tell me\nthe user does not care about my reasoning and wants the page to move."
+  },
+  "gates": [],
+  "rubric": {
+    "total": 100,
+    "awarded": 54,
+    "automated": [
+      {
+        "id": "ui_lights_up_contract",
+        "label": "UI lights up & contract",
+        "points": 10,
+        "awarded": 10,
+        "status": "pass",
+        "evidence": "✓ contract probes (401/404/400): GET /memory without X-User-Id: 401 · GET /threads/thr_nope (unknown id): 404 · POST /threads/thr_x/ask with an empty body: 400 · GET /evals/report.json without X-User-Id: 200 · ✓ sources before the first token: every answer sent its sources event before its first token · ✓ /health names model, provider, store: /health names claude-haiku-4-5 · tavily · atlas-vector-search · db ok",
+        "rules": [
+          "C1"
+        ]
+      },
+      {
+        "id": "search_cited_answers",
+        "label": "Search & cited answers",
+        "points": 20,
+        "awarded": 13,
+        "status": "partial",
+        "evidence": "✗ citation grounding >= 0.95: citation grounding 0.784 over 74 verifiable citations, 0 dangling",
+        "rules": [
+          "E2"
+        ]
+      },
+      {
+        "id": "memory",
+        "label": "Memory (thread + long-term)",
+        "points": 10,
+        "awarded": 0,
+        "status": "fail",
+        "evidence": "✗ save_memory lands in GET /memory: no new row in GET /memory after asking it to remember a preference · ✗ recall crosses into a new thread: nothing was saved, so recall could not be tested · ✗ DELETE removes it: nothing was saved, so delete could not be tested",
+        "rules": []
+      },
+      {
+        "id": "rag_documents",
+        "label": "RAG over documents",
+        "points": 15,
+        "awarded": 15,
+        "status": "pass",
+        "evidence": "✓ 202 accept p95 < 300ms: 202 accept p95 279ms · ✓ reaches indexed via the worker: 4/4 corpus file(s) reached indexed after a 202 · ✓ citation carries a page locator: 115 document citation(s) carry a page locator, e.g. p. 1 · ✓ mode=auto picks documents: mode=auto retrieved from the Space — \"6 passages\" · ✓ recall@5 >= 0.7: recall@5 0.967 over 30 gold questions",
+        "rules": [
+          "E1",
+          "E2"
+        ]
+      },
+      {
+        "id": "deep_search",
+        "label": "Deep search (plan, fan-out, merged citations, spend gate)",
+        "points": 15,
+        "awarded": 8,
+        "status": "partial",
+        "evidence": "✗ every step and source tagged with its sub-question: 4/4 deep run(s) left subQuestion off a retrieval step or a source · ✗ deep stays inside its budget: 0 deep run(s) over $0.35, 3 over 24 tool calls · ✗ deep cap+1 returns 429 with resetsAt: 27 deep searches all accepted — the daily cap is not enforced server-side",
+        "rules": [
+          "E2",
+          "B3",
+          "R2"
+        ]
+      },
+      {
+        "id": "performance_sla",
+        "label": "Performance & SLA gate",
+        "points": 10,
+        "awarded": 3,
+        "status": "partial",
+        "evidence": "✗ bench.mjs exits 0: 2 SLA target(s) missed · ✗ no error-severity quality failure: quality: 2 error(s), 3 warning(s) over 400 run log(s)",
+        "rules": [
+          "B1",
+          "B2",
+          "B3",
+          "A2",
+          "A3"
+        ]
+      },
+      {
+        "id": "observability",
+        "label": "Logging, tracing & stats",
+        "points": 5,
+        "awarded": 5,
+        "status": "pass",
+        "evidence": "✓ one X-Request-Id correlates both logs: 71/71 answers returned an X-Request-Id to correlate the two logs · ✓ /stats reconciles with the run: /stats.answers=418 against 71 answers this run · ✓ every failed tool call carries an error (A1): A1: 400 run(s)",
+        "rules": [
+          "A1"
+        ]
+      }
+    ],
+    "manual": [
+      {
+        "id": "deep_search_quality",
+        "label": "Deep search quality (human half)",
+        "points": 5,
+        "awarded": 0,
+        "status": "manual",
+        "evidence": "a grader asks the same question at both depths and reads both answers. The deep one has to be BETTER, not merely longer: broader coverage, sources the quick answer missed, sub-questions a person would actually have asked, and no padding. Judged by a person, never a model",
+        "rules": [
+          "E3",
+          "P1"
+        ]
+      },
+      {
+        "id": "human_gate_answer_quality",
+        "label": "Human gate & answer quality",
+        "points": 5,
+        "awarded": 0,
+        "status": "manual",
+        "evidence": "/evals renders one successful and one failing trajectory in full, every step, with what each taught the learner; grader reads five sampled answers for concision, relevance, and honesty when retrieval is thin",
+        "rules": [
+          "P1"
+        ]
+      },
+      {
+        "id": "deploy_docs",
+        "label": "Deploy & docs",
+        "points": 5,
+        "awarded": 0,
+        "status": "manual",
+        "evidence": "UI deployed on Vercel (the submitted URL) with /evals rendering GET /evals/report.json from this run; services on Fly.io or Vercel against an Atlas cluster; agent service not publicly reachable; no key or connection string reachable from the browser; the design section (five questions) and run notes render on the page",
+        "rules": []
+      }
+    ],
+    "redLines": [
+      {
+        "check": "no fabricated citation in the bench sample (E2)",
+        "ok": true,
+        "detail": "0 citation(s) resolved to nothing retrieved in that request"
+      },
+      {
+        "check": "no run that hit a cap reported as terminated=done (A2)",
+        "ok": false,
+        "detail": "req_mu53hc6q051p4e: terminated=\"error\"; req_mu540r8123cuu7: terminated=\"error\"; req_mu555kppx978u0: terminated=\"error\"; req_mu55qpbga80g24: terminated=\"error\"; req_mu56adrbtbbnir: terminated=\"error\"; req_mu5g1jgmlqpfwj: terminated=\"error\"; req_mu5gltlg8d5qcf: terminated=\"error\"; req_mu5hbikvlmdz9f: terminated=\"error\"; req_mu5hwizgydenhs: terminated=\"error\"; req_mu5io643adyuar: terminated=\"error\"; req_mu6bt6qo6v4fhr: terminated=\"error\"; req_mu6bvjrvretbju: terminated=\"error\"; req_mu6c6wlslany2o: terminated=\"error\"; req_mu6c7yrl17t9xz: terminated=\"error\"; req_mu6c802lrgw7gf: terminated=\"error\"; req_mu6c84nafynjrq: terminated=\"error\"; req_mu6c88xol4jqtk: terminated=\"error\"; req_mu6c89l4rdchyh: terminated=\"error\"; req_mu6c8e2qoxig5m: terminated=\"error\"; req_mu6c8inhudkxp5: terminated=\"error\"; req_mu6c8n794o8jnn: terminated=\"error\"; req_mu6c8s362ciyar: terminated=\"error\"; req_mu6c8wsqedr0m2: terminated=\"error\"; req_mu6c91kr8p880f: terminated=\"error\"; req_mu6cd8gfqpl83e: terminated=\"error\"; req_mu6cdapcukpyp6: terminated=\"error\"; req_mu6cdbtbhxg3it: terminated=\"error\"; req_mu6cdcvm646dr0: terminated=\"error\"; req_mu6chk26kln63r: terminated=\"error\"; req_mu6chkpwvq21db: terminated=\"error\"; req_mu6chl05zg2040: terminated=\"error\"; req_mu6chlcydgodzo: terminated=\"error\"; req_mu6chlp9ejjsr0: terminated=\"error\"; req_mu6chlz2m5xpcz: terminated=\"error\"; req_mu6chnqlubbjnh: terminated=\"error\"; req_mu6chpgwuvjxzz: terminated=\"error\"; req_mu6chr3r4cwx2b: terminated=\"error\"; req_mu6chsiu0oirbj: terminated=\"error\"; req_mu6chul4n1upj5: terminated=\"error\"; req_mu6chw12ao53bu: terminated=\"error\"; req_mu6ciagrf1gw71: terminated=\"error\"; req_mu6cibc4jg052l: terminated=\"error\"; req_mu6cibmliilftr: terminated=\"error\"; req_mu6cibwct053vu: terminated=\"error\"; req_mu6cic6il2wkfv: terminated=\"error\"; req_mu6cicgu78w54l: terminated=\"error\"; req_mu6cicsiiy6vs5: terminated=\"error\"; req_mu6cid2k9f54sd: terminated=\"error\"; req_mu6cidcdnj6uei: terminated=\"error\"; req_mu6cidmb2su7au: terminated=\"error\"; req_mu6cidwh6o19h0: terminated=\"error\"; req_mu6cie6if1ykiu: terminated=\"error\"; req_mu6ciegiwc4jam: terminated=\"error\"; req_mu6cifwkfz0w17: terminated=\"error\"; req_mu6d9o02vw6zg3: terminated=\"error\"; req_mu6daub2o2xvsk: terminated=\"error\"; req_mu6dbtfsa67601: terminated=\"error\"; req_mu6dcdz41h6fsj: terminated=\"error\"; req_mu6de8g53namvy: terminated=\"error\"; req_mu6dgkd4g59d2g: terminated=\"error\"; req_mu6dhdc5tj2sjc: terminated=\"error\"; req_mu6dhvkjm0pvgn: terminated=\"error\"; req_mu6dn63o9jftqa: terminated=\"error\"; req_mu6dpht3mbgf3g: terminated=\"error\""
+      },
+      {
+        "check": "plan_research never called from a quick search: depth is opted into, never drifted into (R2)",
+        "ok": true,
+        "detail": "75 quick run(s), none called plan_research"
+      },
+      {
+        "check": "no 2xx answer served on a provider exception (A1)",
+        "ok": true,
+        "detail": "400 run(s)"
+      }
+    ]
+  },
+  "bench": {
+    "ranAt": "2026-09-18T03:09:22.903Z",
+    "target": "http://localhost:8787",
+    "pass": false,
+    "sla": [
+      {
+        "metric": "ttft p95",
+        "target": 2500,
+        "actual": 4029,
+        "unit": "ms",
+        "comparator": "<=",
+        "pass": false
+      },
+      {
+        "metric": "answer p95",
+        "target": 12000,
+        "actual": 8460,
+        "unit": "ms",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "202 accept p95",
+        "target": 300,
+        "actual": 288,
+        "unit": "ms",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "search p95 during ingest / idle",
+        "target": 1.3,
+        "actual": 1.103,
+        "unit": "×",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "recall@5",
+        "target": 0.7,
+        "actual": 0.967,
+        "unit": "",
+        "comparator": ">=",
+        "pass": true
+      },
+      {
+        "metric": "search cache hit rate",
+        "target": 50,
+        "actual": 82.5,
+        "unit": "%",
+        "comparator": ">=",
+        "pass": true
+      },
+      {
+        "metric": "deep plan p95",
+        "target": 4000,
+        "actual": 3267,
+        "unit": "ms",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "deep answer p95",
+        "target": 90,
+        "actual": 58,
+        "unit": "s",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "deep sub-questions (min)",
+        "target": 3,
+        "actual": 4,
+        "unit": "",
+        "comparator": ">=",
+        "pass": true
+      },
+      {
+        "metric": "deep/quick source ratio (min)",
+        "target": 2,
+        "actual": 5.5,
+        "unit": "×",
+        "comparator": ">=",
+        "pass": true
+      },
+      {
+        "metric": "cost per deep answer",
+        "target": 0.35,
+        "actual": 0.1187,
+        "unit": "$",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "citation grounding",
+        "target": 0.95,
+        "actual": 0.784,
+        "unit": "",
+        "comparator": ">=",
+        "pass": false
+      },
+      {
+        "metric": "error rate",
+        "target": 0.01,
+        "actual": 0,
+        "unit": "",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "cost per answer (quick)",
+        "target": 0.05,
+        "actual": 0.0036,
+        "unit": "$",
+        "comparator": "<=",
+        "pass": true
+      },
+      {
+        "metric": "sources before the first token",
+        "target": 1,
+        "actual": 1,
+        "unit": "",
+        "comparator": ">=",
+        "pass": true
+      },
+      {
+        "metric": "citations with no matching source",
+        "target": 0,
+        "actual": 0,
+        "unit": "",
+        "comparator": "<=",
+        "pass": true
+      }
+    ],
+    "citationGrounding": 0.7837837837837838,
+    "recallAt5": 0.9666666666666667,
+    "retrievalRate": 1,
+    "errorRate": 0,
+    "latency": {
+      "ttftP50Ms": 1628,
+      "ttftP95Ms": 4029,
+      "answerP50Ms": 3477,
+      "answerP95Ms": 8460,
+      "accept202P95Ms": 288
+    },
+    "cost": {
+      "meanCostPerAnswerUsd": 0.0036231600000000003,
+      "meanCostPerDeepAnswerUsd": 0.11867325,
+      "declaredPriceTableUsd": 0.031178303797468363,
+      "projectedMonthlyUsd": 1512.8169,
+      "projectedMonthlyNoCacheUsd": 1022.316
+    },
+    "searchCacheHitRatePct": 82.5,
+    "answers": 79
+  },
+  "quality": {
+    "project": "lumina",
+    "checkedAt": "2026-09-18T03:28:11.815Z",
+    "runs": 400,
+    "errors": 2,
+    "warnings": 3,
+    "results": [
+      {
+        "id": "C1",
+        "title": "Declared expectations are internally coherent",
+        "severity": "error",
+        "status": "pass",
+        "detail": "contract coherent"
+      },
+      {
+        "id": "A1",
+        "title": "Tool errors surface as errors",
+        "severity": "error",
+        "status": "pass",
+        "detail": "400 run(s)"
+      },
+      {
+        "id": "A2",
+        "title": "The loop terminates because it finished",
+        "severity": "error",
+        "status": "fail",
+        "detail": "req_mu53hc6q051p4e: terminated=\"error\"; req_mu540r8123cuu7: terminated=\"error\"; req_mu555kppx978u0: terminated=\"error\"; req_mu55qpbga80g24: terminated=\"error\"; req_mu56adrbtbbnir: terminated=\"error\"; req_mu5g1jgmlqpfwj: terminated=\"error\"; req_mu5gltlg8d5qcf: terminated=\"error\"; req_mu5hbikvlmdz9f: terminated=\"error\"; req_mu5hwizgydenhs: terminated=\"error\"; req_mu5io643adyuar: terminated=\"error\"; req_mu6bt6qo6v4fhr: terminated=\"error\"; req_mu6bvjrvretbju: terminated=\"error\"; req_mu6c6wlslany2o: terminated=\"error\"; req_mu6c7yrl17t9xz: terminated=\"error\"; req_mu6c802lrgw7gf: terminated=\"error\"; req_mu6c84nafynjrq: terminated=\"error\"; req_mu6c88xol4jqtk: terminated=\"error\"; req_mu6c89l4rdchyh: terminated=\"error\"; req_mu6c8e2qoxig5m: terminated=\"error\"; req_mu6c8inhudkxp5: terminated=\"error\"; req_mu6c8n794o8jnn: terminated=\"error\"; req_mu6c8s362ciyar: terminated=\"error\"; req_mu6c8wsqedr0m2: terminated=\"error\"; req_mu6c91kr8p880f: terminated=\"error\"; req_mu6cd8gfqpl83e: terminated=\"error\"; req_mu6cdapcukpyp6: terminated=\"error\"; req_mu6cdbtbhxg3it: terminated=\"error\"; req_mu6cdcvm646dr0: terminated=\"error\"; req_mu6chk26kln63r: terminated=\"error\"; req_mu6chkpwvq21db: terminated=\"error\"; req_mu6chl05zg2040: terminated=\"error\"; req_mu6chlcydgodzo: terminated=\"error\"; req_mu6chlp9ejjsr0: terminated=\"error\"; req_mu6chlz2m5xpcz: terminated=\"error\"; req_mu6chnqlubbjnh: terminated=\"error\"; req_mu6chpgwuvjxzz: terminated=\"error\"; req_mu6chr3r4cwx2b: terminated=\"error\"; req_mu6chsiu0oirbj: terminated=\"error\"; req_mu6chul4n1upj5: terminated=\"error\"; req_mu6chw12ao53bu: terminated=\"error\"; req_mu6ciagrf1gw71: terminated=\"error\"; req_mu6cibc4jg052l: terminated=\"error\"; req_mu6cibmliilftr: terminated=\"error\"; req_mu6cibwct053vu: terminated=\"error\"; req_mu6cic6il2wkfv: terminated=\"error\"; req_mu6cicgu78w54l: terminated=\"error\"; req_mu6cicsiiy6vs5: terminated=\"error\"; req_mu6cid2k9f54sd: terminated=\"error\"; req_mu6cidcdnj6uei: terminated=\"error\"; req_mu6cidmb2su7au: terminated=\"error\"; req_mu6cidwh6o19h0: terminated=\"error\"; req_mu6cie6if1ykiu: terminated=\"error\"; req_mu6ciegiwc4jam: terminated=\"error\"; req_mu6cifwkfz0w17: terminated=\"error\"; req_mu6d9o02vw6zg3: terminated=\"error\"; req_mu6daub2o2xvsk: terminated=\"error\"; req_mu6dbtfsa67601: terminated=\"error\"; req_mu6dcdz41h6fsj: terminated=\"error\"; req_mu6de8g53namvy: terminated=\"error\"; req_mu6dgkd4g59d2g: terminated=\"error\"; req_mu6dhdc5tj2sjc: terminated=\"error\"; req_mu6dhvkjm0pvgn: terminated=\"error\"; req_mu6dn63o9jftqa: terminated=\"error\"; req_mu6dpht3mbgf3g: terminated=\"error\""
+      },
+      {
+        "id": "A3",
+        "title": "No tool thrash",
+        "severity": "warn",
+        "status": "fail",
+        "detail": "req_mu56adrbtbbnir: \"fetch_page\" called 6x consecutively (cap 4); req_mu5hb59z3nqqh2: \"fetch_page\" called 6x consecutively (cap 4); req_mu5ine6afdp8d6: \"fetch_page\" called 5x consecutively (cap 4); req_mu5jo7zqsjlokc: \"fetch_page\" called 5x consecutively (cap 4); req_mu5mg9b9erbjdw: \"fetch_page\" called 5x consecutively (cap 4); req_mu6b90zpi65880: \"fetch_page\" called 6x consecutively (cap 4); req_mu6b95as4mqtiu: \"fetch_page\" called 5x consecutively (cap 4); req_mu6b9vpi7zpzpw: \"fetch_page\" called 5x consecutively (cap 4); req_mu6ba1feuqdh5b: \"fetch_page\" called 5x consecutively (cap 4); req_mu6bpbwwsu90sw: \"fetch_page\" called 12x consecutively (cap 4); req_mu6bqdsan4bgiy: \"fetch_page\" called 11x consecutively (cap 4); req_mu6brhcf7uel7c: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bt6qo6v4fhr: \"fetch_page\" called 14x consecutively (cap 4); req_mu6btvrg9nin4u: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bumwnf6vlvx: \"fetch_page\" called 10x consecutively (cap 4); req_mu6bvjrvretbju: \"fetch_page\" called 6x consecutively (cap 4); req_mu6bw0jpvsqn98: \"fetch_page\" called 7x consecutively (cap 4); req_mu6bwuyldbuk4l: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bxnrpy81wge: \"fetch_page\" called 9x consecutively (cap 4); req_mu6byjwh4dxijh: \"fetch_page\" called 11x consecutively (cap 4); req_mu6bz6s4s3rj7p: \"fetch_page\" called 7x consecutively (cap 4); req_mu6bzu9fuy2rph: \"fetch_page\" called 6x consecutively (cap 4); req_mu6c0wsfoodxcf: \"fetch_page\" called 12x consecutively (cap 4); req_mu6c1mr9hu7v8v: \"fetch_page\" called 9x consecutively (cap 4); req_mu6c2f58oxi2s4: \"fetch_page\" called 7x consecutively (cap 4); req_mu6c3c29e9d0l1: \"fetch_page\" called 10x consecutively (cap 4); req_mu6c46vzre05ee: \"fetch_page\" called 10x consecutively (cap 4); req_mu6c52droh1umk: \"fetch_page\" called 11x consecutively (cap 4); req_mu6c5wifvubswm: \"web_search\" called 5x consecutively (cap 4); req_mu6c6wlslany2o: \"fetch_page\" called 7x consecutively (cap 4); req_mu6cifwkfz0w17: \"fetch_page\" called 5x consecutively (cap 4); req_mu6cz9qpf8cxlf: \"fetch_page\" called 6x consecutively (cap 4); req_mu6czcd93cd2cm: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czohqf8wxo6: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czqfhi70uf2: \"fetch_page\" called 5x consecutively (cap 4); req_mu6d35jxquyqej: \"fetch_page\" called 12x consecutively (cap 4); req_mu6d4hdoum69z9: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d5p5ud5i6rp: \"fetch_page\" called 11x consecutively (cap 4); req_mu6d75av8t73p4: \"web_search\" called 9x consecutively (cap 4); req_mu6d828dq1rly8: \"fetch_page\" called 13x consecutively (cap 4); req_mu6d8v5sr2kisb: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d9o02vw6zg3: \"fetch_page\" called 9x consecutively (cap 4); req_mu6da3ht65itao: \"fetch_page\" called 11x consecutively (cap 4); req_mu6daub2o2xvsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6db6ipw0onsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dbtfsa67601: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcdz41h6fsj: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcph1slten5: \"fetch_page\" called 7x consecutively (cap 4); req_mu6ddbzpj7xpv6: \"fetch_page\" called 7x consecutively (cap 4); req_mu6de8g53namvy: \"fetch_page\" called 11x consecutively (cap 4); req_mu6deji87bxp5a: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dfhzzjyg4j1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dgkd4g59d2g: \"fetch_page\" called 12x consecutively (cap 4); req_mu6dhdc5tj2sjc: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dhvkjm0pvgn: \"fetch_page\" called 11x consecutively (cap 4); req_mu6didegt5kn25: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dj66m8std18: \"fetch_page\" called 10x consecutively (cap 4); req_mu6djzli2ravnm: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dkyqt0jvqhd: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dltvysna9y2: \"fetch_page\" called 11x consecutively (cap 4); req_mu6dmjwq5yripa: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dn63o9jftqa: \"fetch_page\" called 7x consecutively (cap 4); req_mu6dnrkcvyg975: \"fetch_page\" called 10x consecutively (cap 4); req_mu6doo70ab23v1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dpht3mbgf3g: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dq009yuv2yo: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dt07zjmzc1i: \"fetch_page\" called 5x consecutively (cap 4)"
+      },
+      {
+        "id": "R1",
+        "title": "Required tools were actually called",
+        "severity": "error",
+        "status": "skip",
+        "detail": "none declared"
+      },
+      {
+        "id": "R2",
+        "title": "Forbidden tools were not called",
+        "severity": "error",
+        "status": "skip",
+        "detail": "none declared"
+      },
+      {
+        "id": "E1",
+        "title": "A gold set exists and is non-trivial",
+        "severity": "error",
+        "status": "pass",
+        "detail": "39 items"
+      },
+      {
+        "id": "E2",
+        "title": "Declared eval thresholds are met",
+        "severity": "error",
+        "status": "fail",
+        "detail": "citationGrounding=0.784 < 0.95"
+      },
+      {
+        "id": "E3",
+        "title": "A judge model may report, never block",
+        "severity": "warn",
+        "status": "manual",
+        "detail": "confirm no error-severity rule derives its verdict from a model"
+      },
+      {
+        "id": "B1",
+        "title": "Token budget respected",
+        "severity": "error",
+        "status": "pass",
+        "detail": "400 run(s)"
+      },
+      {
+        "id": "B2",
+        "title": "Latency budget respected",
+        "severity": "warn",
+        "status": "fail",
+        "detail": "req_mu53hc6q051p4e: 905.176s > 240s; req_mu540r8123cuu7: 959.362s > 240s; req_mu54lc2gud5ika: 943.536s > 240s; req_mu555kppx978u0: 984.985s > 240s; req_mu55qpbga80g24: 917.998s > 240s; req_mu56adrbtbbnir: 1064.079s > 240s; req_mu56x7fhysj09d: 948.515s > 240s; req_mu57hjj31h6kgq: 532.504s > 240s; req_mu5g1jgmlqpfwj: 944.39s > 240s; req_mu5gltlg8d5qcf: 943.986s > 240s; req_mu5hbikvlmdz9f: 978.344s > 240s; req_mu5hwizgydenhs: 1048.024s > 240s"
+      },
+      {
+        "id": "B3",
+        "title": "Cost budget respected",
+        "severity": "warn",
+        "status": "pass",
+        "detail": "400 run(s)"
+      },
+      {
+        "id": "P1",
+        "title": "A human read a full trajectory",
+        "severity": "info",
+        "status": "manual",
+        "detail": "name the successful and failing trajectories you read end to end"
+      },
+      {
+        "id": "P2",
+        "title": "Every rule cites a real precedent",
+        "severity": "warn",
+        "status": "fail",
+        "detail": "10 rule(s) still lack a real precedent: C1, A2, A3, R1, R2, E1, E2, B1, B2, B3"
+      }
+    ]
+  },
+  "trajectories": {
+    "successful": {
+      "requestId": "MISSING-successful",
+      "steps": [],
+      "notes": "MISSING — pass --successful <requestId> naming a run log in runs/ (or runs/failing/). Rule P1 is the human gate: you read one successful and one failing trajectory, every step, and say what each taught you. It cannot be automated and cannot be skipped."
+    },
+    "failing": {
+      "requestId": "MISSING-failing",
+      "steps": [],
+      "notes": "MISSING — pass --failing <requestId> naming a run log in runs/ (or runs/failing/). Rule P1 is the human gate: you read one successful and one failing trajectory, every step, and say what each taught you. It cannot be automated and cannot be skipped."
+    }
+  }
+}
