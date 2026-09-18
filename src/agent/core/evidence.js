@@ -354,9 +354,21 @@ export class EvidenceLedger {
       doc_id: chunk.doc_id,
       chunk_id: chunk.chunk_id,
       page: chunk.page,
+      /**
+       * Human-readable for the interface, and structured for the contract.
+       *
+       * `locator` stays "p. 3" because that is what reads well under a
+       * citation in the UI. `line` travels alongside it so the contract's
+       * `{ page, line }` can be built without either one guessing: the
+       * benchmark keys its haystack on `docId:page:heading:line`, and a
+       * locator carrying only a page made every chunk of a page collide.
+       */
       locator: chunk.page_label,
+      line: chunk.line ?? null,
       domain: 'uploaded document',
-      snippet: chunk.text.slice(0, 400),
+      // safeSlice, not slice: the web path already stopped cutting text mid
+      // surrogate pair, and a document snippet is cut the same way.
+      snippet: safeSlice(chunk.text, 400),
       passages: [chunk.text],
       score: chunk.score,
       discovered_by: query,
@@ -432,6 +444,7 @@ export class EvidenceLedger {
       domain: s.domain,
       locator: s.locator,
       page: s.page ?? null,
+      line: s.line ?? null,
       doc_id: s.doc_id ?? null,
       snippet: s.snippet,
       published_at: s.published_at ?? null,

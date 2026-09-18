@@ -1,0 +1,253 @@
+{
+  "ranAt": "2026-09-18T13:33:23.856Z",
+  "target": "http://localhost:8787",
+  "rows": [
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What is the common default value of the k1 parameter in BM25?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 1,
+        "line": 15
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "nts are penalized.\nBM25 scores a document D for a query Q as a sum over query terms of the inverse\ndocument frequency of the term, multiplied by a saturating term-frequency factor. That\nfactor is governed by two free parameters:\n \" k1 controls how quickly term frequency saturates. The common default",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What does the b parameter control in BM25, and what is its usual default?",
+      "citation": 2,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 1,
+        "line": 15
+      },
+      "position": 2,
+      "docSourceCount": 6,
+      "snippet": "nts are penalized.\nBM25 scores a document D for a query Q as a sum over query terms of the inverse\ndocument frequency of the term, multiplied by a saturating term-frequency factor. That\nfactor is governed by two free parameters:\n \" k1 controls how quickly term frequency saturates. The common default",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "Why does BM25 fail on a query for 'car' when the document says 'automobile'?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 1,
+        "line": 15
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "nts are penalized.\nBM25 scores a document D for a query Q as a sum over query terms of the inverse\ndocument frequency of the term, multiplied by a saturating term-frequency factor. That\nfactor is governed by two free parameters:\n \" k1 controls how quickly term frequency saturates. The common default",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "Why does BM25 fail on a query for 'car' when the document says 'automobile'?",
+      "citation": 3,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 1
+      },
+      "position": 3,
+      "docSourceCount": 6,
+      "snippet": "ignores their magnitude. For unit-normalized vectors, cosine similarity and the dot product\ngive the same ranking, which is why many vector databases accept either.\nVector length is a property of the model, not a tuning choice. OpenAI’s\ntext-embedding-3-small produces vectors of 1536 dimensions, and",
+      "haystackChars": 399,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What kind of query tokens does BM25 handle better than a dense retriever?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 1,
+        "line": 15
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "nts are penalized.\nBM25 scores a document D for a query Q as a sum over query terms of the inverse\ndocument frequency of the term, multiplied by a saturating term-frequency factor. That\nfactor is governed by two free parameters:\n \" k1 controls how quickly term frequency saturates. The common default",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "How many dimensions does the text-embedding-3-small model produce?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 1
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "ignores their magnitude. For unit-normalized vectors, cosine similarity and the dot product\ngive the same ranking, which is why many vector databases accept either.\nVector length is a property of the model, not a tuning choice. OpenAI’s\ntext-embedding-3-small produces vectors of 1536 dimensions, and",
+      "haystackChars": 399,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What is the formula for reciprocal rank fusion?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 15
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "e each system’s scores and add them \u0014 is tempting and\nfragile. BM25 scores are unbounded and corpus-dependent; cosine similarities sit in a\nnarrow band near the top of the ranking. Normalizing across that mismatch means picking a\nscaling constant that has no principled value and drifts as the corpus",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What value of the RRF constant k comes from the original paper, and who wrote it?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 15
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "e each system’s scores and add them \u0014 is tempting and\nfragile. BM25 scores are unbounded and corpus-dependent; cosine similarities sit in a\nnarrow band near the top of the ranking. Normalizing across that mismatch means picking a\nscaling constant that has no principled value and drifts as the corpus",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "Why is normalizing BM25 and cosine scores before adding them considered fragile?",
+      "citation": 2,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 15
+      },
+      "position": 2,
+      "docSourceCount": 6,
+      "snippet": "e each system’s scores and add them \u0014 is tempting and\nfragile. BM25 scores are unbounded and corpus-dependent; cosine similarities sit in a\nnarrow band near the top of the ranking. Normalizing across that mismatch means picking a\nscaling constant that has no principled value and drifts as the corpus",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What information does RRF throw away, and why does that matter?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 2,
+        "line": 26
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "s no score calibration, no training data, and no per-corpus\ntuning, and it is stable when one retriever returns garbage: a bad list contributes small\nreciprocals and gets outvoted. Its cost is that it throws away real information \u0014 a\nretriever that is confident and a retriever that is guessing look ",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What chunk size and overlap does the course recommend for prose?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 3,
+        "line": 1
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "\" Chunks too small. A 100-token chunk retrieves precisely and then hands the model a\nfragment with no context. The answer is right about the fragment and wrong about the\ndocument.\n \" Chunks too large. A 4000-token chunk almost always contains the answer somewhere,\nwhich makes recall look excellent a",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "What happens to precision when chunks are too large?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 3,
+        "line": 1
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "\" Chunks too small. A 100-token chunk retrieves precisely and then hands the model a\nfragment with no context. The answer is right about the fragment and wrong about the\ndocument.\n \" Chunks too large. A 4000-token chunk almost always contains the answer somewhere,\nwhich makes recall look excellent a",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    },
+    {
+      "requestId": "doc-probe",
+      "depth": "quick",
+      "query": "How many candidates should you retrieve before re-ranking, and how many should survive?",
+      "citation": 1,
+      "kind": "doc",
+      "docId": "doc_mu700cbrr3zyst",
+      "locator": {
+        "page": 3,
+        "line": 14
+      },
+      "position": 1,
+      "docSourceCount": 6,
+      "snippet": "citation without a locator cannot be verified by a reader, and a\ncitation a reader cannot verify is decoration.\nTop-k, thresholds, and re-ranking\nk is how many chunks you retrieve. Small k starves the model; large k buries the\nrelevant chunk in noise and costs tokens on every request. Retrieve wider",
+      "haystackChars": 400,
+      "longestWindow": 12,
+      "category": "provenance verified",
+      "evidence": "snippet found in the grader haystack"
+    }
+  ]
+}

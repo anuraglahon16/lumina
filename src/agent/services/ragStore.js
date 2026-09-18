@@ -108,6 +108,9 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
     index: chunk.index,
     page: chunk.page,
     page_label: chunk.page_label,
+    // The line the chunk starts on, stored beside the page because a locator
+    // of page alone cannot tell two chunks of one page apart.
+    line: chunk.line ?? null,
     text: chunk.text,
     tokens: tokenize(chunk.text),
     embedding: vectors[j],
@@ -354,6 +357,7 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
       filename: r.chunk.filename,
       page: r.chunk.page,
       page_label: r.chunk.page_label,
+      line: r.chunk.line ?? null,
       text: r.chunk.text,
       score: Number(r.score.toFixed(4)),
       dense_score: r.dense_score,

@@ -38,6 +38,9 @@ const flag = (name, fallback) => {
 
 const BASE = flag('target', 'http://localhost:8787');
 const OUT = 'reports';
+// The diagnosis run's report is a committed record of the defect. A rerun that
+// measures the fix writes beside it under --out rather than over it.
+const NAME = flag('out', 'grounding-failure-distribution');
 
 /** Verbatim from bench.mjs, so our haystack is the grader's haystack. */
 const stripHtml = (html) =>
@@ -396,15 +399,17 @@ async function main() {
       }
       rows.push(...(await classifyWebAnswer(answer, { requestId: 'web-probe', depth: 'quick', query })));
     }
-    if (timedOut.length) fs.writeFileSync(path.join(OUT, 'grounding-timeouts.json'), `${JSON.stringify(timedOut, null, 2)}\n`);
+    // Always written, empty included: a stale file from an earlier run read as
+    // this run's result once already.
+    fs.writeFileSync(path.join(OUT, `${NAME}-timeouts.json`), `${JSON.stringify(timedOut, null, 2)}\n`);
   }
 
   const report = { ranAt: new Date().toISOString(), target: BASE, rows };
-  fs.writeFileSync(path.join(OUT, 'grounding-failure-distribution.json'), `${JSON.stringify(report, null, 2)}\n`);
-  fs.writeFileSync(path.join(OUT, 'grounding-failure-distribution.md'), render(report));
+  fs.writeFileSync(path.join(OUT, `${NAME}.json`), `${JSON.stringify(report, null, 2)}\n`);
+  fs.writeFileSync(path.join(OUT, `${NAME}.md`), render(report));
 
   const failed = rows.filter((r) => r.category !== CATEGORY.VERIFIED);
-  console.log(`\nwrote ${OUT}/grounding-failure-distribution.json and .md`);
+  console.log(`\nwrote ${OUT}/${NAME}.json and .md`);
   console.log(`${rows.length} citations checked, ${failed.length} failed`);
   const counts = {};
   for (const r of failed) counts[r.category] = (counts[r.category] ?? 0) + 1;

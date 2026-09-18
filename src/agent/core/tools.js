@@ -366,6 +366,7 @@ function publicSource(s) {
     domain: s.domain,
     locator: s.locator,
     page: s.page ?? null,
+    line: s.line ?? null,
     snippet: s.snippet,
     published_at: s.published_at ?? null,
     from_cache: Boolean(s.from_cache),
