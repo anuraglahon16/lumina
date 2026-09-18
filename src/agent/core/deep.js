@@ -1,5 +1,5 @@
 import { config } from '../../shared/config.js';
-import { Budget, CAP_REASONS, deadlineSignal } from './budget.js';
+import { Budget, ToolSlots, CAP_REASONS, deadlineSignal } from './budget.js';
 import { validatePlan, fallbackPlan, repairInstruction, PLAN_ORIGIN } from './plan.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
@@ -103,11 +103,17 @@ export async function runDeepQuery({
 
     // ---- parallel branch research ----------------------------------------
     recorder.startPhase('research');
+    // One pool for the whole run. Per-branch budgets remain as a fairness bound
+    // so one sub-question cannot spend everything, but this is the number that
+    // is actually enforced and the one the grader counts.
+    const slots = new ToolSlots(limits.maxToolCallsTotal ?? config.budgets.deep.maxToolCallsTotal);
+
     const branchResults = await runBranches({
       complete: completeFn,
       executor,
       webSearch: webSearchFn,
       fetchPage: fetchPageFn,
+      slots,
       retrievalMode,
       spaceId,
       plan,
@@ -195,7 +201,19 @@ export async function runDeepQuery({
     });
     const run = recorder.finish({
       status: 'ok',
-      terminationReason: truncated ? 'max_tokens' : capped ? 'capped' : 'completed',
+      // Precedence, stated rather than emergent. A genuine synthesis or
+      // provider failure is an error and outranks everything, because the run
+      // produced nothing to describe. Otherwise a spent pool is a cap and says
+      // so with its exact reason: a run that visibly exhausted its budget used
+      // to be recorded as `error`, which kept it out of every cap statistic,
+      // and a later branch finishing normally could leave it reading `done`.
+      terminationReason: truncated
+        ? 'max_tokens'
+        : slots.exhausted
+          ? slots.capReason
+          : capped
+            ? 'capped'
+            : 'completed',
       answer,
       citations: {
         emitted: validation.cited.length + validation.invalid_citations.length,
@@ -347,7 +365,7 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
   return parseJsonLoose(textOf(message));
 }
 
-async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, webSearch: webSearchFn = null, fetchPage: fetchPageFn = null, retrievalMode = 'auto', spaceId = null }) {
+async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, webSearch: webSearchFn = null, fetchPage: fetchPageFn = null, slots = null, retrievalMode = 'auto', spaceId = null }) {
   const queue = [...plan.sub_questions];
   const results = [];
 
@@ -416,6 +434,7 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       ...(executor ? { executor } : {}),
       ...(webSearchFn ? { webSearch: webSearchFn } : {}),
       ...(fetchPageFn ? { fetchPage: fetchPageFn } : {}),
+      slots,
       system: branchSystem({ subQuestion: sub.question, budget: limits, hasDocuments }),
       userMessage: [
         `<sub_question>${sub.question}</sub_question>`,

@@ -254,6 +254,16 @@ export const config = {
       planCeilingMs: num(process.env.DEEP_PLAN_CEILING_MS, 3500),
       maxIterationsPerBranch: num(process.env.DEEP_BRANCH_MAX_ITERATIONS, 4),
       maxToolCallsPerBranch: num(process.env.DEEP_BRANCH_MAX_TOOL_CALLS, 6),
+      /**
+       * The whole run's tool-call ceiling, shared across every branch.
+       *
+       * Per-branch limits alone do not bound a run: four branches at six calls
+       * each is twenty-four before synthesis, five is thirty, and the grader
+       * counts trace events with a cap of twenty-four. This is the number that
+       * is actually enforced; the per-branch limit remains as a fairness bound
+       * so one sub-question cannot spend the whole pool.
+       */
+      maxToolCallsTotal: num(process.env.DEEP_MAX_TOOL_CALLS, 24),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
       wallClockMs: num(process.env.DEEP_WALL_CLOCK_MS, 420000),

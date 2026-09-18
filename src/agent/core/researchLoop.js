@@ -24,6 +24,8 @@ export async function runResearchLoop({
   // Injection points forwarded to the tool executor; production passes neither.
   webSearch = null,
   fetchPage = null,
+  // The Deep run's shared tool-call pool; Quick passes none.
+  slots = null,
   model,
   maxTokens,
   effort,
@@ -39,7 +41,7 @@ export async function runResearchLoop({
 }) {
   const execute =
     executor ||
-    createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch, spaceId, ...(webSearch ? { webSearch } : {}), ...(fetchPage ? { fetchPage } : {}) });
+    createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch, spaceId, slots, ...(webSearch ? { webSearch } : {}), ...(fetchPage ? { fetchPage } : {}) });
   const tools = toolDefinitionsFor({ hasDocuments, retrievalMode });
   const messages = [{ role: 'user', content: userMessage }];
   const notes = [];

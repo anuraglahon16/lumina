@@ -231,3 +231,62 @@ export const CAP_REASONS = {
   wall_clock_exceeded: 'the time limit',
   max_tokens: 'the output token limit',
 };
+
+/**
+ * One pool of tool-call slots for a whole Deep run.
+ *
+ * Each branch used to build its own Budget with `maxToolCallsPerBranch`, so a
+ * four or five sub-question plan permitted 24 to 30 calls before synthesis and
+ * there was no shared number for any of them to exceed. The grader counts trace
+ * events and caps a Deep run at 24; three of four runs were over, and the run
+ * read end to end in Phase 1 finished at 25 after a call at step 14 had already
+ * been refused.
+ *
+ * A slot is claimed synchronously, before any `await`. On a single-threaded
+ * runtime that is what makes the check atomic: a caller cannot observe the
+ * count, yield, and act on a number another branch has since changed. The
+ * in-flight count exists for the same reason the defect existed — a limit that
+ * only counts finished calls passes while the calls that will break it are
+ * still in the air.
+ *
+ * Settling never returns a slot. A call that has been made emitted its
+ * `tool_result`, the grader counted that event, and handing the slot back buys
+ * a call that will be counted twice. This is deliberately unlike `Budget.refund`,
+ * which exists so a blocked publisher does not truncate a Quick run: that
+ * reasoning is about useful work, and this limit is about how many calls were
+ * made.
+ */
+export class ToolSlots {
+  constructor(limit) {
+    this.limit = Math.max(0, Number(limit) || 0);
+    this.claimed = 0;
+    this.inFlight = 0;
+    this.capReason = null;
+  }
+
+  get exhausted() {
+    return this.claimed >= this.limit;
+  }
+
+  /** A permit, or null when the pool is spent. Synchronous by contract. */
+  tryClaim() {
+    if (this.claimed >= this.limit) {
+      this.capReason = 'deep_tool_budget_exhausted';
+      return null;
+    }
+    this.claimed += 1;
+    this.inFlight += 1;
+    return { seq: this.claimed, settled: false };
+  }
+
+  /** Mark a claimed call finished. Idempotent: a double settle is not a credit. */
+  settle(permit) {
+    if (!permit || permit.settled) return;
+    permit.settled = true;
+    this.inFlight = Math.max(0, this.inFlight - 1);
+  }
+
+  snapshot() {
+    return { limit: this.limit, claimed: this.claimed, in_flight: this.inFlight, cap_reason: this.capReason };
+  }
+}

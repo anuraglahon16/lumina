@@ -148,6 +148,9 @@ export function createToolExecutor({
   runId,
   branch = null,
   spaceId = null,
+  // The Deep run's shared pool. Absent for Quick, which has its own budget and
+  // one loop to spend it.
+  slots = null,
   // Injected the same way `gatherFromWeb` injects them, and for the same
   // reason: what is worth testing here is attribution, budgets and ledger
   // bookkeeping, none of which is about the network. Without this a Deep test
@@ -299,6 +302,22 @@ export function createToolExecutor({
       };
     }
 
+    // The shared claim, taken synchronously before any await. A branch that
+    // passes its own budget check can still be refused here, because the pool
+    // is what the grader counts and the other branches are spending from it.
+    const permit = slots ? slots.tryClaim() : null;
+    if (slots && !permit) {
+      budget.markCapped(slots.capReason);
+      emit?.('tool_blocked', { tool: name, reason: slots.capReason, branch, budget: budget.snapshot() });
+      recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${slots.capReason}`, error: slots.capReason, branch });
+      return {
+        ok: false,
+        blocked: true,
+        reason: slots.capReason,
+        content: `The deep search tool budget is spent (${slots.capReason}). No further tool calls are possible in this run. Finish with the evidence already gathered.`,
+      };
+    }
+
     budget.consume(name);
     emit?.('tool_call', { tool: name, input, branch, budget: budget.snapshot() });
     const started = performance.now();
@@ -329,6 +348,10 @@ export function createToolExecutor({
       recorder?.recordToolCall({ name, input, durationMs, ok: false, summary: 'error', error: err.message, branch });
       emit?.('tool_result', { tool: name, ok: false, summary: `error: ${err.message}`, duration_ms: durationMs, branch });
       return { ok: false, content: `Tool ${name} failed: ${err.message}. Continue with another approach.` };
+    } finally {
+      // The slot stays spent; settling only clears the in-flight count, so a
+      // call that threw does not leave the pool believing it is still running.
+      slots?.settle(permit);
     }
   };
 }
