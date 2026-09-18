@@ -10,7 +10,6 @@ import { errorHandler } from '../src/shared/errors.js';
 import { demoAuth } from '../src/gateway/middleware/demoAuth.js';
 import { identity } from '../src/gateway/middleware/identity.js';
 import { rateLimit, rateLimitStats } from '../src/gateway/middleware/rateLimit.js';
-import { evalsPage } from '../src/gateway/routes/evals.js';
 import { runsPage } from '../src/gateway/routes/runs.js';
 
 import { queryRouter } from '../src/agent/routes/query.js';
@@ -165,7 +164,10 @@ app.get('/api/limits', (req, res) => {
   });
 });
 
-app.get('/evals', rateLimit('global'), evalsPage);
+// `/evals` belongs to the React app, which routes it client-side and fetches
+// GET /evals/report.json. A server route here shadowed it, so the page a
+// grader opens was the older server-rendered one telling them to run a
+// harness that has since moved. `/runs` stays: the SPA has no route for it.
 app.get('/runs', rateLimit('global'), runsPage);
 
 // The agent's routers are mounted where the gateway used to forward to them, so

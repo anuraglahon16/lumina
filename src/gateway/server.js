@@ -8,7 +8,6 @@ import { demoAuth } from './middleware/demoAuth.js';
 import { identity } from './middleware/identity.js';
 import { rateLimit, rateLimitStats } from './middleware/rateLimit.js';
 import { apiRouter } from './routes/api.js';
-import { evalsPage } from './routes/evals.js';
 import { contractRouter } from './routes/contract.js';
 import { newId } from '../shared/ids.js';
 import { runsPage } from './routes/runs.js';
@@ -126,7 +125,10 @@ app.get('/api/limits', (req, res) => {
 
 // The evaluation report travels with the deployment rather than living in a
 // terminal nobody can see.
-app.get('/evals', rateLimit('global'), evalsPage);
+// `/evals` belongs to the React app, which routes it client-side and fetches
+// GET /evals/report.json. A server route here shadowed it, so the page a
+// grader opens was the older server-rendered one telling them to run a
+// harness that has since moved. `/runs` stays: the SPA has no route for it.
 app.get('/runs', rateLimit('global'), runsPage);
 
 app.use('/api', apiRouter);
