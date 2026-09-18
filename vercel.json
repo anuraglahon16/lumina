@@ -13,5 +13,6 @@
       "destination": "/api/index.js"
     }
   ],
-  "buildCommand": "npm run build:contract && npm run build -w @lumina/web"
+  "buildCommand": "npm run build:contract && npm run build -w @lumina/web",
+  "outputDirectory": "web/dist"
 }
