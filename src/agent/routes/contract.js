@@ -335,8 +335,14 @@ contractRouter.get('/evals/report.json', async (req, res) => {
   try {
     const { readFile } = await import('node:fs/promises');
     const path = await import('node:path');
-    const file = path.join(config.root, 'reports', 'eval.json');
-    res.set('cache-control', 'no-store').type('application/json').send(await readFile(file, 'utf8'));
+    // `report.json` is the scorecard `eval/build-report.mjs` writes, and what it
+    // tells you to serve here: gates, the design section, the trajectories a
+    // grader reads. `eval.json` is the benchmark's four-field summary and is
+    // only a fallback, because a deployment that has run the bench but not the
+    // report builder should still say something true rather than 404.
+    const dir = path.join(config.root, 'reports');
+    const body = await readFile(path.join(dir, 'report.json'), 'utf8').catch(() => readFile(path.join(dir, 'eval.json'), 'utf8'));
+    res.set('cache-control', 'no-store').type('application/json').send(body);
   } catch {
     res.json({ generatedAt: null, cases: [], note: 'No evaluation has been run against this deployment yet.' });
   }
