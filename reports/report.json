@@ -1,7 +1,7 @@
 {
   "assignment": "Assignment 1: LUMINA",
-  "student": "UNNAMED — pass --student \"Your Name\"",
-  "deployedAt": "2026-09-18T03:28:11.850Z",
+  "student": "Anurag Lahon",
+  "deployedAt": "2026-09-18T05:12:26.941Z",
   "design": {
     "components": "Two Express services and five pieces of state that are not services.\n\n**Gateway** (`src/gateway`) is the only process the browser reaches. It serves the\nReact UI, validates every request against the zod contract, mints request and user\nids, rate-limits, forwards SSE, and holds the shared-password gate. It has no\nprovider keys at all.\n\n**Agent** (`src/agent`) binds to loopback and, when `INTERNAL_TOKEN` is set,\nrefuses anything that did not come through the gateway. It runs the two answer\npaths (Quick and Deep), web search, page fetching, RAG, memory, and the job\nworker. Every provider key lives here.\n\n**MongoDB Atlas** holds `chunks` (document text plus its embedding, searched by\n`$vectorSearch`), `runs`, `threads`, `memories`, `spaces`, `documents` and `jobs`.\n\n**The job queue** is the `jobs` collection plus an in-process worker. Ingestion is\naccepted with a 202 and finished in the background, which is why a 60-page PDF\ndoes not block a search.\n\n**The search cache** keys on a normalised query rather than the raw string,\nbecause the model rephrases the same intent three ways and each rephrasing was a\npaid API call.\n\n**The evidence ledger** is not stored anywhere — it lives for one run — but it\nmakes decisions, so it belongs on this list. It is the only thing that can say a\nsource is citable.\n\n**The funnel** is a diagnostic trace, off by default, that records what happened\nto every candidate from the query to the citation.",
     "responsibilities": "The interesting lines are the exclusions.\n\n**Only the agent may hold a provider key.** The gateway proxies; it never calls\nAnthropic, Tavily or Voyage. A key that reaches the browser is a key that has\nleaked, so the gateway is not given one to leak.\n\n**Only the gateway may talk to the browser.** The agent binds to 127.0.0.1 and\nchecks `x-internal-token`. A request that reaches the agent without having passed\nthe gateway's validation is refused rather than repaired.\n\n**Only the evidence ledger may decide what is citable.** A search result is a\n*candidate*. It becomes evidence when a page has been fetched and its text\nextracted, and at no other moment. The synthesis prompt is never given a snippet\nit did not read, so an answer cannot cite one — this is enforced by what is in\nthe prompt, not by asking the model nicely.\n\n**Only the budget may decide a run is over its cap.** It counts tool calls,\nsearches, fetches, turns and wall clock, and every stop carries a named reason\nthat reaches the run log and the user. Tools do not decide to stop; the harness\nstops them.\n\n**Only the validator may report groundedness**, and it runs after the answer is\nwritten, against the same passages the model saw.",
@@ -311,7 +311,7 @@
   },
   "quality": {
     "project": "lumina",
-    "checkedAt": "2026-09-18T03:28:11.815Z",
+    "checkedAt": "2026-09-18T05:08:31.706Z",
     "runs": 400,
     "errors": 2,
     "warnings": 3,
@@ -418,14 +418,183 @@
   },
   "trajectories": {
     "successful": {
-      "requestId": "MISSING-successful",
-      "steps": [],
-      "notes": "MISSING — pass --successful <requestId> naming a run log in runs/ (or runs/failing/). Rule P1 is the human gate: you read one successful and one failing trajectory, every step, and say what each taught you. It cannot be automated and cannot be skipped."
+      "requestId": "req_mu6gjpj7qrtnvz",
+      "query": "What is a write-ahead log used for in database crash recovery?",
+      "terminated": "done",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 933
+        },
+        {
+          "step": 2,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 511
+        }
+      ],
+      "notes": "req_mu6gjpj7qrtnvz — \"What is a write-ahead log used for in database crash recovery?\" Quick, standalone_web, 4210ms end to end, TTFT 2197ms, $0.003791, terminated sufficient_evidence. The router classified it standalone_web, so no rewrite call was made: the question names its own subject and there was nothing in the thread to resolve against. Context assembly took 98ms and found no memories, no thread history and no documents. Step 1, web_search with the question passed through close to verbatim, 933ms, six results. Step 2, fetch_page on architecture-weekly.com, 511ms, one page read. The pool stopped there: assessCoverage judged one substantive page sufficient for a single-concept definitional question, and the run ended on sufficient_evidence rather than on a budget. Six sentences cited, six supported, groundedness 1.0, best score on the leading sentence 0.909. What it taught: the two-step path is the one the design intends, and the parts that took the time are not the parts I would have guessed. Retrieval was 1460ms of the 4210ms; the rest is model. TTFT at 2197ms is under the 2500ms gate on this question, while the p95 across the benchmark is 4029ms — which says the gate is missed on the tail, not on the median, and that tuning the median would not move it. The cheap thing here is also the honest thing: one page, read, cited six times, nothing inferred. Worth noting against the grounding work: this run scored 1.0 internally and its single source is exactly the kind that passes the benchmark's provenance check too, which is why the failures are concentrated elsewhere rather than spread evenly."
     },
     "failing": {
-      "requestId": "MISSING-failing",
-      "steps": [],
-      "notes": "MISSING — pass --failing <requestId> naming a run log in runs/ (or runs/failing/). Rule P1 is the human gate: you read one successful and one failing trajectory, every step, and say what each taught you. It cannot be automated and cannot be skipped."
+      "requestId": "req_mu6dpht3mbgf3g",
+      "query": "cap probe 25: what is reciprocal rank fusion?",
+      "terminated": "error",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 0
+        },
+        {
+          "step": 2,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 1473
+        },
+        {
+          "step": 3,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 1073
+        },
+        {
+          "step": 4,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 2308
+        },
+        {
+          "step": 5,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 1917
+        },
+        {
+          "step": 6,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 2475
+        },
+        {
+          "step": 7,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 2901
+        },
+        {
+          "step": 8,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 75
+        },
+        {
+          "step": 9,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 76
+        },
+        {
+          "step": 10,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 71
+        },
+        {
+          "step": 11,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 91
+        },
+        {
+          "step": 12,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 88
+        },
+        {
+          "step": 13,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 132
+        },
+        {
+          "step": 14,
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 0,
+          "error": "max_tool_calls_reached"
+        },
+        {
+          "step": 15,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 16,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 17,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 18,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 0
+        },
+        {
+          "step": 19,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 0
+        },
+        {
+          "step": 20,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 21,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 22,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 5
+        },
+        {
+          "step": 23,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 4
+        },
+        {
+          "step": 24,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 2353
+        },
+        {
+          "step": 25,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 63
+        }
+      ],
+      "notes": "req_mu6dpht3mbgf3g — \"cap probe 25: what is reciprocal rank fusion\", Deep, terminated error, zero sources, zero citations, no answer. This one run exposes three separate defects and is the most useful thing I read. Steps 1 to 7 are seven web searches across the sub-questions, 0 to 2901ms each. Steps 8 to 13 fetch six pages. Step 14 is a fetch_page that comes back ok=false with reason max_tool_calls_reached: the budget refused it, correctly. Then steps 15 through 25 happen anyway — eleven more calls after the cap was hit, ending at 25 tool calls against a declared ceiling of 24. That is the first defect, and it is not a limit that is set too high: the budget is per branch (maxToolCallsPerBranch 6), the branches run concurrently, and each checks the shared counter before launching while others are already in flight. Refusing one call while eleven more are mid-flight is a check that arrives after the decision it was meant to gate. The second defect is that the run is recorded terminated=error rather than cap, so a run that visibly exhausted its budget does not appear in any cap statistic — the harness stopped it and then mislabelled why. The third is what actually killed it: synthesis failed with 400 invalid_request_error, \"The request body is not valid JSON: no low surrogate in string: line 1 column 53976\". We had cut page text mid-emoji. String.slice counts UTF-16 code units, an emoji is two of them, and a truncation landing between the halves leaves a lone surrogate that JSON.stringify emits as \"\\ud83d\" and the provider rejects outright. Nine of ten runs in this probe died the same way. The user loses the entire answer because a page they never chose had an emoji at an offset nobody picked. What it taught: a failure that presents as a provider error can be three of our own bugs stacked, and reading the steps in order is what separates them — the cap message at step 14 is invisible in the summary, which only says error. The surrogate bug is fixed (safeSlice, tests/text.test.js). The budget and the termination label are not, and are Phase 3B."
     }
   }
 }

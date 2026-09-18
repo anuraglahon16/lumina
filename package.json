@@ -25,7 +25,9 @@
     "indexes": "node scripts/create-indexes.mjs",
     "export:runs": "node scripts/export-runs.mjs",
     "smoke": "node tools/smoke.js",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "runlogs": "node tools/export-runlogs.mjs",
+    "report": "node eval/build-report.mjs --student \"Anurag Lahon\" --successful req_mu6gjpj7qrtnvz --successful-notes \"$(cat reports/trajectories/successful.md)\" --failing req_mu6dpht3mbgf3g --failing-notes \"$(cat reports/trajectories/failing.md)\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

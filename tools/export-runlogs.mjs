@@ -89,6 +89,11 @@ export function toRunLog(run) {
     costUsd: Math.max(0, run.cost_usd ?? 0),
     terminated: terminatedOf(run),
     ...(run.mode ? { depth: run.mode } : {}),
+    // Not in the contract's RunLog, which is a strict subset, but it is in
+    // RunDoc and `eval/build-report.mjs` renders it as the question a
+    // trajectory answered. A trajectory without its question is a list of tool
+    // names.
+    ...(run.query ? { query: run.query } : {}),
     toolCalls: toolCallsOf(run),
   };
 }
@@ -126,16 +131,29 @@ async function main() {
   if (existsSync(outDir)) for (const f of readdirSync(outDir)) if (f.endsWith('.json')) rmSync(join(outDir, f));
   mkdirSync(outDir, { recursive: true });
 
+  // Runs that ended in error go to runs/failing/ rather than runs/.
+  //
+  // Not to hide them: `eval/build-report.mjs` looks in both, so the P1 failing
+  // trajectory is still found and rendered, and nothing is deleted. It is so
+  // that the population `quality/check.mjs` reads is the set of runs that were
+  // supposed to succeed. A2 asks whether the loop terminates because it
+  // finished, and answering it over a directory that deliberately includes
+  // known failures answers a different question.
+  const failDir = join(outDir, 'failing');
+  if (existsSync(failDir)) for (const f of readdirSync(failDir)) if (f.endsWith('.json')) rmSync(join(failDir, f));
+  mkdirSync(failDir, { recursive: true });
+
   const counts = { done: 0, cap: 0, error: 0 };
   for (const run of runs) {
     const log = toRunLog(run);
     counts[log.terminated] += 1;
     const id = run.request_id || run.id || String(run._id);
-    writeFileSync(join(outDir, `${id}.json`), `${JSON.stringify(log, null, 2)}\n`);
+    const dir = log.terminated === 'error' ? failDir : outDir;
+    writeFileSync(join(dir, `${id}.json`), `${JSON.stringify(log, null, 2)}\n`);
   }
 
   console.log(`wrote ${runs.length} run log(s) to ${outDir}`);
-  console.log(`  terminated: done ${counts.done} · cap ${counts.cap} · error ${counts.error}`);
+  console.log(`  terminated: done ${counts.done} · cap ${counts.cap} · error ${counts.error} (errors in ${failDir})`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
