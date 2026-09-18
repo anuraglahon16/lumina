@@ -1,9 +1,9 @@
 {
   "project": "lumina",
-  "checkedAt": "2026-09-18T05:08:31.706Z",
-  "runs": 400,
+  "checkedAt": "2026-09-18T06:09:29.371Z",
+  "runs": 101,
   "errors": 2,
-  "warnings": 3,
+  "warnings": 2,
   "results": [
     {
       "id": "C1",
@@ -17,21 +17,21 @@
       "title": "Tool errors surface as errors",
       "severity": "error",
       "status": "pass",
-      "detail": "400 run(s)"
+      "detail": "101 run(s)"
     },
     {
       "id": "A2",
       "title": "The loop terminates because it finished",
       "severity": "error",
       "status": "fail",
-      "detail": "req_mu53hc6q051p4e: terminated=\"error\"; req_mu540r8123cuu7: terminated=\"error\"; req_mu555kppx978u0: terminated=\"error\"; req_mu55qpbga80g24: terminated=\"error\"; req_mu56adrbtbbnir: terminated=\"error\"; req_mu5g1jgmlqpfwj: terminated=\"error\"; req_mu5gltlg8d5qcf: terminated=\"error\"; req_mu5hbikvlmdz9f: terminated=\"error\"; req_mu5hwizgydenhs: terminated=\"error\"; req_mu5io643adyuar: terminated=\"error\"; req_mu6bt6qo6v4fhr: terminated=\"error\"; req_mu6bvjrvretbju: terminated=\"error\"; req_mu6c6wlslany2o: terminated=\"error\"; req_mu6c7yrl17t9xz: terminated=\"error\"; req_mu6c802lrgw7gf: terminated=\"error\"; req_mu6c84nafynjrq: terminated=\"error\"; req_mu6c88xol4jqtk: terminated=\"error\"; req_mu6c89l4rdchyh: terminated=\"error\"; req_mu6c8e2qoxig5m: terminated=\"error\"; req_mu6c8inhudkxp5: terminated=\"error\"; req_mu6c8n794o8jnn: terminated=\"error\"; req_mu6c8s362ciyar: terminated=\"error\"; req_mu6c8wsqedr0m2: terminated=\"error\"; req_mu6c91kr8p880f: terminated=\"error\"; req_mu6cd8gfqpl83e: terminated=\"error\"; req_mu6cdapcukpyp6: terminated=\"error\"; req_mu6cdbtbhxg3it: terminated=\"error\"; req_mu6cdcvm646dr0: terminated=\"error\"; req_mu6chk26kln63r: terminated=\"error\"; req_mu6chkpwvq21db: terminated=\"error\"; req_mu6chl05zg2040: terminated=\"error\"; req_mu6chlcydgodzo: terminated=\"error\"; req_mu6chlp9ejjsr0: terminated=\"error\"; req_mu6chlz2m5xpcz: terminated=\"error\"; req_mu6chnqlubbjnh: terminated=\"error\"; req_mu6chpgwuvjxzz: terminated=\"error\"; req_mu6chr3r4cwx2b: terminated=\"error\"; req_mu6chsiu0oirbj: terminated=\"error\"; req_mu6chul4n1upj5: terminated=\"error\"; req_mu6chw12ao53bu: terminated=\"error\"; req_mu6ciagrf1gw71: terminated=\"error\"; req_mu6cibc4jg052l: terminated=\"error\"; req_mu6cibmliilftr: terminated=\"error\"; req_mu6cibwct053vu: terminated=\"error\"; req_mu6cic6il2wkfv: terminated=\"error\"; req_mu6cicgu78w54l: terminated=\"error\"; req_mu6cicsiiy6vs5: terminated=\"error\"; req_mu6cid2k9f54sd: terminated=\"error\"; req_mu6cidcdnj6uei: terminated=\"error\"; req_mu6cidmb2su7au: terminated=\"error\"; req_mu6cidwh6o19h0: terminated=\"error\"; req_mu6cie6if1ykiu: terminated=\"error\"; req_mu6ciegiwc4jam: terminated=\"error\"; req_mu6cifwkfz0w17: terminated=\"error\"; req_mu6d9o02vw6zg3: terminated=\"error\"; req_mu6daub2o2xvsk: terminated=\"error\"; req_mu6dbtfsa67601: terminated=\"error\"; req_mu6dcdz41h6fsj: terminated=\"error\"; req_mu6de8g53namvy: terminated=\"error\"; req_mu6dgkd4g59d2g: terminated=\"error\"; req_mu6dhdc5tj2sjc: terminated=\"error\"; req_mu6dhvkjm0pvgn: terminated=\"error\"; req_mu6dn63o9jftqa: terminated=\"error\"; req_mu6dpht3mbgf3g: terminated=\"error\""
+      "detail": "req_mu6d35jxquyqej: terminated=\"cap\"; req_mu6d4hdoum69z9: terminated=\"cap\"; req_mu6d5p5ud5i6rp: terminated=\"cap\"; req_mu6d75av8t73p4: terminated=\"cap\"; req_mu6d828dq1rly8: terminated=\"cap\"; req_mu6d8v5sr2kisb: terminated=\"cap\"; req_mu6da3ht65itao: terminated=\"cap\"; req_mu6db6ipw0onsk: terminated=\"cap\"; req_mu6dcph1slten5: terminated=\"cap\"; req_mu6dfhzzjyg4j1: terminated=\"cap\"; req_mu6didegt5kn25: terminated=\"cap\"; req_mu6dj66m8std18: terminated=\"cap\"; req_mu6dkyqt0jvqhd: terminated=\"cap\"; req_mu6dltvysna9y2: terminated=\"cap\"; req_mu6dmjwq5yripa: terminated=\"cap\"; req_mu6dnrkcvyg975: terminated=\"cap\"; req_mu6doo70ab23v1: terminated=\"cap\"; req_mu6dq009yuv2yo: terminated=\"cap\""
     },
     {
       "id": "A3",
       "title": "No tool thrash",
       "severity": "warn",
       "status": "fail",
-      "detail": "req_mu56adrbtbbnir: \"fetch_page\" called 6x consecutively (cap 4); req_mu5hb59z3nqqh2: \"fetch_page\" called 6x consecutively (cap 4); req_mu5ine6afdp8d6: \"fetch_page\" called 5x consecutively (cap 4); req_mu5jo7zqsjlokc: \"fetch_page\" called 5x consecutively (cap 4); req_mu5mg9b9erbjdw: \"fetch_page\" called 5x consecutively (cap 4); req_mu6b90zpi65880: \"fetch_page\" called 6x consecutively (cap 4); req_mu6b95as4mqtiu: \"fetch_page\" called 5x consecutively (cap 4); req_mu6b9vpi7zpzpw: \"fetch_page\" called 5x consecutively (cap 4); req_mu6ba1feuqdh5b: \"fetch_page\" called 5x consecutively (cap 4); req_mu6bpbwwsu90sw: \"fetch_page\" called 12x consecutively (cap 4); req_mu6bqdsan4bgiy: \"fetch_page\" called 11x consecutively (cap 4); req_mu6brhcf7uel7c: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bt6qo6v4fhr: \"fetch_page\" called 14x consecutively (cap 4); req_mu6btvrg9nin4u: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bumwnf6vlvx: \"fetch_page\" called 10x consecutively (cap 4); req_mu6bvjrvretbju: \"fetch_page\" called 6x consecutively (cap 4); req_mu6bw0jpvsqn98: \"fetch_page\" called 7x consecutively (cap 4); req_mu6bwuyldbuk4l: \"fetch_page\" called 9x consecutively (cap 4); req_mu6bxnrpy81wge: \"fetch_page\" called 9x consecutively (cap 4); req_mu6byjwh4dxijh: \"fetch_page\" called 11x consecutively (cap 4); req_mu6bz6s4s3rj7p: \"fetch_page\" called 7x consecutively (cap 4); req_mu6bzu9fuy2rph: \"fetch_page\" called 6x consecutively (cap 4); req_mu6c0wsfoodxcf: \"fetch_page\" called 12x consecutively (cap 4); req_mu6c1mr9hu7v8v: \"fetch_page\" called 9x consecutively (cap 4); req_mu6c2f58oxi2s4: \"fetch_page\" called 7x consecutively (cap 4); req_mu6c3c29e9d0l1: \"fetch_page\" called 10x consecutively (cap 4); req_mu6c46vzre05ee: \"fetch_page\" called 10x consecutively (cap 4); req_mu6c52droh1umk: \"fetch_page\" called 11x consecutively (cap 4); req_mu6c5wifvubswm: \"web_search\" called 5x consecutively (cap 4); req_mu6c6wlslany2o: \"fetch_page\" called 7x consecutively (cap 4); req_mu6cifwkfz0w17: \"fetch_page\" called 5x consecutively (cap 4); req_mu6cz9qpf8cxlf: \"fetch_page\" called 6x consecutively (cap 4); req_mu6czcd93cd2cm: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czohqf8wxo6: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czqfhi70uf2: \"fetch_page\" called 5x consecutively (cap 4); req_mu6d35jxquyqej: \"fetch_page\" called 12x consecutively (cap 4); req_mu6d4hdoum69z9: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d5p5ud5i6rp: \"fetch_page\" called 11x consecutively (cap 4); req_mu6d75av8t73p4: \"web_search\" called 9x consecutively (cap 4); req_mu6d828dq1rly8: \"fetch_page\" called 13x consecutively (cap 4); req_mu6d8v5sr2kisb: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d9o02vw6zg3: \"fetch_page\" called 9x consecutively (cap 4); req_mu6da3ht65itao: \"fetch_page\" called 11x consecutively (cap 4); req_mu6daub2o2xvsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6db6ipw0onsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dbtfsa67601: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcdz41h6fsj: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcph1slten5: \"fetch_page\" called 7x consecutively (cap 4); req_mu6ddbzpj7xpv6: \"fetch_page\" called 7x consecutively (cap 4); req_mu6de8g53namvy: \"fetch_page\" called 11x consecutively (cap 4); req_mu6deji87bxp5a: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dfhzzjyg4j1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dgkd4g59d2g: \"fetch_page\" called 12x consecutively (cap 4); req_mu6dhdc5tj2sjc: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dhvkjm0pvgn: \"fetch_page\" called 11x consecutively (cap 4); req_mu6didegt5kn25: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dj66m8std18: \"fetch_page\" called 10x consecutively (cap 4); req_mu6djzli2ravnm: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dkyqt0jvqhd: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dltvysna9y2: \"fetch_page\" called 11x consecutively (cap 4); req_mu6dmjwq5yripa: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dn63o9jftqa: \"fetch_page\" called 7x consecutively (cap 4); req_mu6dnrkcvyg975: \"fetch_page\" called 10x consecutively (cap 4); req_mu6doo70ab23v1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dpht3mbgf3g: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dq009yuv2yo: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dt07zjmzc1i: \"fetch_page\" called 5x consecutively (cap 4)"
+      "detail": "req_mu6cz9qpf8cxlf: \"fetch_page\" called 6x consecutively (cap 4); req_mu6czcd93cd2cm: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czohqf8wxo6: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czqfhi70uf2: \"fetch_page\" called 5x consecutively (cap 4); req_mu6d35jxquyqej: \"fetch_page\" called 12x consecutively (cap 4); req_mu6d4hdoum69z9: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d5p5ud5i6rp: \"fetch_page\" called 11x consecutively (cap 4); req_mu6d75av8t73p4: \"web_search\" called 9x consecutively (cap 4); req_mu6d828dq1rly8: \"fetch_page\" called 13x consecutively (cap 4); req_mu6d8v5sr2kisb: \"fetch_page\" called 10x consecutively (cap 4); req_mu6da3ht65itao: \"fetch_page\" called 11x consecutively (cap 4); req_mu6db6ipw0onsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcph1slten5: \"fetch_page\" called 7x consecutively (cap 4); req_mu6ddbzpj7xpv6: \"fetch_page\" called 7x consecutively (cap 4); req_mu6deji87bxp5a: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dfhzzjyg4j1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6didegt5kn25: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dj66m8std18: \"fetch_page\" called 10x consecutively (cap 4); req_mu6djzli2ravnm: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dkyqt0jvqhd: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dltvysna9y2: \"fetch_page\" called 11x consecutively (cap 4); req_mu6dmjwq5yripa: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dnrkcvyg975: \"fetch_page\" called 10x consecutively (cap 4); req_mu6doo70ab23v1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dq009yuv2yo: \"fetch_page\" called 10x consecutively (cap 4)"
     },
     {
       "id": "R1",
@@ -73,21 +73,21 @@
       "title": "Token budget respected",
       "severity": "error",
       "status": "pass",
-      "detail": "400 run(s)"
+      "detail": "101 run(s)"
     },
     {
       "id": "B2",
       "title": "Latency budget respected",
       "severity": "warn",
-      "status": "fail",
-      "detail": "req_mu53hc6q051p4e: 905.176s > 240s; req_mu540r8123cuu7: 959.362s > 240s; req_mu54lc2gud5ika: 943.536s > 240s; req_mu555kppx978u0: 984.985s > 240s; req_mu55qpbga80g24: 917.998s > 240s; req_mu56adrbtbbnir: 1064.079s > 240s; req_mu56x7fhysj09d: 948.515s > 240s; req_mu57hjj31h6kgq: 532.504s > 240s; req_mu5g1jgmlqpfwj: 944.39s > 240s; req_mu5gltlg8d5qcf: 943.986s > 240s; req_mu5hbikvlmdz9f: 978.344s > 240s; req_mu5hwizgydenhs: 1048.024s > 240s"
+      "status": "pass",
+      "detail": "101 run(s)"
     },
     {
       "id": "B3",
       "title": "Cost budget respected",
       "severity": "warn",
       "status": "pass",
-      "detail": "400 run(s)"
+      "detail": "101 run(s)"
     },
     {
       "id": "P1",

@@ -22,7 +22,7 @@
  *   node tools/export-runlogs.mjs              # from MONGODB_URI in .env
  *   node tools/export-runlogs.mjs --limit 300
  */
-import { mkdirSync, writeFileSync, rmSync, existsSync, readdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from 'dotenv';
@@ -45,7 +45,24 @@ const flag = (name, fallback) => {
  * finished or because it ran out, so anything that is a cap maps to `cap` and
  * keeps its own name nowhere — the richer reason stays in our own record.
  */
+/**
+ * Every reason that means the run stopped because it ran out, enumerated from
+ * what the store actually contains rather than from memory.
+ *
+ * The list was short by the two that matter most. `capped` is what deep.js
+ * writes when a branch hits its limit - 59 runs in the store - and
+ * `max_tokens` is a truncated answer. Both were falling through to `done`,
+ * which reported a run that visibly ran out of budget as one that finished,
+ * in the file the quality gates read. A2 exists to catch exactly that, and a
+ * mapper that hides it from A2 defeats the rule while appearing to satisfy it.
+ *
+ * `evidence_limited` is deliberately not here: a run that searched, found
+ * little, and said so in its answer finished its work. Thin evidence is a
+ * result, not a cap.
+ */
 const CAP_REASONS = new Set([
+  'capped',
+  'max_tokens',
   'max_tool_calls_reached',
   'max_searches_reached',
   'max_fetches_reached',
@@ -53,6 +70,7 @@ const CAP_REASONS = new Set([
   'wall_clock_exceeded',
   'retrieval_deadline',
   'budget_exhausted',
+  'deep_tool_budget_exhausted',
   'cap',
 ]);
 
@@ -108,22 +126,64 @@ async function main() {
   await client.connect();
   // Same database and sort key as the provided exporter, which is the one that
   // found records: the default db from the URI is not the one we write to.
-  // `--since` exists because these files are read as trajectories of the build
-  // under test. A run from a window when the provider account was out of credit
-  // is a trajectory of an outage, and sweeping it in attributes someone else's
-  // failure to this code. Without the flag everything is exported, which is the
-  // honest default; with it, say in the report which window was used and why.
+  // Which runs the quality gates are allowed to read.
+  //
+  // `quality/check.mjs` asks whether the loop terminates because it finished
+  // and whether tools thrash. Both are questions about the system under test,
+  // and the store holds more than that: ad-hoc diagnostic scripts run by hand,
+  // runs from a window when the provider account was out of credit, and
+  // development traffic from days earlier. Judging this build on those is
+  // judging it on someone else's trajectory.
+  //
+  // `--scope benchmark` uses the benchmark's own identifiers rather than a date
+  // chosen after the fact: the user id declared in `benchmark/sla.json` and the
+  // `bench-*` sub-users the harness derives from it, bounded by the window
+  // ending at `reports/bench.json`'s own `ranAt`. The start is found by walking
+  // back while the gap between consecutive runs stays under fifteen minutes,
+  // which is what separates one benchmark invocation from the one before it.
+  //
+  // Nothing is excluded for having failed. A benchmark run that errored stays
+  // in the population and counts against the gates; that is what the gates are
+  // for. What is excluded is traffic that was never part of the evaluation.
+  //
   // `created_at`, not `createdAt`. Our records are snake_case, so a sort on the
   // camelCase name sorts on a field that is not there and returns runs in
-  // whatever order the collection scan produces — which is how an export asking
-  // for "the latest 300" came back with runs from three days earlier.
+  // whatever order the collection scan produces.
+  const scope = flag('scope', null);
   const since = flag('since', null);
-  const where = since ? { created_at: { $gte: since } } : {};
-  const runs = await client
-    .db(process.env.MONGODB_DB ?? 'lumina')
-    .collection('runs')
-    .find(where, { sort: { created_at: -1 }, limit })
-    .toArray();
+  const db = client.db(process.env.MONGODB_DB ?? 'lumina');
+
+  let where = {};
+  let windowNote = 'every run in the store';
+  if (since) {
+    where = { created_at: { $gte: since } };
+    windowNote = `runs created at or after ${since}`;
+  }
+
+  if (scope === 'benchmark') {
+    const ranAt = JSON.parse(readFileSync(join(ROOT, 'reports', 'bench.json'), 'utf8')).ranAt;
+    const user = JSON.parse(readFileSync(join(ROOT, 'benchmark', 'sla.json'), 'utf8')).user_id ?? 'bench';
+    const candidates = await db
+      .collection('runs')
+      .find({ user_id: { $regex: `^${user}` }, created_at: { $lte: ranAt } }, { sort: { created_at: -1 }, limit: 5000 })
+      .toArray();
+
+    const GAP_MS = 15 * 60 * 1000;
+    let previous = new Date(ranAt).getTime();
+    const session = [];
+    for (const row of candidates) {
+      const at = new Date(row.created_at).getTime();
+      if (previous - at > GAP_MS) break;
+      session.push(row);
+      previous = at;
+    }
+    const start = session.at(-1)?.created_at ?? ranAt;
+    where = { user_id: { $regex: `^${user}` }, created_at: { $gte: start, $lte: ranAt } };
+    windowNote = `benchmark user "${user}*", ${start} .. ${ranAt}`;
+  }
+
+  console.log(`scope: ${windowNote}`);
+  const runs = await db.collection('runs').find(where, { sort: { created_at: -1 }, limit }).toArray();
   await client.close();
 
   // Cleared first. A stale file from an earlier export is a trajectory the gates
