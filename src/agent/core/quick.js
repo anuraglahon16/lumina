@@ -2,10 +2,12 @@ import { config } from '../../shared/config.js';
 import { Budget, CAP_REASONS } from './budget.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
-import { runResearchLoop } from './researchLoop.js';
+import { classifyQuestion, QUESTION_KIND } from './router.js';
+import { gatherFromWeb, gatherFromDocuments, rescueRetrieval, QUICK_PAGES } from './retrieve.js';
+import { createFunnel } from './funnel.js';
+import { rewriteFollowUp } from './rewrite.js';
 import { synthesizeAnswer } from './synthesize.js';
 import { extractMemories } from './memoryExtractor.js';
-import { researchSystem, buildResearchUserMessage } from './prompts.js';
 import { searchMemories } from '../services/memoryStore.js';
 import { ensureThread, appendMessage, threadContext } from '../services/threads.js';
 import { documentStats } from '../services/ragStore.js';
@@ -20,10 +22,10 @@ const log = createLogger('quick');
  * Quick never escalates into Deep Search. If the budget runs out it says so,
  * an honest partial answer beats a silently-truncated confident one.
  */
-export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal }) {
+export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto' }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
-  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.model });
+  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.quickModel });
   const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {
@@ -31,21 +33,33 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     thread_id: thread.id,
     mode: 'quick',
     query,
-    model: config.llm.model,
+    model: config.llm.quickModel,
     budget: budget.snapshot(),
     search_provider: resolveProviders()[0],
   });
 
-  await appendMessage(thread.id, { role: 'user', content: query, run_id: recorder.id });
 
   try {
     // ---- context assembly -------------------------------------------------
     recorder.startPhase('context');
-    const [memories, docs] = await Promise.all([
+    // Three independent reads, so they go together. Sequentially they are three
+    // round trips to a remote database in front of a phase the SLA gives four
+    // seconds end to end, and none of them depends on another's result.
+    const [memories, docs, history] = await Promise.all([
       searchMemories(query, { userId }).catch(() => []),
-      documentStats(userId),
+      documentStats(userId, { spaceId }),
+      threadContext(thread.id),
     ]);
-    const history = (await threadContext(thread.id)).slice(0, -1);
+
+    // Recording the question is a write nothing downstream reads, so it is
+    // started here and not waited for. It used to run before the context reads
+    // purely so that `history` could drop its last entry, which made a
+    // bookkeeping write a step on the path to the first thing the user sees.
+    const questionRecorded = appendMessage(thread.id, {
+      role: 'user',
+      content: query,
+      run_id: recorder.id,
+    }).catch((err) => log.warn('append_user_message_failed', { run_id: recorder.id, err: err.message }));
     recorder.endPhase('context', { memories: memories.length, thread_turns: history.length, documents: docs.indexed });
 
     if (memories.length) emit('memory_used', { memories });
@@ -56,33 +70,128 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       document_chunks: docs.chunks,
     });
 
-    // ---- research ---------------------------------------------------------
-    recorder.startPhase('research');
-    const research = await runResearchLoop({
-      system: researchSystem({
-        mode: 'quick',
-        budget: config.budgets.quick,
-        memories,
-        hasDocuments: docs.indexed > 0,
-        searchDegraded: resolveProviders()[0] === 'duckduckgo',
-      }),
-      userMessage: buildResearchUserMessage({ query, threadContext: history, documentCount: docs.indexed }),
-      ledger,
-      budget,
-      recorder,
-      emit,
-      userId,
-      threadId: thread.id,
-      runId: recorder.id,
-      model: config.llm.model,
-      maxTokens: config.budgets.quick.researchMaxTokens,
-      effort: config.budgets.quick.researchEffort,
+    // ---- routing ----------------------------------------------------------
+    // Decided from the request, not by asking a model. The turn that used to
+    // reach this conclusion sat in front of every answer.
+    const route = classifyQuestion({
+      query,
+      mode: retrievalMode,
+      spaceId,
       hasDocuments: docs.indexed > 0,
-      signal,
+      threadTurns: history.length,
     });
-    recorder.endPhase('research', {
+    // Null unless DIAGNOSTIC_TRACE is on, and every call on it is guarded, so a
+    // production run carries nothing extra.
+    const funnel = createFunnel({ question: query });
+    emit('route', { kind: route.kind, reason: route.reason });
+    recorder.set({ route: route.kind });
+
+    // ---- deterministic retrieval -------------------------------------------
+    recorder.startPhase('retrieval');
+    let searchQuery = query;
+    let rewritten = false;
+
+    if (route.kind === QUESTION_KIND.CONTEXTUAL_FOLLOW_UP) {
+      recorder.startPhase('rewrite');
+      // "why?" cannot be searched. One small model call turns it back into a
+      // question that can be, which is the only place in this path where a
+      // model is needed before retrieval — and it is needed, because the
+      // information is in the conversation rather than in the request.
+      const standalone = await rewriteFollowUp({ query, history, recorder, signal }).catch(() => null);
+      if (standalone && standalone !== query) {
+        searchQuery = standalone;
+        rewritten = true;
+        funnel?.rewrote(standalone);
+        emit('query_rewritten', { from: query, to: standalone });
+      }
+      recorder.endPhase('rewrite', { rewritten: Boolean(standalone && standalone !== query) });
+    }
+
+    const gathered =
+      route.kind === QUESTION_KIND.DOCUMENTS
+        ? await gatherFromDocuments({ query: searchQuery, ledger, budget, recorder, emit, userId, spaceId, signal })
+        : route.kind === QUESTION_KIND.MEMORY_INSTRUCTION
+          ? { searched: false, coverage: { ok: true, reasons: [] } }
+          : await gatherFromWeb({ query: searchQuery, ledger, budget, recorder, emit, signal, pages: QUICK_PAGES(), funnel });
+
+    recorder.endPhase('retrieval', {
+      route: route.kind,
+      rewritten,
+      sources: ledger.citable.length,
+      coverage_ok: gathered.coverage.ok,
+      coverage_reasons: gathered.coverage.reasons,
+    });
+
+    /**
+     * Quick is one pass, and stays one pass.
+     *
+     * Incomplete evidence used to hand the question to the iterative research
+     * loop, which added eight to ten seconds and turned a quick answer into a
+     * slow one — for a mode whose entire premise is that most questions do not
+     * need that. Deep Search is the iterative one; that is what the two gears
+     * are for, and quietly escalating between them is the spend failure their
+     * separation exists to prevent.
+     *
+     * So an incomplete result is answered as incomplete. The evidence that was
+     * found is used, the answer says what it could not establish, and the run
+     * is marked evidence-limited rather than failed: a partial answer with
+     * honest limits is a real outcome, not an error.
+     *
+     * Nothing found at all is different, because there is nothing to answer
+     * from. That gets exactly one more deterministic attempt — a broader search
+     * on the same question, no model call in front of it — and then answers
+     * with whatever that produced.
+     */
+    let coverage = gathered.coverage;
+    let rescued = false;
+
+    if (!coverage.ok && ledger.citable.length === 0 && route.kind !== QUESTION_KIND.MEMORY_INSTRUCTION) {
+      recorder.startPhase('rescue');
+      const rescue = await rescueRetrieval({
+        query: searchQuery,
+        route: route.kind,
+        ledger,
+        budget,
+        recorder,
+        emit,
+        userId,
+        spaceId,
+        signal,
+        candidates: gathered.candidates || [],
+        funnel,
+      });
+      coverage = rescue.coverage;
+      rescued = true;
+      recorder.endPhase('rescue', { sources: ledger.citable.length, coverage_ok: coverage.ok });
+    }
+
+    const evidenceLimited = !coverage.ok;
+    if (evidenceLimited) {
+      recorder.recordWarning('retrieval', 'evidence_limited', coverage.reasons.join('; '));
+      emit('evidence_limited', {
+        reasons: coverage.reasons,
+        sources: ledger.citable.length,
+        // The honest next step, offered rather than taken: escalating a quick
+        // run into a deep one on the server's own initiative is an unbounded
+        // bill the user never agreed to.
+        suggestion: 'Deep Search researches each part of a question separately and reads more sources.',
+      });
+    }
+
+    const research = {
+      notes: [],
+      termination_reason: evidenceLimited ? 'evidence_limited' : 'sufficient_evidence',
+      capped: false,
+      cap_reason: null,
+      budget: budget.snapshot(),
+    };
+    recorder.endPhase('retrieval_outcome', {
+      route: route.kind,
+      rescued,
       tool_calls: budget.counts.tool_calls,
       sources_fetched: ledger.sources.length,
+      coverage_ok: coverage.ok,
+      coverage_reasons: coverage.reasons,
       termination_reason: research.termination_reason,
     });
 
@@ -97,22 +206,41 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     // ---- synthesis (sources always emitted before answer tokens) ----------
     const { answer, validation, truncated } = await synthesizeAnswer({
       query,
+      // A follow-up reaches here as "why?"; the standalone rewrite is what the
+      // passages should be ranked against. The prompt still shows the user's
+      // own words.
+      retrievalQuery: searchQuery,
       ledger,
       mode: 'quick',
       capped: research.capped,
       capReason: research.cap_reason,
+      evidenceLimited,
+      evidenceGaps: coverage.reasons.join('; ') || null,
       memories,
       threadContext: history,
       researchNotes: null,
       recorder,
       emit,
-      model: config.llm.model,
+      model: config.llm.quickModel,
       maxTokens: config.budgets.quick.maxTokens,
       effort: config.budgets.quick.effort,
       ceilingMs: config.budgets.quick.synthesisCeilingMs,
       signal,
     });
 
+    // An answer written from evidence that cites none of it is the failure this
+    // system exists to prevent, and it is indistinguishable from an answer made
+    // up entirely. Recorded rather than patched: attaching citations after the
+    // fact would put markers on sentences nothing checked.
+    if (ledger.citable.length > 0 && validation.cited.length === 0) {
+      recorder.recordWarning('synthesis', 'uncited_answer', `${ledger.citable.length} sources available, none cited`);
+      emit('uncited_answer', { sources: ledger.citable.length });
+      log.warn('uncited_answer', { run_id: recorder.id, sources: ledger.citable.length, model: config.llm.quickModel });
+    }
+
+    // The question's write is joined here and nowhere earlier: the thread
+    // must not show an answer arriving before the thing it answers.
+    await questionRecorded;
     await appendMessage(thread.id, {
       role: 'assistant',
       content: answer,
@@ -125,7 +253,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
 
     const terminationReason = truncated ? 'max_tokens' : research.termination_reason;
     // Set before finish(): finish() is what persists the record.
-    recorder.set({ budget: budget.snapshot() });
+    recorder.set({ budget: budget.snapshot(), ...(funnel ? { funnel: funnel.toJSON() } : {}) });
     const run = recorder.finish({
       status: 'ok',
       terminationReason,
@@ -135,6 +263,29 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
         valid: validation.cited.length,
         invalid: validation.invalid_citations.length,
         groundedness: validation.groundedness,
+        // The two counts the ratio is made of. Without them a pooled figure
+        // across runs cannot be computed at all: `valid` counts distinct
+        // sources, not sentences, and dividing by it produces a number that
+        // looks like grounding and is not one.
+        cited_sentences: validation.cited_sentences,
+        supported_sentences: validation.supported_sentences,
+        // Kept so grounding can be diagnosed from the run itself. A support
+        // score is only interpretable beside the sentence it scored and the
+        // text it was scored against; the ratio alone says a number failed and
+        // nothing about why.
+        // The validator's own decisions, capped so a run record stays a record
+        // rather than a transcript. Passages are trimmed, not summarised: a
+        // classifier reading a paraphrase of the evidence is back to guessing.
+        sentence_results: (validation.sentence_results || []).slice(0, 20).map((r) => ({
+          sentence: r.sentence,
+          refs: r.refs,
+          supported: r.supported,
+          best_score: r.best_score,
+          // Not truncated. Trimming a passage to twelve hundred characters can
+          // drop the sentence that produced the score, which makes the record
+          // unable to explain its own number.
+          scored_against: r.scored_against,
+        })),
       },
       sources: {
         discovered: ledger.sources.length + ledger.candidates.size,
@@ -174,11 +325,27 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
   }
 }
 
+/** Which model served which role, as the running process is configured. */
+export function modelRoles() {
+  return {
+    quick: config.llm.quickModel,
+    planner: config.llm.plannerModel,
+    branch: config.llm.branchModel,
+    deepSynthesis: config.llm.deepSynthesisModel,
+    queryRewrite: config.llm.queryRewriteModel,
+    memory: config.llm.memoryModel,
+  };
+}
+
 /** The metrics block the UI shows in the run footer. */
 export function summarizeRun(run, extra = {}) {
   return {
     run_id: run.id,
     mode: run.mode,
+    // The contract's done event names the model that served the answer, and a
+    // grader reading a cost figure cannot interpret it without one.
+    model: run.model,
+    models: modelRoles(),
     status: run.status,
     termination_reason: run.termination_reason,
     termination_explanation: CAP_REASONS[run.termination_reason] || null,

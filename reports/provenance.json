@@ -1,0 +1,247 @@
+{
+  "_LIMITATIONS": [
+    "Not the official benchmark: saved answers, not the contract path.",
+    "Pages are re-fetched today; the run read them weeks ago, so page_changed is expected and is reported separately.",
+    "Uses benchmark/lib.mjs scoring directly, so it cannot drift from the gate it estimates."
+  ],
+  "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
+  "ran_at": "2026-09-17T14:25:29.887Z",
+  "ran_provenance_at": "2026-09-18T01:32:38.042Z",
+  "target": 0.95,
+  "summary": {
+    "checked": 25,
+    "verifiable": 25,
+    "grounded": 24,
+    "dangling": 0,
+    "blocked": 0,
+    "changed": 1,
+    "absent": 0,
+    "citation_grounding": 0.96
+  },
+  "runs": [
+    {
+      "query": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://algomaster.io/learn/system-design/bloom-filters"
+        }
+      ]
+    },
+    {
+      "query": "What does the Linux OOM killer use to score which process to terminate?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://docs.memset.com/cd/Linux's-OOM-Process-Killer.199066633.html"
+        }
+      ]
+    },
+    {
+      "query": "How does TCP slow start decide the initial congestion window?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "page_changed_since_run",
+          "url": "https://www.keycdn.com/support/tcp-slow-start",
+          "snippet": "SupportFind answers, guides, and tutorials to supercharge your content delivery.Getting StartedZonesPull ZonePush ZoneIntegrationsCMSFrameworksAccount Managemen"
+        }
+      ]
+    },
+    {
+      "query": "What is the difference between a clustered and a non-clustered database index?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://www.solarwinds.com/database-optimization/clustered-vs-non-clustered-index"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://www.sqlshack.com/what-is-the-difference-between-clustered-and-non-clustered-indexes-in-sql-server/"
+        }
+      ]
+    },
+    {
+      "query": "How does the DNS resolver decide when a cached record has expired?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://jvns.ca/blog/2021/12/06/dns-doesn-t-propagate/"
+        }
+      ]
+    },
+    {
+      "query": "What does a Merkle tree let a distributed system verify cheaply?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://pratikpandey.substack.com/p/merkle-trees-the-data-structure-for"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://brilliant.org/wiki/merkle-tree/"
+        }
+      ]
+    },
+    {
+      "query": "How does write amplification arise in solid state drives?",
+      "checks": []
+    },
+    {
+      "query": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://en.wikipedia.org/wiki/Two-phase_commit_protocol"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://www.geeksforgeeks.org/dbms/two-phase-commit-protocol-distributed-transaction-management/"
+        }
+      ]
+    },
+    {
+      "query": "How does HTTP content negotiation choose a response representation?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/Content_negotiation"
+        }
+      ]
+    },
+    {
+      "query": "What does the borrow checker in Rust prevent at compile time?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://blog.logrocket.com/introducing-rust-borrow-checker/"
+        }
+      ]
+    },
+    {
+      "query": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://codingtechroom.com/question/jvm-jit-compile-hot-methods"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://www.javacodegeeks.com/2026/07/how-the-jvm-decides-what-to-compile-inside-the-jit-tier-system-and-profiling-pipeline.html"
+        }
+      ]
+    },
+    {
+      "query": "What is the purpose of a write-ahead log in database crash recovery?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://en.wikipedia.org/wiki/Write-ahead_logging"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://martinuke0.github.io/posts/2026-05-13-why-write-ahead-logging-prevents-database-corruption-during-crashes/"
+        }
+      ]
+    },
+    {
+      "query": "How does consistent hashing limit the keys that move when a node leaves?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://www.geeksforgeeks.org/system-design/consistent-hashing/"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://www.systemforces.com/blog/consistent-hashing-explained-for-system-design"
+        }
+      ]
+    },
+    {
+      "query": "What does TLS certificate pinning protect against, and what does it break?",
+      "checks": []
+    },
+    {
+      "query": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://codelucky.com/copy-on-write-filesystem-zfs-btrfs/"
+        }
+      ]
+    },
+    {
+      "query": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://martinuke0.github.io/posts/2026-05-16-the-latency-cost-of-http2-head-of-line-blocking/"
+        }
+      ]
+    },
+    {
+      "query": "How does a vector clock differ from a Lamport timestamp?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://www.designgurus.io/answers/detail/when-to-use-vector-clocks-vs-lamport-timestamps"
+        }
+      ]
+    },
+    {
+      "query": "What does the CAP theorem actually claim about partition tolerance?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://en.wikipedia.org/wiki/CAP_theorem"
+        }
+      ]
+    },
+    {
+      "query": "How do columnar storage formats achieve better compression than row formats?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://moderndataengineering.dev/docs/storage-formats/row-vs-columnar"
+        }
+      ]
+    },
+    {
+      "query": "What is false sharing, and why does it slow down multicore code?",
+      "checks": [
+        {
+          "n": 1,
+          "outcome": "provenance_verified",
+          "url": "https://en.wikipedia.org/wiki/False_sharing"
+        },
+        {
+          "n": 2,
+          "outcome": "provenance_verified",
+          "url": "https://awesome-embedded-learning-studio.github.io/Tutorial_AwesomeModernCPP/en/vol6-performance/ch05-multicore-performance/05-01-false-sharing"
+        }
+      ]
+    }
+  ]
+}

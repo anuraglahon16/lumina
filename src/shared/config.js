@@ -107,7 +107,35 @@ export const config = {
      * core/llm.js shapes the request for.
      */
     model: process.env.LUMINA_MODEL || 'claude-sonnet-5',
-    branchModel: process.env.LUMINA_BRANCH_MODEL || process.env.LUMINA_MODEL || 'claude-sonnet-5',
+
+    /**
+     * One model per role, because the roles are not alike.
+     *
+     * Most calls in a run are not writing the answer. Choosing which page to
+     * read, decomposing a question, rewriting a follow-up into something
+     * searchable, noticing a durable fact about the user: all of them are
+     * mechanical, none reaches the reader as prose, and all of them were served
+     * by the model chosen for the one job that does.
+     *
+     * These deliberately do NOT inherit `LUMINA_MODEL`. That was the first
+     * shape of this and it was wrong in the place it mattered: a deployment
+     * with `LUMINA_MODEL=claude-sonnet-5` already set — which is what ours had
+     * — would read the new code, log the new role names, and route every one of
+     * them straight back to Sonnet. The split would have existed only in
+     * environments that had never configured anything. A setting whose whole
+     * purpose is to separate roles cannot be silently overridden by the setting
+     * it exists to separate them from.
+     *
+     * `deepSynthesisModel` is the exception, and honestly so: `LUMINA_MODEL`
+     * has always meant "the model that writes answers", and deep synthesis is
+     * the call that writes them.
+     */
+    quickModel: process.env.LUMINA_QUICK_MODEL || 'claude-haiku-4-5',
+    plannerModel: process.env.LUMINA_PLANNER_MODEL || 'claude-haiku-4-5',
+    branchModel: process.env.LUMINA_BRANCH_MODEL || 'claude-haiku-4-5',
+    deepSynthesisModel: process.env.LUMINA_DEEP_SYNTHESIS_MODEL || process.env.LUMINA_MODEL || 'claude-sonnet-5',
+    queryRewriteModel: process.env.LUMINA_QUERY_REWRITE_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
+    memoryModel: process.env.LUMINA_MEMORY_MODEL || process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     fastModel: process.env.LUMINA_FAST_MODEL || 'claude-haiku-4-5',
     maxRetries: num(process.env.LLM_MAX_RETRIES, 2),
     timeoutMs: num(process.env.LLM_TIMEOUT_MS, 120000),
@@ -128,6 +156,18 @@ export const config = {
 
   // Hard execution limits. Quick mode is deliberately small and must report
   // honestly when it hits a cap; Deep Search gets its own, larger envelope.
+  /**
+   * Observation, off by default.
+   *
+   * With it off a run behaves exactly as it did and its record carries nothing
+   * extra. With it on, the retrieval path keeps what it already has in memory:
+   * no additional searches, fetches or model calls are made for the sake of
+   * looking at them.
+   */
+  diagnostics: {
+    trace: bool(process.env.DIAGNOSTIC_TRACE, false),
+  },
+
   budgets: {
     quick: {
       maxIterations: num(process.env.QUICK_MAX_ITERATIONS, 4),
@@ -174,13 +214,44 @@ export const config = {
        * Set to 0 to disable and let the model decide when to stop.
        */
       sufficientSources: num(process.env.QUICK_SUFFICIENT_SOURCES, 2),
+      // One more deterministic attempt when the first found nothing at all,
+      // bounded so that a rescue cannot cost more than the answer it rescues.
+      rescueCeilingMs: num(process.env.QUICK_RESCUE_CEILING_MS, 6000),
+      // The whole retrieval phase, after which the answer is written from
+      // whatever arrived. A reader waiting is a cost too.
+      retrievalCeilingMs: num(process.env.QUICK_RETRIEVAL_CEILING_MS, 6000),
+      // More fetches in flight than the answer needs, because about half return
+      // nothing usable and finding that out serially is what made the tail long.
+      fetchConcurrency: num(process.env.QUICK_FETCH_CONCURRENCY, 3),
+      // Below this a "successful" fetch is navigation furniture, not evidence.
+      minPageChars: num(process.env.QUICK_MIN_PAGE_CHARS, 400),
       // A few hundred words does not take a minute and a half to write. The
       // ceiling exists for a stalled connection, not for a slow answer, so it
       // is sized just above what writing this much has ever taken.
       synthesisCeilingMs: num(process.env.QUICK_SYNTHESIS_CEILING_MS, 90000),
     },
     deep: {
-      maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 5),
+      /**
+       * Four, not five.
+       *
+       * The gate asks for at least three, and the fifth sub-question was
+       * costing twice: roughly fifty output tokens on a call whose latency is
+       * almost entirely output tokens, and a whole extra branch in a run with a
+       * ninety second ceiling. Four still decomposes a question properly and
+       * still reads more sources than a quick run by a wide margin.
+       */
+      maxSubQuestions: num(process.env.DEEP_MAX_SUBQUESTIONS, 4),
+      /**
+       * The benchmark scores the *minimum* sub-question count across runs, so a
+       * single thin plan is worth as much as a run that never happened. Three is
+       * the floor below which a decomposition is not one.
+       */
+      minSubQuestions: num(process.env.DEEP_MIN_SUBQUESTIONS, 3),
+      /**
+       * Planning is a deep run's first paint: nothing is shown until it lands.
+       * A planner still thinking after this is treated as one that failed.
+       */
+      planCeilingMs: num(process.env.DEEP_PLAN_CEILING_MS, 3500),
       maxIterationsPerBranch: num(process.env.DEEP_BRANCH_MAX_ITERATIONS, 4),
       maxToolCallsPerBranch: num(process.env.DEEP_BRANCH_MAX_TOOL_CALLS, 6),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
@@ -298,5 +369,31 @@ export function capabilities() {
       openai: Boolean(config.embeddings.openaiKey),
       local: true,
     },
+  };
+}
+
+/**
+ * Which model actually serves each role.
+ *
+ * `/v1/health` reported `config.llm.model` under the name `model`, and a
+ * diagnostic recorded that as the model under test. It was wrong in the way
+ * that matters: `LUMINA_MODEL` is the legacy global, it said `claude-sonnet-5`,
+ * and every Quick answer in the run was written by Haiku. Twenty questions were
+ * attributed to a model that answered none of them, and nothing in the file
+ * contradicted it.
+ *
+ * So the roles are reported as roles. `model` stays where it is for anything
+ * already reading it, but it is the legacy field and nothing should reason
+ * about which model answered from it.
+ */
+export function modelRoles() {
+  return {
+    quick: config.llm.quickModel,
+    deep_planner: config.llm.plannerModel,
+    deep_branch: config.llm.branchModel,
+    deep_synthesis: config.llm.deepSynthesisModel,
+    query_rewrite: config.llm.queryRewriteModel,
+    memory: config.llm.memoryModel,
+    mechanical: config.llm.fastModel,
   };
 }

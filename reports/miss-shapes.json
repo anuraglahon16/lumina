@@ -1,0 +1,356 @@
+{
+  "ab_ran_at": "2026-09-18T00:03:31.556Z",
+  "variant": "granular",
+  "counts": {
+    "continuation_prose": 39,
+    "list_introduction": 2,
+    "evidence_gap_disclosure": 4,
+    "quotation_fragment": 2,
+    "framing_sentence": 2
+  },
+  "misses": [
+    {
+      "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "sample": 2,
+      "sentence": "This compact representation uses far less memory than storing the items themselves.",
+      "best_support": 0.778,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "sample": 2,
+      "sentence": "A missing item can appear present if other items already set all of its hash positions to 1.",
+      "best_support": 1,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "sample": 3,
+      "sentence": "If the filter says \"yes,\" the engine still checks the actual file to confirm.",
+      "best_support": 0.875,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "sample": 1,
+      "sentence": "The principal criteria for this score are:",
+      "best_support": 0.667,
+      "shape": "list_introduction"
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "sample": 1,
+      "sentence": "In practice, this means the OOM Killer tends to target large non-system processes with many child processes.",
+      "best_support": 0.75,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "sample": 2,
+      "sentence": "The badness score is based on several criteria, primarily:",
+      "best_support": 0.667,
+      "shape": "list_introduction"
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "sample": 3,
+      "sentence": "This scoring approach means the OOM Killer typically targets large, non-system processes with many child processes.",
+      "best_support": 0.692,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is the difference between a clustered and a non-clustered database index?",
+      "sample": 2,
+      "sentence": "Clustered and nonclustered indexes differ in their structure, location, quantity per table, and performance characteristics.",
+      "best_support": 0.727,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is the difference between a clustered and a non-clustered database index?",
+      "sample": 3,
+      "sentence": "Read performance differs between the two.",
+      "best_support": 0.5,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does the DNS resolver decide when a cached record has expired?",
+      "sample": 2,
+      "sentence": "It mentions that resolvers cache DNS records and that the TTL (time to live) on a record is supposed to determine how long resolvers cache it before expiring, but it does not explain the mechanism res",
+      "best_support": 0.611,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does the DNS resolver decide when a cached record has expired?",
+      "sample": 3,
+      "sentence": "It confirms that resolvers cache DNS records and that cached records expire based on their TTL (time to live), but it does not describe the mechanism resolvers use to determine expiration or manage th",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does a Merkle tree let a distributed system verify cheaply?",
+      "sample": 2,
+      "sentence": "Instead of sending gigabytes of data across a network to confirm two copies match, the system can compare cryptographic hashes.",
+      "best_support": 0.857,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does a Merkle tree let a distributed system verify cheaply?",
+      "sample": 3,
+      "sentence": "Instead of sending entire files or datasets for comparison, a Merkle tree allows verification through hashes.",
+      "best_support": 0.833,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does a Merkle tree let a distributed system verify cheaply?",
+      "sample": 3,
+      "sentence": "If the hashes match, verification is complete.",
+      "best_support": 0.75,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does write amplification arise in solid state drives?",
+      "sample": 1,
+      "sentence": "The evidence provided discusses the SSD market size, growth projections, regional adoption, and key players in the industry, but it does not contain any information about write amplification or the te",
+      "best_support": 0.522,
+      "shape": "evidence_gap_disclosure"
+    },
+    {
+      "question": "How does write amplification arise in solid state drives?",
+      "sample": 3,
+      "sentence": "The evidence is a market report about the SSD industry's size, growth projections, and regional adoption trends.",
+      "best_support": 0.636,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "sample": 1,
+      "sentence": "However, the protocol has significant costs.",
+      "best_support": 0.6,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "sample": 3,
+      "sentence": "The protocol also addresses recovery from temporary failures.",
+      "best_support": 0.6,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the borrow checker in Rust prevent at compile time?",
+      "sample": 2,
+      "sentence": "The evidence provided discusses what the borrow checker is and its general role in Rust's memory management, but it does not explicitly detail what specific problems or errors it prevents at compile t",
+      "best_support": 0.5,
+      "shape": "evidence_gap_disclosure"
+    },
+    {
+      "question": "What does the borrow checker in Rust prevent at compile time?",
+      "sample": 2,
+      "sentence": "To give you a complete answer about what specific violations the borrow checker catches at compile time, I would need evidence that explicitly lists those compile-time checks.",
+      "best_support": 0.5,
+      "shape": "evidence_gap_disclosure"
+    },
+    {
+      "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "sample": 3,
+      "sentence": "The JVM determines when a method is \"hot\" enough to compile based on execution frequency metrics and a multi-stage decision process.",
+      "best_support": 0.615,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "sample": 3,
+      "sentence": "The JVM decides the next compilation step dynamically based on invocation counts, loop back-edge counts, and how busy each compiler's queue currently is.",
+      "best_support": 0.875,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "sample": 3,
+      "sentence": "The JVM can route through level 2 instead of 3 when the C2 compilation queue is under pressure, adapting the decision based on current system load.",
+      "best_support": 0.733,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is the purpose of a write-ahead log in database crash recovery?",
+      "sample": 2,
+      "sentence": "This works because WAL enforces a strict ordering: log entries are written to durable storage first, then the changes are applied to the database.",
+      "best_support": 0.867,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is the purpose of a write-ahead log in database crash recovery?",
+      "sample": 2,
+      "sentence": "The main functionality includes three key aspects.",
+      "best_support": 0.5,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it break?",
+      "sample": 1,
+      "sentence": "The heading \"What Is Certificate Pinning?",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it break?",
+      "sample": 1,
+      "sentence": "Benefits, Risks & Best Practices\" appears in the evidence, along with related topics like \"Risks and Limitations of Certificate Pinning\" and \"Listiche: Key Stages of a Pinning Failure,\" but the substa",
+      "best_support": 0.524,
+      "shape": "quotation_fragment"
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it break?",
+      "sample": 2,
+      "sentence": "Benefits, Risks & Best Practices\" and \"Risks and Limitations of Certificate Pinning,\" which appear to be in the source but are not included in the evidence provided.",
+      "best_support": 0.583,
+      "shape": "quotation_fragment"
+    },
+    {
+      "question": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "sample": 3,
+      "sentence": "The mechanism works through the filesystem's tree structure.",
+      "best_support": 0.5,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "sample": 3,
+      "sentence": "Both the snapshot and the active filesystem can then reference their respective versions of the data without redundancy.",
+      "best_support": 0.5,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "sample": 3,
+      "sentence": "The evidence discusses what causes head-of-line blocking in HTTP/2, specifically frame interleaving limits and flow control stalls at the application layer, but it does not explain why HTTP/3 avoids t",
+      "best_support": 0.5,
+      "shape": "evidence_gap_disclosure"
+    },
+    {
+      "question": "How does a vector clock differ from a Lamport timestamp?",
+      "sample": 1,
+      "sentence": "The practical difference matters when you need to detect concurrent writes.",
+      "best_support": 0.571,
+      "shape": "framing_sentence"
+    },
+    {
+      "question": "How does a vector clock differ from a Lamport timestamp?",
+      "sample": 3,
+      "sentence": "The practical difference matters most when you need to detect concurrent writes.",
+      "best_support": 0.571,
+      "shape": "framing_sentence"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 1,
+      "sentence": "When a network partition occurs, the system must choose between consistency or availability, but it cannot abandon partition tolerance itself.",
+      "best_support": 0.833,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 1,
+      "sentence": "In 2012, Eric Brewer clarified this aspect, noting that the often-cited \"two out of three\" framing can be misleading.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 1,
+      "sentence": "This means partition tolerance is the baseline requirement, and the real trade-off happens within that constraint.",
+      "best_support": 0.6,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 2,
+      "sentence": "In other words, the system keeps functioning even when network failures occur and nodes cannot communicate with each other.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 3,
+      "sentence": "The CAP theorem does not claim that you must sacrifice partition tolerance.",
+      "best_support": 0.714,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sample": 3,
+      "sentence": "This is why the theorem is sometimes misunderstood.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 1,
+      "sentence": "A single column contains values of the same type that repeat or change gradually.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 1,
+      "sentence": "For example, ShopFlow's status column is a long run of \"paid, paid, paid, shipped, paid...\", a handful of distinct values repeating.",
+      "best_support": 0.923,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 2,
+      "sentence": "A single column contains values of the same type that repeat or change gradually.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 2,
+      "sentence": "For example, ShopFlow's status column is a long run of values like \"paid, paid, paid, shipped, paid\", just a handful of distinct values repeating.",
+      "best_support": 1,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 2,
+      "sentence": "By contrast, a row mixes different data types: a bigint order_id, a string status, and a decimal amount.",
+      "best_support": 1,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sample": 2,
+      "sentence": "Since compression works by finding and exploiting repetition and similarity in data, columnar layouts present much better opportunities for compression algorithms to work effectively.",
+      "best_support": 0.588,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "sample": 2,
+      "sentence": "The slowdown happens because of how cache coherence protocols work.",
+      "best_support": 0.571,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "sample": 2,
+      "sentence": "Even though the cores are operating on logically unrelated variables, the coherence mechanism treats them as a single unit.",
+      "best_support": 0.667,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "sample": 3,
+      "sentence": "The slowdown happens because of how cache coherence protocols work.",
+      "best_support": 0.571,
+      "shape": "continuation_prose"
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "sample": 3,
+      "sentence": "The fix involves separating variables that different threads access frequently.",
+      "best_support": 0.5,
+      "shape": "continuation_prose"
+    }
+  ]
+}

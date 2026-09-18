@@ -72,35 +72,115 @@ async function openaiEmbed(texts) {
 }
 
 /**
- * Embed a batch of texts. Falls back to the local embedder if a remote
- * provider errors, so indexing never dies halfway through a document.
+ * The version of how text is turned into a vector.
+ *
+ * Bumped when chunking, cleaning or normalisation changes in a way that makes
+ * old vectors describe text the system no longer produces. Part of the
+ * namespace, so old vectors stop being compared to new ones rather than being
+ * silently mixed with them.
  */
-export async function embedBatch(texts, { inputType = 'document', recorder } = {}) {
-  if (!texts.length) return { vectors: [], provider: resolveEmbeddingProvider(), dim: 0 };
-  const provider = resolveEmbeddingProvider();
+export const EMBEDDING_VERSION = 1;
 
-  if (provider === 'local') {
-    return { vectors: texts.map(localEmbed), provider: 'local', dim: config.embeddings.localDim };
+/** The model actually used for a provider, which is what a vector belongs to. */
+export function modelFor(provider) {
+  if (provider === 'voyage') return config.embeddings.voyageModel;
+  if (provider === 'openai') return config.embeddings.openaiModel;
+  return `local-${config.embeddings.localDim}`;
+}
+
+/**
+ * The space a vector lives in.
+ *
+ * Cosine similarity between vectors from different models is not a smaller
+ * similarity, it is a meaningless number — and it does not announce itself,
+ * because the arithmetic succeeds and returns something between -1 and 1. Two
+ * vectors may only be compared when every part of this string matches, so the
+ * comparison is gated on identity rather than on dimension agreeing by luck.
+ */
+export function embeddingNamespace({ provider, model, dim }) {
+  return `${provider}:${model || modelFor(provider)}:${dim}:v${EMBEDDING_VERSION}`;
+}
+
+/**
+ * Embed a batch of texts, reporting which embedder actually produced them.
+ *
+ * The fallback used to happen per slice, which kept indexing alive and quietly
+ * destroyed the index: a rate-limited document came back part remote vectors
+ * and part local ones, in different spaces and often different dimensions, and
+ * cosine similarity across that mixture is not a similarity. It did not error.
+ * It returned a number, the document looked indexed, and recall was zero.
+ *
+ * So the choice of embedder is made once for the whole batch. Vectors compared
+ * to each other are always from the same model, and `provider` tells the caller
+ * which one, because a query has to be embedded the same way as the chunks it
+ * is searched against.
+ */
+export async function embedBatch(texts, { inputType = 'document', recorder, provider: forced } = {}) {
+  if (!texts.length) {
+    const p = forced || resolveEmbeddingProvider();
+    return { vectors: [], provider: p, model: modelFor(p), dim: 0, namespace: null };
+  }
+  // A query must be embedded by whatever embedded the chunks it will be
+  // compared against, which is not always the current default.
+  const provider = forced || resolveEmbeddingProvider();
+
+  // A provider this build does not implement cannot be reached by trying. It
+  // reaches here when a chunk was written by a deployment configured
+  // differently, and attempting the call would mean a network round trip and a
+  // misleading 401 before arriving at the same answer.
+  if (!['voyage', 'openai', 'local'].includes(provider)) {
+    return { vectors: [], provider: 'unavailable', model: null, dim: 0, namespace: null };
   }
 
-  const vectors = [];
-  for (let i = 0; i < texts.length; i += config.embeddings.batchSize) {
-    const slice = texts.slice(i, i + config.embeddings.batchSize);
-    try {
+  if (provider === 'local') {
+    const dim = config.embeddings.localDim;
+    return { vectors: texts.map(localEmbed), provider: 'local', model: modelFor('local'), dim, namespace: embeddingNamespace({ provider: 'local', dim }) };
+  }
+
+  try {
+    const vectors = [];
+    for (let i = 0; i < texts.length; i += config.embeddings.batchSize) {
+      const slice = texts.slice(i, i + config.embeddings.batchSize);
       const { value } = await cached(
         'embed',
         { provider, inputType, texts: slice },
         config.cache.embedTtlMs,
-        () => (provider === 'voyage' ? voyageEmbed(slice, inputType) : openaiEmbed(slice)),
+        () => withRetry(() => (provider === 'voyage' ? voyageEmbed(slice, inputType) : openaiEmbed(slice))),
         recorder,
       );
       vectors.push(...value);
+    }
+    const dim = vectors[0]?.length || 0;
+    return { vectors, provider, model: modelFor(provider), dim, namespace: embeddingNamespace({ provider, dim }) };
+  } catch (err) {
+    // All of it, or none of it.
+    log.warn('embedding_provider_failed_using_local', { provider, texts: texts.length, err: err.message });
+    const dim = config.embeddings.localDim;
+    return { vectors: texts.map(localEmbed), provider: 'local', model: modelFor('local'), dim, namespace: embeddingNamespace({ provider: 'local', dim }) };
+  }
+}
+
+/**
+ * Retry a rate-limited embedding call before giving up on the provider.
+ *
+ * A free-tier key is a few requests a minute, and treating the first 429 as
+ * "this provider does not work" throws away the good embedder for a document
+ * that only needed to wait. Anything that is not a rate limit fails
+ * immediately, because retrying a bad key just makes the failure slower.
+ */
+async function withRetry(fn, attempts = 3) {
+  let lastErr;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      return await fn();
     } catch (err) {
-      log.warn('embedding_provider_failed_using_local', { provider, err: err.message });
-      vectors.push(...slice.map(localEmbed));
+      lastErr = err;
+      if (!/\b429\b|rate limit/i.test(err.message || '')) throw err;
+      if (attempt === attempts - 1) break;
+      await new Promise((r) => setTimeout(r, 2 ** attempt * 1500 + Math.random() * 500));
     }
   }
-  return { vectors, provider, dim: vectors[0]?.length || 0 };
+  throw lastErr;
 }
 
 export async function embedQuery(text, opts = {}) {

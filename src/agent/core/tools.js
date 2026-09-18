@@ -114,8 +114,23 @@ export function validateToolInput(name, input) {
   return { ok: false, message };
 }
 
-export function toolDefinitionsFor({ hasDocuments }) {
-  return TOOL_DEFINITIONS.filter((t) => t.name !== 'search_documents' || hasDocuments);
+/**
+ * Which tools this run may call.
+ *
+ * `retrievalMode` is the caller saying where the answer should come from. Asked
+ * a question about an uploaded document, a model handed a web search will
+ * often take it, answer from the web, and produce something plausible that
+ * never touched the document — so "search the documents" is enforced by not
+ * offering the web rather than by asking nicely in a prompt.
+ */
+export function toolDefinitionsFor({ hasDocuments, retrievalMode = 'auto' }) {
+  const WEB = new Set(['web_search', 'fetch_page']);
+  return TOOL_DEFINITIONS.filter((t) => {
+    if (t.name === 'search_documents' && !hasDocuments) return false;
+    if (retrievalMode === 'docs' && WEB.has(t.name)) return false;
+    if (retrievalMode === 'web' && t.name === 'search_documents') return false;
+    return true;
+  });
 }
 
 /**
@@ -123,7 +138,7 @@ export function toolDefinitionsFor({ hasDocuments }) {
  * Search branch). It is responsible for budget accounting, ledger updates,
  * trace emission, and converting results into compact text for the model.
  */
-export function createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch = null }) {
+export function createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch = null, spaceId = null }) {
   async function run(name, rawInput) {
     const checked = validateToolInput(name, rawInput);
     if (!checked.ok) {
@@ -204,7 +219,7 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
   }
 
   async function runSearchDocuments({ query, doc_ids }) {
-    const { results, corpus_size, embedding_provider } = await searchChunks(query, { userId, docIds: doc_ids, recorder });
+    const { results, corpus_size, embedding_provider } = await searchChunks(query, { userId, docIds: doc_ids, spaceId, recorder });
     if (!results.length) {
       return {
         ok: false,

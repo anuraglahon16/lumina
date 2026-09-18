@@ -1,0 +1,572 @@
+{
+  "_README": [
+    "One entry per factual sentence that carries no citation. Classify each:",
+    "placement_artifact        \u2014 the claim is cited, the marker sits where the parser could not attach it",
+    "evidence_supported_uncited\u2014 a source in this run supports it and the answer did not cite it",
+    "unsupported_statement     \u2014 nothing in this run supports it",
+    "transition_or_non_factual \u2014 it asserts nothing checkable",
+    "evidence_gap_disclosure   \u2014 it describes what the evidence does not say",
+    "splitter_artifact         \u2014 it is not a sentence; the splitter made it",
+    "Leave category null to say you have not decided."
+  ],
+  "commit": "e2e0e4652a4283a5fcaef037a28f2e85d79335a3",
+  "ran_at": "2026-09-17T14:25:29.887Z",
+  "questions": [
+    {
+      "question": "How does a bloom filter trade memory for false positives in a storage engine?",
+      "sentences": [
+        {
+          "sentence": "If it says no, the item is definitely absent.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "If it says yes, the item is only probably present.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "This tradeoff becomes sharper as you add more items than the filter was sized for.",
+          "best_support": 0.5,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "The smaller the bit array relative to the number of items added, the more bits get set to 1, and the more likely a query will find all its hash positions already set, triggering a false positive.",
+          "best_support": 0.75,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "For example, a database can use a Bloom filter to skip a disk file that cannot contain a key.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "If the filter says \"definitely no,\" the file is skipped entirely.",
+          "best_support": 0.667,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "If it says \"maybe,\" the engine performs the actual lookup.",
+          "best_support": 0.833,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "What does the Linux OOM killer use to score which process to terminate?",
+      "sentences": [
+        {
+          "sentence": "- The process and all of its child processes are using a lot of memory.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "- The minimum number of processes are killed (ideally one) to free up enough memory to resolve the situation.",
+          "best_support": 0.917,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "- Root, kernel, and important system processes are given much lower scores.",
+          "best_support": 0.778,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "In practice, this means the OOM Killer typically selects non-system processes that consume large amounts of memory and have many child processes.",
+          "best_support": 0.75,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "How does TCP slow start decide the initial congestion window?",
+      "sentences": [
+        {
+          "sentence": "- If SMSS > 2190 bytes: IW = 2 * SMSS bytes (maximum 2 segments)",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "- If SMSS > 1095 bytes and SMSS \u2264 2190 bytes: IW = 3 * SMSS bytes (maximum 3 segments)",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "- Otherwise: IW = 4 * SMSS bytes (maximum 4 segments)",
+          "best_support": 0.833,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "How does the DNS resolver decide when a cached record has expired?",
+      "sentences": [
+        {
+          "sentence": "This means the TTL is a guideline rather than a binding rule that all resolvers follow.",
+          "best_support": 0.333,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        },
+        {
+          "sentence": "The evidence does not provide technical details about the specific mechanisms resolvers use to track expiration times or decide the exact moment a cached entry becomes invalid.",
+          "best_support": 0.278,
+          "is_absence_disclosure": true,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "It focuses on the conceptual role of TTL and the practical reality that some resolvers do not honor it.",
+          "best_support": 0.333,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "What does a Merkle tree let a distributed system verify cheaply?",
+      "sentences": [
+        {
+          "sentence": "Merkle trees also verify data integrity in peer-to-peer networks where trust is a concern.",
+          "best_support": 0.778,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "This lets you verify information even when some sources are unreliable.",
+          "best_support": 0.667,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "How does write amplification arise in solid state drives?",
+      "sentences": [
+        {
+          "sentence": "The evidence provided does not address write amplification or how it arises in solid state drives.",
+          "best_support": 0.222,
+          "is_absence_disclosure": true,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "The document covers market size, growth rates, regional adoption, and general applications of SSDs, but contains no technical discussion of write amplification mechanisms.",
+          "best_support": 0.412,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "I cannot answer this question from the available evidence.",
+          "best_support": 0,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "What problem does the two-phase commit protocol solve, and what does it cost?",
+      "sentences": [
+        {
+          "sentence": "The core problem it addresses is this: when a single transaction runs on multiple independent systems, those systems may fail or lose communication at different times.",
+          "best_support": 0.429,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        },
+        {
+          "sentence": "Without coordination, one site might commit its portion of the transaction while another aborts, leaving the overall system in an inconsistent state.",
+          "best_support": 0.6,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "The protocol works by designating one coordinator node that asks all participating sites whether they can commit their local portion.",
+          "best_support": 0.714,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Each site responds with either a vote to commit (if its operations succeeded) or to abort (if it detected a problem).",
+          "best_support": 0.9,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "First, the protocol is not resilient to all failure modes.",
+          "best_support": 0.833,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Third, recovery procedures form a major part of the protocol because many failure scenarios must be handled.",
+          "best_support": 0.538,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "How does HTTP content negotiation choose a response representation?",
+      "sentences": [
+        {
+          "sentence": "The evidence does not cover how the server makes its final selection in detail beyond stating it uses an internal algorithm based on client hints.",
+          "best_support": 0.533,
+          "is_absence_disclosure": true,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "What does the borrow checker in Rust prevent at compile time?",
+      "sentences": [
+        {
+          "sentence": "The evidence provided does not directly specify what the borrow checker prevents at compile time.",
+          "best_support": 0.556,
+          "is_absence_disclosure": true,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "It helps you (or forces you) to manage ownership,\" and that ownership \"enables Rust to make memory safety guarantees without needing a garbage collector.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "splitter_artifact",
+          "note": "not a sentence: the splitter broke inside a quoted title or quotation."
+        },
+        {
+          "sentence": "The evidence also mentions that the borrow checker is responsible for \"what it stops us from doing,\" but the article excerpt does not detail the specific compile-time checks or errors the borrow checker catches.",
+          "best_support": 0.467,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "To answer your question fully, I would need evidence that explicitly describes the categories of memory safety violations or programming patterns that the borrow checker detects and rejects before compilation completes.",
+          "best_support": 0.421,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "How does a JIT compiler decide that a method is hot enough to compile?",
+      "sentences": [
+        {
+          "sentence": "The system is adaptive: the JVM doesn't apply a rigid threshold uniformly.",
+          "best_support": 0.375,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        }
+      ]
+    },
+    {
+      "question": "What is the purpose of a write-ahead log in database crash recovery?",
+      "sentences": [
+        {
+          "sentence": "Based on this comparison, the program can decide to undo what it had started, complete what it had started, or keep things as they are.",
+          "best_support": 0.909,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "This prevents the classic corruption scenario where a crash leaves a partially written data page on disk.",
+          "best_support": 0.909,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "If power fails during a page flush, the partially written data page is irrelevant because the log guarantees the change can be reapplied once the system restarts.",
+          "best_support": 0.813,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "How does consistent hashing limit the keys that move when a node leaves?",
+      "sentences": [
+        {
+          "sentence": "As a node fails or is removed, only the keys in its range move to the next node on the ring in the clockwise direction, while everything else remains unchanged.",
+          "best_support": 0.8,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Instead, only a small subset of keys are displaced, which minimizes disruption and improves system stability.",
+          "best_support": 0.8,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "What does TLS certificate pinning protect against, and what does it break?",
+      "sentences": [
+        {
+          "sentence": "I cannot answer this question from the evidence provided.",
+          "best_support": 0,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "While the evidence includes a title \"What Is Certificate Pinning?",
+          "best_support": 0.333,
+          "is_absence_disclosure": false,
+          "category": "splitter_artifact",
+          "note": "not a sentence: the splitter broke inside a quoted title or quotation."
+        },
+        {
+          "sentence": "Benefits, Risks & Best Practices\" and mentions \"Risks and Limitations of Certificate Pinning\" and \"Listiche: Key Stages of a Pinning Failure,\" the actual content explaining what certificate pinning protects against or what it breaks is not included in the retrieved material.",
+          "best_support": 0.619,
+          "is_absence_disclosure": false,
+          "category": "splitter_artifact",
+          "note": "not a sentence: the splitter broke inside a quoted title or quotation."
+        },
+        {
+          "sentence": "Only the table of contents or section headings from a Palo Alto Networks resource appear in the evidence.",
+          "best_support": 0,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "To answer your question properly, I would need the full text of those sections.",
+          "best_support": 0,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "How does a copy-on-write filesystem snapshot avoid duplicating data?",
+      "sentences": [
+        {
+          "sentence": "When you take a snapshot, the system simply records the current state of the file system tree structure.",
+          "best_support": 0.4,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        },
+        {
+          "sentence": "Both ZFS and Btrfs use this approach.",
+          "best_support": 0.8,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "The space efficiency comes from the fact that multiple copies, the snapshot and the current file system, share unchanged data blocks.",
+          "best_support": 0.714,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "What causes head-of-line blocking in HTTP/2 but not in HTTP/3?",
+      "sentences": [
+        {
+          "sentence": "The evidence provided describes head-of-line blocking in HTTP/2 but does not explain what changed in HTTP/3 or why HTTP/3 avoids this problem.",
+          "best_support": 0.2,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        },
+        {
+          "sentence": "To answer your question properly, I would need evidence that covers HTTP/3's design and how it differs from HTTP/2 in this regard.",
+          "best_support": 0.273,
+          "is_absence_disclosure": false,
+          "category": "evidence_gap_disclosure",
+          "note": "describes what the evidence does not cover. The synthesis prompt requires these to carry no citation."
+        }
+      ]
+    },
+    {
+      "question": "How does a vector clock differ from a Lamport timestamp?",
+      "sentences": [
+        {
+          "sentence": "When an event occurs locally, the counter increments.",
+          "best_support": 0.4,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        },
+        {
+          "sentence": "On any local event, a process increments its own entry.",
+          "best_support": 0.833,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "If every index of vector A is less than or equal to vector B with at least one strictly less, then A causally precedes B.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "What does the CAP theorem actually claim about partition tolerance?",
+      "sentences": [
+        {
+          "sentence": "This is the definition of partition tolerance as one of the three properties a distributed data store might provide.",
+          "best_support": 0.8,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Because partitions are unavoidable, the theorem's real insight is not about choosing whether to tolerate partitions.",
+          "best_support": 0.5,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "When a network partition occurs, a system cannot maintain all three properties at once; it must sacrifice either consistency or availability while continuing to operate despite the partition.",
+          "best_support": 0.75,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "The trade-off only becomes mandatory when partition failures actually happen.",
+          "best_support": 0.429,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        }
+      ]
+    },
+    {
+      "question": "How do columnar storage formats achieve better compression than row formats?",
+      "sentences": [
+        {
+          "sentence": "A single column typically holds values of one type that repeat or change gradually.",
+          "best_support": 0.6,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "For example, a status column might be a long sequence of \"paid, paid, paid, shipped, paid\u2026\", just a handful of distinct values repeating.",
+          "best_support": 0.917,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "A row, by contrast, mixes different data types together: a bigint order_id, a string status, a decimal amount.",
+          "best_support": 1,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Because compression works by exploiting repetition and similarity, the high self-similarity within columns makes them far more compressible than the mixed-type data found in rows.",
+          "best_support": 0.529,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        }
+      ]
+    },
+    {
+      "question": "What is false sharing, and why does it slow down multicore code?",
+      "sentences": [
+        {
+          "sentence": "The hardware guarantees that the same cacheline stays consistent across all cores through a coherence protocol.",
+          "best_support": 0.667,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "The granularity of coherence is the cacheline, not the individual variable.",
+          "best_support": 0.8,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "In some cases, eliminating false sharing can result in order-of-magnitude performance improvements.",
+          "best_support": 0.875,
+          "is_absence_disclosure": false,
+          "category": "evidence_supported_uncited",
+          "note": "a continuation sentence in a block whose opening sentence carries the marker; a source in this run supports it."
+        },
+        {
+          "sentence": "Other approaches include reordering variables or using compile-time data transformations, though these may have constraints depending on the language.",
+          "best_support": 0.462,
+          "is_absence_disclosure": false,
+          "category": "unsupported_statement",
+          "note": "below the 0.5 lexical bar; reads as paraphrase or inference rather than fabrication. A lexical overlap measure cannot tell the two apart, so this needs reading against the passage."
+        }
+      ]
+    }
+  ],
+  "_CLASSIFIED": [
+    "Filled in by hand at commit e2e0e46 + the measurement-correction phase.",
+    "evidence_supported_uncited: a source in this run supports it (>= 0.5 overlap) and the answer did not cite it.",
+    "evidence_gap_disclosure: it describes what the evidence lacks. The prompt requires these to be uncited.",
+    "unsupported_statement: below the lexical bar. Upper bound on real problems, not a count of them.",
+    "splitter_artifact: not a sentence."
+  ],
+  "distribution": {
+    "evidence_supported_uncited": 40,
+    "unsupported_statement": 7,
+    "evidence_gap_disclosure": 14,
+    "splitter_artifact": 3
+  }
+}

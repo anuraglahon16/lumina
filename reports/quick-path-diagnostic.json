@@ -1,0 +1,1527 @@
+[
+  {
+    "query": "What is the purpose of a write-ahead log in crash recovery?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 181,
+      "rewrite": null,
+      "retrieval": 6331,
+      "rescue": null,
+      "synthesis": 1128
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1135,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 5196,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 5196,
+        "ok": true,
+        "cached": false,
+        "summary": "read 151 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 7212,
+    "latency_ms": 8045,
+    "cost_usd": 0.001525,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does erasure coding compare with replication for durability?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 181,
+      "rewrite": null,
+      "retrieval": 2667,
+      "rescue": null,
+      "synthesis": 2073
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1772,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 892,
+        "ok": true,
+        "cached": false,
+        "summary": "read 2573 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 892,
+        "ok": true,
+        "cached": false,
+        "summary": "read 9806 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3503,
+    "latency_ms": 5292,
+    "cost_usd": 0.003359,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 0
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What limits the practical fan-out of a Kubernetes service mesh?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 179,
+      "rewrite": null,
+      "retrieval": 1778,
+      "rescue": null,
+      "synthesis": 1637
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1302,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 475,
+        "ok": true,
+        "cached": false,
+        "summary": "read 17782 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 475,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 2666,
+    "latency_ms": 3956,
+    "cost_usd": 0.002873,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 2,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 1
+        }
+      }
+    }
+  },
+  {
+    "query": "How does DNS negative caching work with NXDOMAIN responses?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 2283,
+      "rescue": null,
+      "synthesis": 1135
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1269,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1013,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1013,
+        "ok": true,
+        "cached": false,
+        "summary": "read 151 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3100,
+    "latency_ms": 3958,
+    "cost_usd": 0.001457,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What is the difference between optimistic and pessimistic locking?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 3441,
+      "rescue": null,
+      "synthesis": 1849
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1629,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1812,
+        "ok": true,
+        "cached": false,
+        "summary": "read 6711 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1812,
+        "ok": true,
+        "cached": false,
+        "summary": "read 4216 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 4217,
+    "latency_ms": 5838,
+    "cost_usd": 0.003917,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How do columnar formats like Parquet achieve compression ratios?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 2934,
+      "rescue": null,
+      "synthesis": 4273
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1494,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1438,
+        "ok": true,
+        "cached": false,
+        "summary": "read 13664 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1439,
+        "ok": true,
+        "cached": false,
+        "summary": "read 7639 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3784,
+    "latency_ms": 7754,
+    "cost_usd": 0.004865,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What is the role of the sequence number in TCP retransmission?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 2231,
+      "rescue": null,
+      "synthesis": 1393
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1441,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 789,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 789,
+        "ok": true,
+        "cached": false,
+        "summary": "read 6970 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3153,
+    "latency_ms": 4188,
+    "cost_usd": 0.002798,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does a CPU's store buffer affect memory ordering guarantees?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 2130,
+      "rescue": 2134,
+      "synthesis": 2472
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1206,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 924,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 924,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "web_search",
+        "ms": 1251,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 882,
+        "ok": true,
+        "cached": false,
+        "summary": "read 151 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 882,
+        "ok": true,
+        "cached": false,
+        "summary": "read 16606 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 5080,
+    "latency_ms": 7278,
+    "cost_usd": 0.003664,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 9,
+      "fetched": 2,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 6,
+      "writes": 6,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 4,
+          "writes": 4
+        }
+      }
+    }
+  },
+  {
+    "query": "What are the tradeoffs of copy-on-write versus journaling filesystems?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 181,
+      "rewrite": null,
+      "retrieval": 2402,
+      "rescue": null,
+      "synthesis": 1819
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1324,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1077,
+        "ok": true,
+        "cached": false,
+        "summary": "read 151 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1077,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3138,
+    "latency_ms": 4765,
+    "cost_usd": 0.001957,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does content-defined chunking improve deduplication ratios?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 182,
+      "rewrite": null,
+      "retrieval": 2522,
+      "rescue": null,
+      "synthesis": 4615
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1618,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 900,
+        "ok": true,
+        "cached": false,
+        "summary": "read 11054 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 900,
+        "ok": true,
+        "cached": false,
+        "summary": "read 24000 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3398,
+    "latency_ms": 7678,
+    "cost_usd": 0.006947,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What is the difference between at-least-once and exactly-once delivery?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 174,
+      "rewrite": null,
+      "retrieval": 2018,
+      "rescue": null,
+      "synthesis": 1413
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1442,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 575,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 575,
+        "ok": true,
+        "cached": false,
+        "summary": "read 2730 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 2901,
+    "latency_ms": 3984,
+    "cost_usd": 0.002243,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does Postgres decide between a sequential scan and an index scan?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 181,
+      "rewrite": null,
+      "retrieval": 3827,
+      "rescue": 2255,
+      "synthesis": 3370
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1843,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1983,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1983,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "web_search",
+        "ms": 1068,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1187,
+        "ok": true,
+        "cached": false,
+        "summary": "read 151 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1187,
+        "ok": true,
+        "cached": false,
+        "summary": "read 10973 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 7189,
+    "latency_ms": 9975,
+    "cost_usd": 0.003845,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 11,
+      "fetched": 2,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 6,
+      "writes": 6,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 4,
+          "writes": 4
+        }
+      }
+    }
+  },
+  {
+    "query": "What causes priority inheritance to be needed in real-time systems?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 175,
+      "rewrite": null,
+      "retrieval": 2936,
+      "rescue": null,
+      "synthesis": 3454
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1515,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1419,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1419,
+        "ok": true,
+        "cached": false,
+        "summary": "read 8768 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3702,
+    "latency_ms": 6927,
+    "cost_usd": 0.004178,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 0.833
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does WebRTC perform NAT traversal with ICE?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 178,
+      "rewrite": null,
+      "retrieval": 2827,
+      "rescue": 3,
+      "synthesis": 1694
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1144,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1683,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1683,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "web_search",
+        "ms": 0,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 3,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 3,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3801,
+    "latency_ms": 5075,
+    "cost_usd": 0.001852,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 0,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 3,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 1,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 2,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What is the purpose of a bloom filter in a storage engine?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 180,
+      "rewrite": null,
+      "retrieval": 3320,
+      "rescue": null,
+      "synthesis": 4182
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 2306,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1013,
+        "ok": true,
+        "cached": false,
+        "summary": "read 11717 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1013,
+        "ok": true,
+        "cached": false,
+        "summary": "read 11445 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 4192,
+    "latency_ms": 8058,
+    "cost_usd": 0.004905,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 0.625
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does the Go garbage collector achieve sub-millisecond pauses?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 179,
+      "rewrite": null,
+      "retrieval": 2684,
+      "rescue": null,
+      "synthesis": 3061
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1814,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 868,
+        "ok": true,
+        "cached": false,
+        "summary": "read 12991 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 869,
+        "ok": true,
+        "cached": false,
+        "summary": "read 24000 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3586,
+    "latency_ms": 6282,
+    "cost_usd": 0.004762,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 0.333
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What determines the branch misprediction penalty on modern x86?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 179,
+      "rewrite": null,
+      "retrieval": 3860,
+      "rescue": 3,
+      "synthesis": 1359
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1230,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 2629,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 2629,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "web_search",
+        "ms": 0,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 2,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 3,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 4612,
+    "latency_ms": 5751,
+    "cost_usd": 0.001886,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 0,
+      "cited": 0
+    },
+    "citations": {
+      "emitted": 0,
+      "valid": 0,
+      "invalid": 0,
+      "groundedness": null
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 3,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 1,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 2,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "How does TLS session resumption reduce handshake latency?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 179,
+      "rewrite": null,
+      "retrieval": 2348,
+      "rescue": null,
+      "synthesis": 4274
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1233,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1113,
+        "ok": true,
+        "cached": false,
+        "summary": "read 5587 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1114,
+        "ok": true,
+        "cached": false,
+        "summary": "read 6028 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 3184,
+    "latency_ms": 7177,
+    "cost_usd": 0.005394,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 6,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 3,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        }
+      }
+    }
+  },
+  {
+    "query": "What is the difference between a B-tree and an LSM-tree write path?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 568,
+      "rewrite": null,
+      "retrieval": 1704,
+      "rescue": null,
+      "synthesis": 1495
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1198,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 505,
+        "ok": true,
+        "cached": false,
+        "summary": "read 1179 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 506,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 2904,
+    "latency_ms": 4136,
+    "cost_usd": 0.002239,
+    "termination_reason": "evidence_limited",
+    "sources": {
+      "discovered": 6,
+      "fetched": 1,
+      "cited": 1
+    },
+    "citations": {
+      "emitted": 1,
+      "valid": 1,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [
+      "evidence_limited"
+    ],
+    "cache": {
+      "hits": 0,
+      "misses": 3,
+      "writes": 2,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 1,
+          "writes": 1
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 1
+        }
+      }
+    }
+  },
+  {
+    "query": "How does the Linux futex syscall avoid unnecessary context switches?",
+    "route": "standalone_web",
+    "phases_ms": {
+      "context": 569,
+      "rewrite": null,
+      "retrieval": 3696,
+      "rescue": 2169,
+      "synthesis": 3709
+    },
+    "tools": [
+      {
+        "name": "web_search",
+        "ms": 1227,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 2468,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "fetch_page",
+        "ms": 2468,
+        "ok": false,
+        "cached": false,
+        "summary": null
+      },
+      {
+        "name": "web_search",
+        "ms": 954,
+        "ok": true,
+        "cached": false,
+        "summary": "6 results"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1211,
+        "ok": true,
+        "cached": false,
+        "summary": "read 15446 characters"
+      },
+      {
+        "name": "fetch_page",
+        "ms": 1212,
+        "ok": true,
+        "cached": false,
+        "summary": "read 13762 characters"
+      }
+    ],
+    "coverage_ok": null,
+    "coverage_reasons": [],
+    "rescued": false,
+    "ttft_ms": 7244,
+    "latency_ms": 10502,
+    "cost_usd": 0.005102,
+    "termination_reason": "sufficient_evidence",
+    "sources": {
+      "discovered": 7,
+      "fetched": 2,
+      "cited": 2
+    },
+    "citations": {
+      "emitted": 2,
+      "valid": 2,
+      "invalid": 0,
+      "groundedness": 1
+    },
+    "warnings": [],
+    "cache": {
+      "hits": 0,
+      "misses": 6,
+      "writes": 5,
+      "by_namespace": {
+        "search": {
+          "hits": 0,
+          "misses": 2,
+          "writes": 2
+        },
+        "fetch": {
+          "hits": 0,
+          "misses": 4,
+          "writes": 3
+        }
+      }
+    }
+  }
+]

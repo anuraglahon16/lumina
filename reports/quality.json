@@ -1,0 +1,107 @@
+{
+  "project": "lumina",
+  "checkedAt": "2026-09-18T02:28:17.615Z",
+  "runs": 0,
+  "errors": 1,
+  "warnings": 1,
+  "results": [
+    {
+      "id": "C1",
+      "title": "Declared expectations are internally coherent",
+      "severity": "error",
+      "status": "pass",
+      "detail": "contract coherent"
+    },
+    {
+      "id": "A1",
+      "title": "Tool errors surface as errors",
+      "severity": "error",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "A2",
+      "title": "The loop terminates because it finished",
+      "severity": "error",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "A3",
+      "title": "No tool thrash",
+      "severity": "warn",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "R1",
+      "title": "Required tools were actually called",
+      "severity": "error",
+      "status": "skip",
+      "detail": "none declared"
+    },
+    {
+      "id": "R2",
+      "title": "Forbidden tools were not called",
+      "severity": "error",
+      "status": "skip",
+      "detail": "none declared"
+    },
+    {
+      "id": "E1",
+      "title": "A gold set exists and is non-trivial",
+      "severity": "error",
+      "status": "pass",
+      "detail": "39 items"
+    },
+    {
+      "id": "E2",
+      "title": "Declared eval thresholds are met",
+      "severity": "error",
+      "status": "fail",
+      "detail": "citationGrounding=0.8 < 0.95; errorRate=0.0375 > 0.01"
+    },
+    {
+      "id": "E3",
+      "title": "A judge model may report, never block",
+      "severity": "warn",
+      "status": "manual",
+      "detail": "confirm no error-severity rule derives its verdict from a model"
+    },
+    {
+      "id": "B1",
+      "title": "Token budget respected",
+      "severity": "error",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "B2",
+      "title": "Latency budget respected",
+      "severity": "warn",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "B3",
+      "title": "Cost budget respected",
+      "severity": "warn",
+      "status": "skip",
+      "detail": "no run logs found"
+    },
+    {
+      "id": "P1",
+      "title": "A human read a full trajectory",
+      "severity": "info",
+      "status": "manual",
+      "detail": "name the successful and failing trajectories you read end to end"
+    },
+    {
+      "id": "P2",
+      "title": "Every rule cites a real precedent",
+      "severity": "warn",
+      "status": "fail",
+      "detail": "10 rule(s) still lack a real precedent: C1, A2, A3, R1, R2, E1, E2, B1, B2, B3"
+    }
+  ]
+}

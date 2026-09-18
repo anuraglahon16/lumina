@@ -16,9 +16,12 @@ const pendingUploads = new Map();
  * indexing all happen in the background job below; the client polls the
  * document (or the job) for progress.
  */
-export async function enqueueDocument({ userId, filename, mimetype, buffer }) {
-  const doc = await createDocument({ userId, filename, mimetype, size: buffer.length });
+export async function enqueueDocument({ userId, filename, mimetype, buffer, spaceId = null, onAccepted }) {
+  const doc = await createDocument({ userId, filename, mimetype, size: buffer.length, spaceId });
   pendingUploads.set(doc.id, buffer);
+  // The document exists and its bytes are held, so the upload can be
+  // acknowledged now. Everything below is bookkeeping for the worker.
+  onAccepted?.(doc);
   const job = await jobQueue.enqueue('index_document', { doc_id: doc.id }, { userId, maxAttempts: 2 });
   await updateDocument(doc.id, { job_id: job.id });
 

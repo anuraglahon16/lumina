@@ -6,6 +6,32 @@
 const REFUNDABLE_TOOLS = new Set(['fetch_page', 'web_search']);
 
 /**
+ * A cancellation reason that every layer recognises as one.
+ *
+ * `new Error('retrieval_complete')` is not an abort to anything that inspects
+ * it. A fetch rejects with whatever reason it was given, the host circuit
+ * breaker asks whether the failure was the host's fault by checking for an
+ * AbortError, sees a plain Error, and counts it. Cancelling the losing fetches
+ * of a healthy pool would then trip the breaker for the very hosts that
+ * answered fastest — the opposite of what the breaker is for.
+ *
+ * DOMException is what the platform itself raises on abort, so it is what
+ * everything downstream already knows how to read. `code` is set too, because
+ * not every library checks `name`.
+ */
+export function abortReason(message) {
+  if (typeof DOMException === 'function') {
+    // Its name is already AbortError and is read-only, which is the point: this
+    // is the same object the platform raises, not an imitation of one.
+    return new DOMException(message, 'AbortError');
+  }
+  const reason = new Error(message);
+  reason.name = 'AbortError';
+  reason.code = 'ABORT_ERR';
+  return reason;
+}
+
+/**
  * A cancellation that fires when `remainingMs` elapses, composed with a
  * caller's own signal so whichever comes first wins.
  *
@@ -18,7 +44,7 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     onExpire?.();
-    controller.abort(new Error('wall_clock_exceeded'));
+    controller.abort(abortReason('wall_clock_exceeded'));
   }, Math.max(0, remainingMs));
 
   // The caller's signal is forwarded by hand rather than composed with
@@ -27,11 +53,31 @@ export function deadlineSignal(remainingMs, outer, onExpire) {
   // under a 390-second ceiling that never fired: the deadline existed, held
   // nothing, and was collected. One owned controller cannot be collected out
   // from under the request it is bounding.
-  const forward = () => controller.abort(outer.reason);
+  /**
+   * Normalise whatever the caller aborted with.
+   *
+   * An outer signal carries whatever reason its owner supplied, and a caller
+   * doing `controller.abort(new Error('client_disconnected'))` would reintroduce
+   * exactly the classification bug this helper exists to prevent: a plain Error
+   * forwarded downstream, where the circuit breaker reads it as the host's
+   * fault. The message is kept, since it is the useful part; the class is made
+   * correct, since that is the part everything else reads.
+   */
+  const forward = () => {
+    const given = outer.reason;
+    const isAbort = given?.name === 'AbortError' || given?.code === 'ABORT_ERR';
+    controller.abort(isAbort ? given : abortReason(given?.message || 'cancelled'));
+  };
   if (outer) {
-    if (outer.aborted) controller.abort(outer.reason);
+    if (outer.aborted) forward();
     else outer.addEventListener('abort', forward, { once: true });
   }
+
+  // However this cancellation ends, the timer has no further work. Without
+  // this it survives its own signal: a caller aborting after a hundred
+  // milliseconds left a sixty second timer pending, which holds the event loop
+  // open and made the test suite take a minute to exit after it had finished.
+  controller.signal.addEventListener('abort', () => clearTimeout(timer), { once: true });
 
   return {
     signal: controller.signal,
@@ -93,6 +139,13 @@ export class Budget {
 
   /** Whether one specific tool call is still affordable. */
   allows(toolName) {
+    // A budget that has already stopped stays stopped. Re-deriving the answer
+    // from the clock lets a call through in the moment between the deadline
+    // timer firing and `Date.now()` passing the deadline it fired for: the run
+    // is capped, and a tool call is nonetheless affordable. Rare, real, and
+    // exactly the sort of thing that shows up as a test that passes alone and
+    // fails under load.
+    if (this.capped) return { ok: false, reason: this.capped };
     if (this.counts.tool_calls >= this.limits.maxToolCalls) return { ok: false, reason: 'max_tool_calls_reached' };
     if (Date.now() >= this.deadline) return { ok: false, reason: 'wall_clock_exceeded' };
     if (toolName === 'web_search' && this.limits.maxSearches !== undefined && this.counts.searches >= this.limits.maxSearches) {
