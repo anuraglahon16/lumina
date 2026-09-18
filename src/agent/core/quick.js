@@ -206,6 +206,10 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     // ---- synthesis (sources always emitted before answer tokens) ----------
     const { answer, validation, truncated } = await synthesizeAnswer({
       query,
+      // A follow-up reaches here as "why?"; the standalone rewrite is what the
+      // passages should be ranked against. The prompt still shows the user's
+      // own words.
+      retrievalQuery: searchQuery,
       ledger,
       mode: 'quick',
       capped: research.capped,

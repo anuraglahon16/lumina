@@ -28,6 +28,17 @@ export async function synthesizeAnswer({
   effort,
   signal,
   ceilingMs,
+  /**
+   * The question to rank passages against, when it differs from the one shown
+   * to the model.
+   *
+   * A contextual follow-up reaches synthesis as the user typed it — "why?" —
+   * while the standalone rewrite lives alongside it. Ranking against "why?"
+   * finds no content words and leaves the order alone, which is safe and
+   * useless: the follow-up gets none of the benefit. The prompt keeps the
+   * user's own words; only the ranking uses the resolved question.
+   */
+  retrievalQuery = null,
   // Injected so an orchestration test can run without a provider.
   streamComplete: streamFn = streamComplete,
   // Which citation contract the prompt states. Threaded through so the A/B
@@ -58,7 +69,7 @@ export async function synthesizeAnswer({
   // question the cap keeps whatever the extractor emitted first, which is how
   // three questions were answered "the evidence does not cover this" while the
   // text that answered them sat in the ledger past the cut.
-  const evidence = ledger.renderForPrompt({ query });
+  const evidence = ledger.renderForPrompt({ query: retrievalQuery || query });
   if (evidence.dropped_sources?.length) {
     recorder?.note?.('evidence_truncated', evidence.dropped_sources);
   }

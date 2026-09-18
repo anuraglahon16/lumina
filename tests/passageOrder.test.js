@@ -198,3 +198,31 @@ test('a ledger with no query still renders, so nothing depends on passing one', 
   assert.ok(String(rendered).length > 0);
   assert.ok(Array.isArray(rendered.dropped_sources));
 });
+
+test('a follow-up ranks passages against the resolved question, not "why?"', () => {
+  // Quick rewrites "why?" into a standalone question for retrieval but shows
+  // the model the user's own words. Ranking against "why?" finds no content
+  // words and leaves the order untouched: safe, and no help at all.
+  const ledger = buriedAnswerLedger();
+  const raw = ledger.renderForPrompt({ query: 'why?' });
+  const resolved = ledger.renderForPrompt({ query: 'What does TLS certificate pinning protect against?' });
+
+  assert.ok(!raw.includes('breaks this attack lifecycle'), 'the bare follow-up cannot rank anything');
+  assert.ok(resolved.includes('breaks this attack lifecycle'), 'the resolved question can');
+
+  // And the wiring that makes the difference reach synthesis.
+  const quick = fs.readFileSync(new URL('../src/agent/core/quick.js', import.meta.url), 'utf8');
+  assert.match(quick, /retrievalQuery: searchQuery/, 'quick passes the resolved question for ranking');
+  const synth = fs.readFileSync(new URL('../src/agent/core/synthesize.js', import.meta.url), 'utf8');
+  assert.match(synth, /renderForPrompt\(\{ query: retrievalQuery \|\| query \}\)/, 'and synthesis prefers it when present');
+});
+
+test('ranking against an empty question changes nothing', () => {
+  // The safe degradation, pinned: no content words must mean no reordering,
+  // never an arbitrary one.
+  const passages = [MENU, PROSE, TABLE];
+  for (const q of ['', 'why?', null]) {
+    const ranked = reorderPassages(passages, q, 'relevance');
+    assert.deepEqual(ranked.map((p) => p.from), [0, 1, 2], `"${q}" left the order alone`);
+  }
+});
