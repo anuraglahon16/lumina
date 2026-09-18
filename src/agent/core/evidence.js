@@ -437,6 +437,18 @@ export class EvidenceLedger {
       published_at: s.published_at ?? null,
       from_cache: Boolean(s.from_cache),
       branches: s.branches,
+      // The sub-question that found this source first, singular, because the
+      // contract wants one integer per source and the ledger keeps an array:
+      // one page can be reached from two sub-questions and the ledger is right
+      // to record both. `toContractSource` reads `branch`, we published only
+      // `branches`, and the field it looked for was never there - so no Deep
+      // source ever carried an index and the attribution gate failed on every
+      // run.
+      //
+      // First discoverer is the canonical owner. It is the only choice that is
+      // stable: the array's later entries depend on which concurrent branch
+      // happened to reach the same page second.
+      branch: s.branches?.[0] ?? null,
     }));
   }
 

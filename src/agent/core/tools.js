@@ -138,7 +138,25 @@ export function toolDefinitionsFor({ hasDocuments, retrievalMode = 'auto' }) {
  * Search branch). It is responsible for budget accounting, ledger updates,
  * trace emission, and converting results into compact text for the model.
  */
-export function createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch = null, spaceId = null }) {
+export function createToolExecutor({
+  ledger,
+  budget,
+  recorder,
+  emit,
+  userId,
+  threadId,
+  runId,
+  branch = null,
+  spaceId = null,
+  // Injected the same way `gatherFromWeb` injects them, and for the same
+  // reason: what is worth testing here is attribution, budgets and ledger
+  // bookkeeping, none of which is about the network. Without this a Deep test
+  // must replace the whole executor, which then writes no sources and cannot
+  // exercise deduplication - the exact shape of disconnection this codebase
+  // has been bitten by before.
+  webSearch: searchFn = webSearch,
+  fetchPage: fetchFn = fetchPage,
+}) {
   async function run(name, rawInput) {
     const checked = validateToolInput(name, rawInput);
     if (!checked.ok) {
@@ -167,7 +185,7 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
 
   async function runWebSearch({ query, recency }) {
     const q = recency === 'recent' ? `${query} ${new Date().getFullYear()}` : query;
-    const { results, provider, cached, degraded, provider_errors } = await webSearch(q, { recorder });
+    const { results, provider, cached, degraded, provider_errors } = await searchFn(q, { recorder });
     ledger.noteCandidates(results);
     if (!results.length) {
       return {
@@ -194,7 +212,7 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
   }
 
   async function runFetchPage({ url, reason }) {
-    const page = await fetchPage(url, { recorder });
+    const page = await fetchFn(url, { recorder });
     if (!page.ok) {
       return {
         ok: false,
@@ -328,6 +346,9 @@ function publicSource(s) {
     snippet: s.snippet,
     published_at: s.published_at ?? null,
     from_cache: Boolean(s.from_cache),
+    // Same reason as publicSources: the contract reads `branch`, singular, and
+    // the first discoverer is the stable owner.
+    branch: s.branches?.[0] ?? null,
   };
 }
 

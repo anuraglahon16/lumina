@@ -21,6 +21,9 @@ export async function runResearchLoop({
   threadId,
   runId,
   branch = null,
+  // Injection points forwarded to the tool executor; production passes neither.
+  webSearch = null,
+  fetchPage = null,
   model,
   maxTokens,
   effort,
@@ -34,7 +37,9 @@ export async function runResearchLoop({
   complete: completeFn = complete,
   executor,
 }) {
-  const execute = executor || createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch, spaceId });
+  const execute =
+    executor ||
+    createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch, spaceId, ...(webSearch ? { webSearch } : {}), ...(fetchPage ? { fetchPage } : {}) });
   const tools = toolDefinitionsFor({ hasDocuments, retrievalMode });
   const messages = [{ role: 'user', content: userMessage }];
   const notes = [];

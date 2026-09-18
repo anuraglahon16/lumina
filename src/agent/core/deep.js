@@ -39,6 +39,11 @@ export async function runDeepQuery({
   // against an uploaded Space was answered from somewhere else entirely.
   retrievalMode = 'auto',
   spaceId = null,
+  // Forwarded to the tool executor so a Deep test can drive the real
+  // orchestration - real ledger writes, real deduplication - without touching
+  // the network. Production passes neither.
+  webSearch: webSearchFn = null,
+  fetchPage: fetchPageFn = null,
   // Injected the way the research loop's are, and for the same reason: the
   // orchestration here — does it plan before retrieving, does every branch get
   // its own budget, is one branch's failure survivable — is the part that broke
@@ -101,6 +106,8 @@ export async function runDeepQuery({
     const branchResults = await runBranches({
       complete: completeFn,
       executor,
+      webSearch: webSearchFn,
+      fetchPage: fetchPageFn,
       retrievalMode,
       spaceId,
       plan,
@@ -340,7 +347,7 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
   return parseJsonLoose(textOf(message));
 }
 
-async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, retrievalMode = 'auto', spaceId = null }) {
+async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, webSearch: webSearchFn = null, fetchPage: fetchPageFn = null, retrievalMode = 'auto', spaceId = null }) {
   const queue = [...plan.sub_questions];
   const results = [];
 
@@ -407,6 +414,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
     const result = await runResearchLoop({
       ...(completeFn ? { complete: completeFn } : {}),
       ...(executor ? { executor } : {}),
+      ...(webSearchFn ? { webSearch: webSearchFn } : {}),
+      ...(fetchPageFn ? { fetchPage: fetchPageFn } : {}),
       system: branchSystem({ subQuestion: sub.question, budget: limits, hasDocuments }),
       userMessage: [
         `<sub_question>${sub.question}</sub_question>`,
