@@ -91,6 +91,27 @@ surrogate defect fixed earlier for web sources is still present for document
 sources. Noted here rather than fixed, because Phase 5 forbids changing citation
 text before the failure distribution is known.
 
+## Follow-up carried forward: Quick's envelope is 10, the grader's is 8
+
+`bench.mjs:673` holds a Quick run to `(a.trace ?? []).length > 8`, and
+`expectations.json` says so explicitly: "The tighter quick envelope (8 tool
+calls, 90s, $0.05) is enforced per run by benchmark/bench.mjs". Our configured
+ceiling is `QUICK_MAX_TOOL_CALLS: 10`.
+
+Measured rather than assumed, over 397 exported Quick run logs:
+
+```
+tool calls: 0→12  1→82  2→115  3→115  4→32  5→10  6→20  7→8  8→3
+runs over 8: 0
+```
+
+No Quick run has ever exceeded 8, because retrieval stops on
+`sufficient_evidence` long before the ceiling. So this is latent rather than
+active — but the margin is zero: three runs sat exactly on 8, and a slightly
+harder question produces 9. Lowering the configured ceiling to 8 would make the
+enforced number match the graded one. Not changed here, because it belongs with
+the performance work rather than inside a quota change.
+
 ## What this phase did not do
 
 No production code was changed. No record was edited. No run log was deleted.

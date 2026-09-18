@@ -264,6 +264,15 @@ export const config = {
        * so one sub-question cannot spend the whole pool.
        */
       maxToolCallsTotal: num(process.env.DEEP_MAX_TOOL_CALLS, 24),
+      /**
+       * Deep searches one user may start per UTC day.
+       *
+       * Deep costs roughly thirty times a Quick answer, so the per-run budget
+       * bounds one request and this bounds a user. The benchmark reads the
+       * number off `GET /stats` and drives two past it, so the value is
+       * declared rather than assumed.
+       */
+      dailyLimit: num(process.env.DEEP_DAILY_LIMIT, 5),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
       wallClockMs: num(process.env.DEEP_WALL_CLOCK_MS, 420000),
