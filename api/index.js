@@ -90,6 +90,24 @@ app.use((req, res, next) => {
  */
 const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces|evals\/report\.json)(\/|$)/;
 const PUBLIC_UI = /^\/(assets\/|favicon|manifest|robots|index\.html$|$)/;
+
+// Multipart uploads stream; everything else is JSON.
+const isUpload = (req) =>
+  req.method === 'POST' && (req.path.startsWith('/api/documents') || /^\/spaces\/[^/]+\/documents$/.test(req.path));
+const parseJson = (req, res, next) => (isUpload(req) ? next() : express.json({ limit: '512kb' })(req, res, next));
+
+/**
+ * The body parser runs before the contract router, not after it.
+ *
+ * It used to run after, and the two-process build does it in the other order,
+ * so this only broke when deployed. Every contract POST reached its handler
+ * with `req.body` undefined: `POST /threads/:id/ask` answered
+ * `{"query":["Required"]}` for a request that carried a query, and `POST
+ * /threads` appeared to work only because its one field is optional. The
+ * deployed app could not answer a question at all.
+ */
+app.use((req, res, next) => (CONTRACT_PATH.test(req.path) ? parseJson(req, res, next) : next()));
+
 app.use((req, res, next) => {
   if (!CONTRACT_PATH.test(req.path)) return next();
   req.requestId = req.get('x-request-id') || newId('req');
@@ -104,10 +122,7 @@ app.use((req, res, next) => {
 app.use((req, res, next) => (PUBLIC_UI.test(req.path) ? next() : demoAuth(log)(req, res, next)));
 app.use(identity);
 
-// Multipart uploads stream; everything else is JSON.
-const isUpload = (req) =>
-  req.method === 'POST' && (req.path.startsWith('/api/documents') || /^\/spaces\/[^/]+\/documents$/.test(req.path));
-app.use((req, res, next) => (isUpload(req) ? next() : express.json({ limit: '512kb' })(req, res, next)));
+app.use(parseJson);
 
 app.use((req, res, next) => {
   const started = Date.now();
