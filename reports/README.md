@@ -18,6 +18,8 @@ Everything in this directory describes commit `e2e0e46`, run 2026-09-17.
 | `uncited-audit.json` | every uncited factual sentence, classified by hand |
 | `prompt-ab.json` / `.md` | citation contract A/B, 120 answers on evidence replayed from this run |
 | `retrieval-probe.json` / `.md` / `probe-review.json` | a live retrieval-only probe verifying the instrumentation fix |
+| `miss-shapes.json` / `.md` | the remaining citation misses, classified by answer structure |
+| `unsupported-adjudication.json` / `.md` | every sentence the lexical validator called unsupported, adjudicated by hand and re-reviewed |
 
 ## Limitations
 
@@ -56,6 +58,24 @@ separates the two cases. What separates them is whether extraction gave up what
 the page it read actually contained, and the review now asks that — but only
 where relevant pages were cancelled, so no existing review is invalidated by it.
 The e2e0e46 outcome counts are unchanged.
+
+**Two retrieval classifications in these files are wrong, and adjudication is
+how we found out.** The TLS question is filed as `passage_miss` and the
+HTTP/2-versus-HTTP/3 question was going to be `coverage_miss`. In both, the
+extracted passages contain exactly what the answer said was missing: `[1].3` of
+the HTTP run reads "HTTP/3 runs over QUIC, which provides independent streams at
+the transport layer, eliminating both TCP..." and passages `[1].5` to `[1].7` of
+the TLS run define pinning and state what it breaks. The evidence was gathered
+and extracted; the answer declined to use it. Both are `synthesis_omission`.
+
+`coverage_miss` consequently has **no confirmed instance on real data**. The
+category is logically sound and fixture-tested, and the run it was built from
+turns out not to be an example of it.
+
+The error was mine and it was a specific one: in the review step, I took the
+answer's own statement about the evidence as ground truth about the evidence.
+The passages were in the file the whole time. Any future review of a refusal has
+to read the passages, not the refusal.
 
 **Retrieval outcomes that depend on citation counts are provisional.**
 `citation_failure` is decided by cited and supported sentence totals, so every
