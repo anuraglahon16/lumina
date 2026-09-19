@@ -5,7 +5,7 @@
   "type": "module",
   "description": "LUMINA - streaming, citation-grounded AI research agent",
   "engines": {
-    "node": ">=20.19"
+    "node": ">=20.19 <24"
   },
   "workspaces": [
     "packages/contract",
