@@ -292,6 +292,7 @@ export function createToolExecutor({
     const gate = budget.allows(name);
     if (!gate.ok) {
       budget.markCapped(gate.reason);
+      slots?.noteBranchRefusal();
       emit?.('tool_blocked', { tool: name, reason: gate.reason, branch, budget: budget.snapshot() });
       recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${gate.reason}`, error: gate.reason, branch });
       return {

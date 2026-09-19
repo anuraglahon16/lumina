@@ -296,6 +296,11 @@ export class ToolSlots {
     this.attempted = 0;
     this.settled = 0;
     this.refused = 0;
+    // Refusals by a branch's own gate rather than by the pool. Counted here so
+    // one summary can answer "was anything refused", which `refused` alone
+    // could not: a run whose four branches were each denied a sixth call
+    // reported `refused: 0` beside `capped` and read as a contradiction.
+    this.branchRefused = 0;
     this.byOwner = { branch: 0, sweep: 0 };
   }
 
@@ -317,6 +322,11 @@ export class ToolSlots {
     return { seq: this.claimed, settled: false, owner };
   }
 
+  /** A branch's own ceiling refused a call. Recorded, never consulted. */
+  noteBranchRefusal() {
+    this.branchRefused += 1;
+  }
+
   /** Mark a claimed call finished. Idempotent: a double settle is not a credit. */
   settle(permit) {
     if (!permit || permit.settled) return;
@@ -334,6 +344,7 @@ export class ToolSlots {
       attempted: this.attempted,
       settled: this.settled,
       refused: this.refused,
+      branch_refused: this.branchRefused,
       by_owner: { ...this.byOwner },
     };
   }

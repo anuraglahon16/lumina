@@ -227,6 +227,7 @@ export async function runDeepQuery({
           claimed: slots.claimed,
           settled: slots.settled,
           refused: slots.refused,
+          branch_refused: slots.branchRefused,
           branch_claimed: slots.byOwner.branch ?? 0,
           sweep_claimed: slots.byOwner.sweep ?? 0,
           stop_reason: stopReason,

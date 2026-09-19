@@ -109,7 +109,19 @@ function assertInvariants({ pool, providerCalls, terminated }, label) {
   assert.equal(pool.branch_claimed + pool.sweep_claimed, pool.claimed, `${label}: owners do not account for every claim`);
   assert.equal(providerCalls, pool.claimed, `${label}: ${providerCalls} provider calls against ${pool.claimed} claims`);
   if (pool.refused > 0) assert.equal(terminated, 'cap', `${label}: ${pool.refused} refused but terminated=${terminated}`);
-  if (pool.stop_reason === 'completed') assert.equal(pool.refused, 0, `${label}: completed with ${pool.refused} refused`);
+  if (pool.stop_reason === 'completed') {
+    assert.equal(pool.refused, 0, `${label}: completed with ${pool.refused} refused`);
+    assert.equal(pool.branch_refused, 0, `${label}: completed with ${pool.branch_refused} branch refusals`);
+  }
+  // A cap must name something that was actually refused. A deployed probe read
+  // `refused: 0` beside `capped`, which looked like a contradiction and was
+  // really a per-branch gate denying nine calls the pool never saw.
+  if (pool.stop_reason === 'capped') {
+    assert.ok(
+      pool.refused > 0 || pool.branch_refused > 0,
+      `${label}: capped with nothing refused - pool ${pool.refused}, branches ${pool.branch_refused}`,
+    );
+  }
 }
 
 test('normal completion: every claim settled, nothing refused, nothing outside the pool', async () => {
