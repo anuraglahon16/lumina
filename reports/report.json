@@ -1,7 +1,7 @@
 {
   "assignment": "Assignment 1: LUMINA",
   "student": "Anurag Lahon",
-  "deployedAt": "2026-09-18T06:21:08.818Z",
+  "deployedAt": "2026-09-19T13:23:51.953Z",
   "design": {
     "components": "Two Express services and five pieces of state that are not services.\n\n**Gateway** (`src/gateway`) is the only process the browser reaches. It serves the\nReact UI, validates every request against the zod contract, mints request and user\nids, rate-limits, forwards SSE, and holds the shared-password gate. It has no\nprovider keys at all.\n\n**Agent** (`src/agent`) binds to loopback and, when `INTERNAL_TOKEN` is set,\nrefuses anything that did not come through the gateway. It runs the two answer\npaths (Quick and Deep), web search, page fetching, RAG, memory, and the job\nworker. Every provider key lives here.\n\n**MongoDB Atlas** holds `chunks` (document text plus its embedding, searched by\n`$vectorSearch`), `runs`, `threads`, `memories`, `spaces`, `documents` and `jobs`.\n\n**The job queue** is the `jobs` collection plus an in-process worker. Ingestion is\naccepted with a 202 and finished in the background, which is why a 60-page PDF\ndoes not block a search.\n\n**The search cache** keys on a normalised query rather than the raw string,\nbecause the model rephrases the same intent three ways and each rephrasing was a\npaid API call.\n\n**The evidence ledger** is not stored anywhere — it lives for one run — but it\nmakes decisions, so it belongs on this list. It is the only thing that can say a\nsource is citable.\n\n**The funnel** is a diagnostic trace, off by default, that records what happened\nto every candidate from the query to the citation.",
     "responsibilities": "The interesting lines are the exclusions.\n\n**Only the agent may hold a provider key.** The gateway proxies; it never calls\nAnthropic, Tavily or Voyage. A key that reaches the browser is a key that has\nleaked, so the gateway is not given one to leak.\n\n**Only the gateway may talk to the browser.** The agent binds to 127.0.0.1 and\nchecks `x-internal-token`. A request that reaches the agent without having passed\nthe gateway's validation is refused rather than repaired.\n\n**Only the evidence ledger may decide what is citable.** A search result is a\n*candidate*. It becomes evidence when a page has been fetched and its text\nextracted, and at no other moment. The synthesis prompt is never given a snippet\nit did not read, so an answer cannot cite one — this is enforced by what is in\nthe prompt, not by asking the model nicely.\n\n**Only the budget may decide a run is over its cap.** It counts tool calls,\nsearches, fetches, turns and wall clock, and every stop carries a named reason\nthat reaches the run log and the user. Tools do not decide to stop; the harness\nstops them.\n\n**Only the validator may report groundedness**, and it runs after the answer is\nwritten, against the same passages the model saw.",
@@ -12,7 +12,7 @@
   "gates": [],
   "rubric": {
     "total": 100,
-    "awarded": 54,
+    "awarded": 68,
     "automated": [
       {
         "id": "ui_lights_up_contract",
@@ -31,7 +31,7 @@
         "points": 20,
         "awarded": 13,
         "status": "partial",
-        "evidence": "✗ citation grounding >= 0.95: citation grounding 0.784 over 74 verifiable citations, 0 dangling",
+        "evidence": "✗ search cache hits on repeats: search cache hit rate 44.7% on a workload that is 50% repeats",
         "rules": [
           "E2"
         ]
@@ -40,18 +40,18 @@
         "id": "memory",
         "label": "Memory (thread + long-term)",
         "points": 10,
-        "awarded": 0,
-        "status": "fail",
-        "evidence": "✗ save_memory lands in GET /memory: no new row in GET /memory after asking it to remember a preference · ✗ recall crosses into a new thread: nothing was saved, so recall could not be tested · ✗ DELETE removes it: nothing was saved, so delete could not be tested",
+        "awarded": 10,
+        "status": "pass",
+        "evidence": "✓ save_memory lands in GET /memory: GET /memory lists 1 new row after the save and the trace shows save_memory · ✓ recall crosses into a new thread: a new thread's trace carries 1 recall_memory step(s) · ✓ DELETE removes it: DELETE /memory/mem_mu7utqttt089pw removed the row",
         "rules": []
       },
       {
         "id": "rag_documents",
         "label": "RAG over documents",
         "points": 15,
-        "awarded": 15,
-        "status": "pass",
-        "evidence": "✓ 202 accept p95 < 300ms: 202 accept p95 279ms · ✓ reaches indexed via the worker: 4/4 corpus file(s) reached indexed after a 202 · ✓ citation carries a page locator: 115 document citation(s) carry a page locator, e.g. p. 1 · ✓ mode=auto picks documents: mode=auto retrieved from the Space — \"6 passages\" · ✓ recall@5 >= 0.7: recall@5 0.967 over 30 gold questions",
+        "awarded": 12,
+        "status": "partial",
+        "evidence": "✗ 202 accept p95 < 300ms: 202 accept p95 390ms",
         "rules": [
           "E1",
           "E2"
@@ -61,9 +61,9 @@
         "id": "deep_search",
         "label": "Deep search (plan, fan-out, merged citations, spend gate)",
         "points": 15,
-        "awarded": 8,
-        "status": "partial",
-        "evidence": "✗ every step and source tagged with its sub-question: 4/4 deep run(s) left subQuestion off a retrieval step or a source · ✗ deep stays inside its budget: 0 deep run(s) over $0.35, 3 over 24 tool calls · ✗ deep cap+1 returns 429 with resetsAt: 27 deep searches all accepted — the daily cap is not enforced server-side",
+        "awarded": 15,
+        "status": "pass",
+        "evidence": "✓ plan streamed before any retrieval: 4/4 deep runs planned >= 3 sub-questions, 4/4 streamed the plan before retrieving anything · ✓ every step and source tagged with its sub-question: all 4 deep runs tag every retrieval step and every source with its subQuestion · ✓ deep reads more than quick: worst deep/quick distinct-source ratio 5.50x (need 2x) · ✓ deep stays inside its budget: 0 deep run(s) over $0.35, 0 over 24 tool calls · ✓ quick never escalates to plan_research (R2): 73 quick run(s), none called plan_research · ✓ deep cap+1 returns 429 with resetsAt: request 6 of a 5/day deep cap returned 429 with resetsAt 2026-09-20T00:00:00.000Z",
         "rules": [
           "E2",
           "B3",
@@ -76,7 +76,7 @@
         "points": 10,
         "awarded": 3,
         "status": "partial",
-        "evidence": "✗ bench.mjs exits 0: 2 SLA target(s) missed · ✗ no error-severity quality failure: quality: 2 error(s), 2 warning(s) over 101 run log(s)",
+        "evidence": "✗ bench.mjs exits 0: 4 SLA target(s) missed · ✗ no error-severity quality failure: quality: 2 error(s), 2 warning(s) over 87 run log(s)",
         "rules": [
           "B1",
           "B2",
@@ -91,7 +91,7 @@
         "points": 5,
         "awarded": 5,
         "status": "pass",
-        "evidence": "✓ one X-Request-Id correlates both logs: 71/71 answers returned an X-Request-Id to correlate the two logs · ✓ /stats reconciles with the run: /stats.answers=418 against 71 answers this run · ✓ every failed tool call carries an error (A1): A1: 101 run(s)",
+        "evidence": "✓ one X-Request-Id correlates both logs: 69/69 answers returned an X-Request-Id to correlate the two logs · ✓ /stats reconciles with the run: /stats.answers=72 against 69 answers this run · ✓ every failed tool call carries an error (A1): A1: 87 run(s)",
         "rules": [
           "A1"
         ]
@@ -140,29 +140,29 @@
       {
         "check": "no run that hit a cap reported as terminated=done (A2)",
         "ok": false,
-        "detail": "req_mu6d35jxquyqej: terminated=\"cap\"; req_mu6d4hdoum69z9: terminated=\"cap\"; req_mu6d5p5ud5i6rp: terminated=\"cap\"; req_mu6d75av8t73p4: terminated=\"cap\"; req_mu6d828dq1rly8: terminated=\"cap\"; req_mu6d8v5sr2kisb: terminated=\"cap\"; req_mu6da3ht65itao: terminated=\"cap\"; req_mu6db6ipw0onsk: terminated=\"cap\"; req_mu6dcph1slten5: terminated=\"cap\"; req_mu6dfhzzjyg4j1: terminated=\"cap\"; req_mu6didegt5kn25: terminated=\"cap\"; req_mu6dj66m8std18: terminated=\"cap\"; req_mu6dkyqt0jvqhd: terminated=\"cap\"; req_mu6dltvysna9y2: terminated=\"cap\"; req_mu6dmjwq5yripa: terminated=\"cap\"; req_mu6dnrkcvyg975: terminated=\"cap\"; req_mu6doo70ab23v1: terminated=\"cap\"; req_mu6dq009yuv2yo: terminated=\"cap\""
+        "detail": "req_mu7upct3qus33l: terminated=\"cap\"; req_mu7uqz7nk5oh3f: terminated=\"cap\"; req_mu7urpc6nea496: terminated=\"cap\"; req_mu7us8x04e2f6z: terminated=\"cap\""
       },
       {
         "check": "plan_research never called from a quick search: depth is opted into, never drifted into (R2)",
         "ok": true,
-        "detail": "75 quick run(s), none called plan_research"
+        "detail": "73 quick run(s), none called plan_research"
       },
       {
         "check": "no 2xx answer served on a provider exception (A1)",
         "ok": true,
-        "detail": "101 run(s)"
+        "detail": "87 run(s)"
       }
     ]
   },
   "bench": {
-    "ranAt": "2026-09-18T03:09:22.903Z",
-    "target": "http://localhost:8787",
+    "ranAt": "2026-09-19T03:55:26.458Z",
+    "target": "https://lumina-kimit8sv0-anuraglahon16s-projects.vercel.app",
     "pass": false,
     "sla": [
       {
         "metric": "ttft p95",
         "target": 2500,
-        "actual": 4029,
+        "actual": 4715,
         "unit": "ms",
         "comparator": "<=",
         "pass": false
@@ -170,7 +170,7 @@
       {
         "metric": "answer p95",
         "target": 12000,
-        "actual": 8460,
+        "actual": 9260,
         "unit": "ms",
         "comparator": "<=",
         "pass": true
@@ -178,15 +178,15 @@
       {
         "metric": "202 accept p95",
         "target": 300,
-        "actual": 288,
+        "actual": 390,
         "unit": "ms",
         "comparator": "<=",
-        "pass": true
+        "pass": false
       },
       {
         "metric": "search p95 during ingest / idle",
         "target": 1.3,
-        "actual": 1.103,
+        "actual": 0.92,
         "unit": "×",
         "comparator": "<=",
         "pass": true
@@ -202,15 +202,15 @@
       {
         "metric": "search cache hit rate",
         "target": 50,
-        "actual": 82.5,
+        "actual": 44.7,
         "unit": "%",
         "comparator": ">=",
-        "pass": true
+        "pass": false
       },
       {
         "metric": "deep plan p95",
         "target": 4000,
-        "actual": 3267,
+        "actual": 3340,
         "unit": "ms",
         "comparator": "<=",
         "pass": true
@@ -218,7 +218,7 @@
       {
         "metric": "deep answer p95",
         "target": 90,
-        "actual": 58,
+        "actual": 58.1,
         "unit": "s",
         "comparator": "<=",
         "pass": true
@@ -242,7 +242,7 @@
       {
         "metric": "cost per deep answer",
         "target": 0.35,
-        "actual": 0.1187,
+        "actual": 0.1038,
         "unit": "$",
         "comparator": "<=",
         "pass": true
@@ -250,23 +250,23 @@
       {
         "metric": "citation grounding",
         "target": 0.95,
-        "actual": 0.784,
+        "actual": 1,
         "unit": "",
         "comparator": ">=",
-        "pass": false
+        "pass": true
       },
       {
         "metric": "error rate",
         "target": 0.01,
-        "actual": 0,
+        "actual": 0.0247,
         "unit": "",
         "comparator": "<=",
-        "pass": true
+        "pass": false
       },
       {
         "metric": "cost per answer (quick)",
         "target": 0.05,
-        "actual": 0.0036,
+        "actual": 0.0035,
         "unit": "$",
         "comparator": "<=",
         "pass": true
@@ -288,31 +288,31 @@
         "pass": true
       }
     ],
-    "citationGrounding": 0.7837837837837838,
+    "citationGrounding": 1,
     "recallAt5": 0.9666666666666667,
     "retrievalRate": 1,
-    "errorRate": 0,
+    "errorRate": 0.024691358024691357,
     "latency": {
-      "ttftP50Ms": 1628,
-      "ttftP95Ms": 4029,
-      "answerP50Ms": 3477,
-      "answerP95Ms": 8460,
-      "accept202P95Ms": 288
+      "ttftP50Ms": 934,
+      "ttftP95Ms": 4715,
+      "answerP50Ms": 4405,
+      "answerP95Ms": 9260,
+      "accept202P95Ms": 390
     },
     "cost": {
-      "meanCostPerAnswerUsd": 0.0036231600000000003,
-      "meanCostPerDeepAnswerUsd": 0.11867325,
-      "declaredPriceTableUsd": 0.031178303797468363,
-      "projectedMonthlyUsd": 1512.8169,
-      "projectedMonthlyNoCacheUsd": 1022.316
+      "meanCostPerAnswerUsd": 0.0035414246575342454,
+      "meanCostPerDeepAnswerUsd": 0.10376999999999999,
+      "declaredPriceTableUsd": 0.02908419480519481,
+      "projectedMonthlyUsd": 1356.4282191780821,
+      "projectedMonthlyNoCacheUsd": 712.0372025955298
     },
-    "searchCacheHitRatePct": 82.5,
-    "answers": 79
+    "searchCacheHitRatePct": 44.73684210526316,
+    "answers": 77
   },
   "quality": {
     "project": "lumina",
-    "checkedAt": "2026-09-18T06:09:29.371Z",
-    "runs": 101,
+    "checkedAt": "2026-09-19T03:56:30.937Z",
+    "runs": 87,
     "errors": 2,
     "warnings": 2,
     "results": [
@@ -328,21 +328,21 @@
         "title": "Tool errors surface as errors",
         "severity": "error",
         "status": "pass",
-        "detail": "101 run(s)"
+        "detail": "87 run(s)"
       },
       {
         "id": "A2",
         "title": "The loop terminates because it finished",
         "severity": "error",
         "status": "fail",
-        "detail": "req_mu6d35jxquyqej: terminated=\"cap\"; req_mu6d4hdoum69z9: terminated=\"cap\"; req_mu6d5p5ud5i6rp: terminated=\"cap\"; req_mu6d75av8t73p4: terminated=\"cap\"; req_mu6d828dq1rly8: terminated=\"cap\"; req_mu6d8v5sr2kisb: terminated=\"cap\"; req_mu6da3ht65itao: terminated=\"cap\"; req_mu6db6ipw0onsk: terminated=\"cap\"; req_mu6dcph1slten5: terminated=\"cap\"; req_mu6dfhzzjyg4j1: terminated=\"cap\"; req_mu6didegt5kn25: terminated=\"cap\"; req_mu6dj66m8std18: terminated=\"cap\"; req_mu6dkyqt0jvqhd: terminated=\"cap\"; req_mu6dltvysna9y2: terminated=\"cap\"; req_mu6dmjwq5yripa: terminated=\"cap\"; req_mu6dnrkcvyg975: terminated=\"cap\"; req_mu6doo70ab23v1: terminated=\"cap\"; req_mu6dq009yuv2yo: terminated=\"cap\""
+        "detail": "req_mu7upct3qus33l: terminated=\"cap\"; req_mu7uqz7nk5oh3f: terminated=\"cap\"; req_mu7urpc6nea496: terminated=\"cap\"; req_mu7us8x04e2f6z: terminated=\"cap\""
       },
       {
         "id": "A3",
         "title": "No tool thrash",
         "severity": "warn",
         "status": "fail",
-        "detail": "req_mu6cz9qpf8cxlf: \"fetch_page\" called 6x consecutively (cap 4); req_mu6czcd93cd2cm: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czohqf8wxo6: \"fetch_page\" called 5x consecutively (cap 4); req_mu6czqfhi70uf2: \"fetch_page\" called 5x consecutively (cap 4); req_mu6d35jxquyqej: \"fetch_page\" called 12x consecutively (cap 4); req_mu6d4hdoum69z9: \"fetch_page\" called 10x consecutively (cap 4); req_mu6d5p5ud5i6rp: \"fetch_page\" called 11x consecutively (cap 4); req_mu6d75av8t73p4: \"web_search\" called 9x consecutively (cap 4); req_mu6d828dq1rly8: \"fetch_page\" called 13x consecutively (cap 4); req_mu6d8v5sr2kisb: \"fetch_page\" called 10x consecutively (cap 4); req_mu6da3ht65itao: \"fetch_page\" called 11x consecutively (cap 4); req_mu6db6ipw0onsk: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dcph1slten5: \"fetch_page\" called 7x consecutively (cap 4); req_mu6ddbzpj7xpv6: \"fetch_page\" called 7x consecutively (cap 4); req_mu6deji87bxp5a: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dfhzzjyg4j1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6didegt5kn25: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dj66m8std18: \"fetch_page\" called 10x consecutively (cap 4); req_mu6djzli2ravnm: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dkyqt0jvqhd: \"fetch_page\" called 10x consecutively (cap 4); req_mu6dltvysna9y2: \"fetch_page\" called 11x consecutively (cap 4); req_mu6dmjwq5yripa: \"fetch_page\" called 9x consecutively (cap 4); req_mu6dnrkcvyg975: \"fetch_page\" called 10x consecutively (cap 4); req_mu6doo70ab23v1: \"fetch_page\" called 8x consecutively (cap 4); req_mu6dq009yuv2yo: \"fetch_page\" called 10x consecutively (cap 4)"
+        "detail": "req_mu7u4gpuyeadhy: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u4jsxoph7jv: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u4k8rqbs4ls: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u5g5nvjyl7b: \"fetch_page\" called 5x consecutively (cap 4); req_mu7ulkqfqf4b2s: \"fetch_page\" called 10x consecutively (cap 4); req_mu7umpaos5h5ss: \"fetch_page\" called 10x consecutively (cap 4); req_mu7unvnxpll044: \"fetch_page\" called 12x consecutively (cap 4); req_mu7upct3qus33l: \"fetch_page\" called 12x consecutively (cap 4); req_mu7uqbcabl3ys5: \"fetch_page\" called 12x consecutively (cap 4); req_mu7uqz7nk5oh3f: \"fetch_page\" called 7x consecutively (cap 4); req_mu7urpc6nea496: \"fetch_page\" called 11x consecutively (cap 4); req_mu7us8x04e2f6z: \"fetch_page\" called 10x consecutively (cap 4); req_mu7ut0bw4j9x4h: \"fetch_page\" called 6x consecutively (cap 4)"
       },
       {
         "id": "R1",
@@ -370,7 +370,7 @@
         "title": "Declared eval thresholds are met",
         "severity": "error",
         "status": "fail",
-        "detail": "citationGrounding=0.784 < 0.95"
+        "detail": "errorRate=0.0247 > 0.01"
       },
       {
         "id": "E3",
@@ -384,21 +384,21 @@
         "title": "Token budget respected",
         "severity": "error",
         "status": "pass",
-        "detail": "101 run(s)"
+        "detail": "87 run(s)"
       },
       {
         "id": "B2",
         "title": "Latency budget respected",
         "severity": "warn",
         "status": "pass",
-        "detail": "101 run(s)"
+        "detail": "87 run(s)"
       },
       {
         "id": "B3",
         "title": "Cost budget respected",
         "severity": "warn",
         "status": "pass",
-        "detail": "101 run(s)"
+        "detail": "87 run(s)"
       },
       {
         "id": "P1",
@@ -418,134 +418,135 @@
   },
   "trajectories": {
     "successful": {
-      "requestId": "req_mu6czcd93cd2cm",
+      "requestId": "req_mu7u5dw4wvyjjn",
       "query": "Why do proxies buffer Server-Sent Events?",
       "terminated": "done",
       "steps": [
         {
           "step": 1,
-          "tool": "web_search",
+          "tool": "recall_memory",
           "ok": true,
-          "ms": 1343
+          "ms": 5
         },
         {
           "step": 2,
-          "tool": "fetch_page",
-          "ok": false,
-          "ms": 207,
-          "error": "HTTP 403"
-        },
-        {
-          "step": 3,
-          "tool": "fetch_page",
-          "ok": false,
-          "ms": 257,
-          "error": "HTTP 403"
-        },
-        {
-          "step": 4,
-          "tool": "fetch_page",
-          "ok": true,
-          "ms": 214
-        },
-        {
-          "step": 5,
-          "tool": "fetch_page",
-          "ok": false,
-          "ms": 270,
-          "error": "HTTP 403"
-        },
-        {
-          "step": 6,
-          "tool": "fetch_page",
-          "ok": true,
-          "ms": 5
-        }
-      ],
-      "notes": "req_mu6czcd93cd2cm — \"Why do proxies buffer Server-Sent Events?\" Quick, standalone_web, 6042ms end to end, TTFT 2754ms, $0.005649, terminated sufficient_evidence. Chosen from inside the benchmark window rather than from development traffic, so the trajectory a grader reads is one the evaluated population actually contains. Context assembly 277ms, no memories, no thread history, no documents. Step 1 searches the question close to verbatim and gets six results in 1343ms. Steps 2 through 6 are the fetch pool working through them concurrently, and this is the part worth reading: three of the five pages refuse us outright. Medium 403s in 207ms, Server Fault 403s in 257ms, Stack Overflow 403s in 270ms. Two succeed — a Cloudflare community thread giving 1580 characters, and an nginx write-up giving 6689 — and the second comes back in 5ms because it was already in the page cache. The run then stops on sufficient_evidence rather than on a budget: coverage judged two independent publishers enough for a question with one mechanism at its centre, and the remaining candidates were never tried. Eight sentences cited, eight supported, groundedness 1.0. Retrieval was 1877ms of the 6042ms; synthesis was 3471ms, and memory extraction added 1512ms after the answer had already been sent. What it taught me, in three parts. First, a 60% fetch failure rate is the ordinary case rather than a bad day, and the design that survives it is the pool: had these been sequential with a stop-on-first-success, the run would have spent three round trips on 403s before reading anything. Second, the budget refund matters more than it looks — those three blocked pages returned their slots, so a healthy run was not truncated by publishers who simply do not serve robots. Third, and least comfortable: this run scores 1.0 on internal grounding and is exactly the shape that fails the benchmark's provenance check, because the citable snippet comes from a Cloudflare community page whose live HTML may not contain our extracted text as a contiguous twelve-token window. Internal grounding and the graded provenance metric are different questions, and this trajectory is where I stopped conflating them."
-    },
-    "failing": {
-      "requestId": "req_mu6dpht3mbgf3g",
-      "query": "cap probe 25: what is reciprocal rank fusion?",
-      "terminated": "error",
-      "steps": [
-        {
-          "step": 1,
           "tool": "web_search",
           "ok": true,
           "ms": 0
         },
         {
+          "step": 3,
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 25,
+          "error": "HTTP 403"
+        },
+        {
+          "step": 4,
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 69,
+          "error": "HTTP 403"
+        },
+        {
+          "step": 5,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 3
+        },
+        {
+          "step": 6,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 73
+        }
+      ],
+      "notes": "req_mu7u5dw4wvyjjn — \"Why do proxies buffer Server-Sent Events?\" Quick, web mode, on the deployed application: 3271ms end to end, TTFT 614ms, $0.005296, terminated sufficient_evidence. The same question as the trajectory I read on localhost, which is why I chose it: it is the one run I can compare across the two environments, and the comparison is the point. Context assembly took 5ms and found no memories for this user. The search came back in 0ms with six results — a cache hit, which is worth noticing because the deployed cache hit rate is 44.7% and below its target, so this run is the good case rather than the typical one. Then the fetch pool works the six candidates concurrently and two of the four attempts are refused: Medium 403s in 25ms, Server Fault 403s in 69ms. Two succeed — a OneUptime post on nginx and SSE giving 5591 characters in 3ms from the page cache, and a Cypress GitHub issue giving 1582 characters in 73ms. Retrieval was 74ms of the 3271ms. Synthesis was 3172ms, which is essentially the whole run, and memory extraction added 1669ms after the answer had already been sent to the reader. Five sentences cited, five supported, groundedness 1.0, two sources cited of six discovered. What it taught me. First, the shape of the run is now almost entirely synthesis: retrieval is 2% of the wall clock and the model writing the answer is 97%. Every instinct to optimise retrieval further is misdirected effort — the TTFT work that matters is in the first token, not in the fetches. Second, a 50% fetch refusal rate is the ordinary case on the open web and the concurrent pool is what survives it; sequentially this run would have spent two round trips on 403s before reading anything. Third, and this is the one I got wrong earlier: on localhost this same question produced an internal groundedness of 1.0 and still failed the benchmark's provenance check, because our extracted snippet was not a contiguous twelve-token window of the live page. Deployed, with the locator and extraction fixes in place, the benchmark scored 75 of 75 citations as verifiable. Internal grounding and graded provenance are different questions, and the second one only became true when I stopped treating the first as evidence for it."
+    },
+    "failing": {
+      "requestId": "req_mu7upct3qus33l",
+      "query": "What are the trade-offs between MongoDB Atlas Vector Search and a dedicated vector database for a RAG application with page-level citations?",
+      "terminated": "cap",
+      "steps": [
+        {
+          "step": 1,
+          "tool": "web_search",
+          "ok": true,
+          "ms": 829
+        },
+        {
           "step": 2,
           "tool": "web_search",
           "ok": true,
-          "ms": 1473
+          "ms": 844
         },
         {
           "step": 3,
           "tool": "web_search",
           "ok": true,
-          "ms": 1073
+          "ms": 914
         },
         {
           "step": 4,
           "tool": "web_search",
           "ok": true,
-          "ms": 2308
+          "ms": 976
         },
         {
           "step": 5,
           "tool": "web_search",
           "ok": true,
-          "ms": 1917
+          "ms": 1338
         },
         {
           "step": 6,
           "tool": "web_search",
           "ok": true,
-          "ms": 2475
+          "ms": 1292
         },
         {
           "step": 7,
           "tool": "web_search",
           "ok": true,
-          "ms": 2901
+          "ms": 1317
         },
         {
           "step": 8,
-          "tool": "fetch_page",
+          "tool": "web_search",
           "ok": true,
-          "ms": 75
+          "ms": 1589
         },
         {
           "step": 9,
-          "tool": "fetch_page",
+          "tool": "web_search",
           "ok": true,
-          "ms": 76
+          "ms": 3438
         },
         {
           "step": 10,
           "tool": "fetch_page",
-          "ok": true,
-          "ms": 71
+          "ok": false,
+          "ms": 0,
+          "error": "max_tool_calls_reached"
         },
         {
           "step": 11,
           "tool": "fetch_page",
-          "ok": true,
-          "ms": 91
+          "ok": false,
+          "ms": 136,
+          "error": "error not recorded in the run log"
         },
         {
           "step": 12,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 88
+          "ms": 253
         },
         {
           "step": 13,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 132
+          "ms": 894
         },
         {
           "step": 14,
@@ -557,71 +558,112 @@
         {
           "step": 15,
           "tool": "fetch_page",
-          "ok": true,
-          "ms": 4
+          "ok": false,
+          "ms": 102,
+          "error": "error not recorded in the run log"
         },
         {
           "step": 16,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 4
+          "ms": 155
         },
         {
           "step": 17,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 4
+          "ms": 238
         },
         {
           "step": 18,
-          "tool": "web_search",
-          "ok": true,
-          "ms": 0
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 0,
+          "error": "max_tool_calls_reached"
         },
         {
           "step": 19,
-          "tool": "web_search",
-          "ok": true,
-          "ms": 0
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 116,
+          "error": "error not recorded in the run log"
         },
         {
           "step": 20,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 4
+          "ms": 682
         },
         {
           "step": 21,
           "tool": "fetch_page",
           "ok": true,
-          "ms": 4
+          "ms": 858
         },
         {
           "step": 22,
-          "tool": "fetch_page",
+          "tool": "web_search",
           "ok": true,
-          "ms": 5
+          "ms": 934
         },
         {
           "step": 23,
-          "tool": "fetch_page",
+          "tool": "web_search",
           "ok": true,
-          "ms": 4
+          "ms": 1069
         },
         {
           "step": 24,
-          "tool": "fetch_page",
+          "tool": "web_search",
           "ok": true,
-          "ms": 2353
+          "ms": 3020
         },
         {
           "step": 25,
           "tool": "fetch_page",
+          "ok": false,
+          "ms": 102,
+          "error": "error not recorded in the run log"
+        },
+        {
+          "step": 26,
+          "tool": "fetch_page",
           "ok": true,
-          "ms": 63
+          "ms": 408
+        },
+        {
+          "step": 27,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 501
+        },
+        {
+          "step": 28,
+          "tool": "fetch_page",
+          "ok": false,
+          "ms": 0,
+          "error": "deep_tool_budget_exhausted"
+        },
+        {
+          "step": 29,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 357
+        },
+        {
+          "step": 30,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 583
+        },
+        {
+          "step": 31,
+          "tool": "fetch_page",
+          "ok": true,
+          "ms": 1
         }
       ],
-      "notes": "req_mu6dpht3mbgf3g — \"cap probe 25: what is reciprocal rank fusion\", Deep, terminated error, zero sources, zero citations, no answer. This one run exposes three separate defects and is the most useful thing I read. Steps 1 to 7 are seven web searches across the sub-questions, 0 to 2901ms each. Steps 8 to 13 fetch six pages. Step 14 is a fetch_page that comes back ok=false with reason max_tool_calls_reached: the budget refused it, correctly. Then steps 15 through 25 happen anyway — eleven more calls after the cap was hit, ending at 25 tool calls against a declared ceiling of 24. That is the first defect, and it is not a limit that is set too high: the budget is per branch (maxToolCallsPerBranch 6), the branches run concurrently, and each checks the shared counter before launching while others are already in flight. Refusing one call while eleven more are mid-flight is a check that arrives after the decision it was meant to gate. The second defect is that the run is recorded terminated=error rather than cap, so a run that visibly exhausted its budget does not appear in any cap statistic — the harness stopped it and then mislabelled why. The third is what actually killed it: synthesis failed with 400 invalid_request_error, \"The request body is not valid JSON: no low surrogate in string: line 1 column 53976\". We had cut page text mid-emoji. String.slice counts UTF-16 code units, an emoji is two of them, and a truncation landing between the halves leaves a lone surrogate that JSON.stringify emits as \"\\ud83d\" and the provider rejects outright. Nine of ten runs in this probe died the same way. The user loses the entire answer because a page they never chose had an emoji at an offset nobody picked. What it taught: a failure that presents as a provider error can be three of our own bugs stacked, and reading the steps in order is what separates them — the cap message at step 14 is invisible in the summary, which only says error. The surrogate bug is fixed (safeSlice, tests/text.test.js). The budget and the termination label are not, and are Phase 3B."
+      "notes": "req_mu7upct3qus33l — \"What are the trade-offs between MongoDB Atlas Vector Search and a dedicated vector database for a RAG application with page-level citations?\" Deep, on the deployed application: 42536ms end to end, $0.103941, terminated deep_tool_budget_exhausted. This is the run that exposed the budget defect, and it is worth reading precisely because it produced a good answer while doing something the design did not intend. The plan took 2211ms and returned four sub-questions — citation preservation and metadata, performance and scaling, infrastructure cost at scale, and current limitations. Research ran 16136ms across four concurrent branches, each allotted six tool calls. Every branch used five, each had one call refunded after a 403, and all four ended capped: three against their own per-branch ceiling and the fourth, q4, against the shared pool. The sweep then ran for 1019ms, synthesis for 23151ms, and memory extraction for 1358ms after the answer was sent. It discovered 60 candidates, fetched 11, cited 10, and wrote 6005 characters at a groundedness of 0.895. Here is the defect. The run log records 31 tool calls — 12 searches and 19 fetches — against a global ceiling of 24. The pool itself only ever saw 22 claimed, because the cross-branch sweep did not claim slots at all: it called the fetcher directly, so its pages were real provider calls that no budget counted. Meanwhile maxToolCallsPerBranch of 6 times four branches is exactly maxToolCallsTotal of 24, so the branches were guaranteed to consume the entire pool and leave the sweep nothing, which is why q4's next call was refused by a budget that four branches had already spent. Three things follow. First, a ceiling that a later phase can step around is not a ceiling, and the only reason this looked fine for so long is that the grader counts trace events and the sweep does not emit them — the visible number stayed under 24 while the real one did not. Second, the arithmetic was self-defeating rather than merely tight: no amount of tuning the branch allowance fixes a design where the branches are entitled to the whole pool by construction. Third, and the reason this run is the failing trajectory rather than a footnote, it terminated honestly. It said deep_tool_budget_exhausted, it kept its partial answer, and it cited ten sources — the run told the truth about being curtailed, which is what let me find the defect at all. The fix was to allocate before the branches start, reserve capacity for the sweep, make the sweep claim from the same pool, and let a branch that spends its allocation finish normally rather than by being refused."
     }
   }
 }
