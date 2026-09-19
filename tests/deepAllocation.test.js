@@ -79,9 +79,21 @@ const manyLeads = async (query) => ({
   provider: 'stub', cached: false,
 });
 
+const TOPICS = [
+  'how ranking fusion combines two ordered candidate lists',
+  'what latency cost a reranking stage adds to retrieval',
+  'which chunk size preserves citation precision in documents',
+  'when lexical scoring beats dense embeddings on rare terms',
+  'why blocked publishers distort measured coverage on the web',
+  'where vector index build time dominates ingestion',
+];
+
 const planOf = (n) => ({
   interpretation: 'a multi-part question',
-  sub_questions: Array.from({ length: n }, (_, i) => ({ id: `q${i + 1}`, question: `part ${i + 1}`, why: 'because' })),
+  // Genuinely distinct: the plan validator drops sub-questions that reduce to
+  // the same content words, so "part 1".."part 4" silently became three
+  // branches and the fixtures tested a smaller plan than they claimed.
+  sub_questions: Array.from({ length: n }, (_, i) => ({ id: `q${i + 1}`, question: TOPICS[i % TOPICS.length], why: 'because' })),
 });
 
 /** Searches once, then fetches forever if allowed. */

@@ -202,11 +202,35 @@ export async function runDeepQuery({
     });
 
 
+    const stopReason = terminationFor({ truncated, refusedReason: slots.capReason, curtailed: capped });
+
     // Set before finish(): finish() is what persists the record.
     recorder.set({
       budget: {
         limits,
         branches: branchResults.map((b) => ({ id: b.id, question: b.question, ...b.budget })),
+        /**
+         * The pool, as it was actually spent.
+         *
+         * Enough to check the claims that matter without re-deriving them:
+         * that nothing exceeded the ceiling, that every claim was settled,
+         * that a refusal and a cap agree, and whether the sweep spent from
+         * the pool or around it. The last one is the defect this exists to
+         * make visible - the sweep used to call the fetcher directly, so runs
+         * made 29 to 32 provider calls while the pool recorded 22.
+         */
+        pool: {
+          total_limit: slots.limit,
+          reserved: allocation.reserve,
+          branch_allocations: Object.fromEntries(plan.sub_questions.map((q) => [q.id, allocation.perBranch])),
+          attempted: slots.attempted,
+          claimed: slots.claimed,
+          settled: slots.settled,
+          refused: slots.refused,
+          branch_claimed: slots.byOwner.branch ?? 0,
+          sweep_claimed: slots.byOwner.sweep ?? 0,
+          stop_reason: stopReason,
+        },
       },
     });
     const run = recorder.finish({
@@ -221,7 +245,7 @@ export async function runDeepQuery({
        * curtails a run is the wall clock, the token ceiling, the shared pool
        * refusing a call, or a sub-question that never got researched at all.
        */
-      terminationReason: terminationFor({ truncated, refusedReason: slots.capReason, curtailed: capped }),
+      terminationReason: stopReason,
       answer,
       citations: {
         emitted: validation.cited.length + validation.invalid_citations.length,
@@ -542,7 +566,7 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
     // the fetcher directly, so its pages were real provider calls that no
     // budget had counted - which is how runs reached 29 to 32 calls against a
     // ceiling of 24.
-    const permit = slots ? slots.tryClaim() : null;
+    const permit = slots ? slots.tryClaim('sweep') : null;
     if (slots && !permit) {
       emit('sweep_done', { fetched: fetched.length, stopped: slots.capReason });
       return fetched;

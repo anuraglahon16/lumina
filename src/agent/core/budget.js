@@ -285,6 +285,18 @@ export class ToolSlots {
     this.claimed = 0;
     this.inFlight = 0;
     this.capReason = null;
+    /**
+     * Counted so the run log can say what happened rather than be inferred
+     * from it. `attempted` minus `claimed` is `refused`, and who spent the
+     * pool - branches or the sweep - is the difference between a budget that
+     * was shared and one that was taken.
+     *
+     * These are records, not decisions: nothing here is read by tryClaim.
+     */
+    this.attempted = 0;
+    this.settled = 0;
+    this.refused = 0;
+    this.byOwner = { branch: 0, sweep: 0 };
   }
 
   get exhausted() {
@@ -292,24 +304,37 @@ export class ToolSlots {
   }
 
   /** A permit, or null when the pool is spent. Synchronous by contract. */
-  tryClaim() {
+  tryClaim(owner = 'branch') {
+    this.attempted += 1;
     if (this.claimed >= this.limit) {
+      this.refused += 1;
       this.capReason = 'deep_tool_budget_exhausted';
       return null;
     }
     this.claimed += 1;
     this.inFlight += 1;
-    return { seq: this.claimed, settled: false };
+    this.byOwner[owner] = (this.byOwner[owner] ?? 0) + 1;
+    return { seq: this.claimed, settled: false, owner };
   }
 
   /** Mark a claimed call finished. Idempotent: a double settle is not a credit. */
   settle(permit) {
     if (!permit || permit.settled) return;
     permit.settled = true;
+    this.settled += 1;
     this.inFlight = Math.max(0, this.inFlight - 1);
   }
 
   snapshot() {
-    return { limit: this.limit, claimed: this.claimed, in_flight: this.inFlight, cap_reason: this.capReason };
+    return {
+      limit: this.limit,
+      claimed: this.claimed,
+      in_flight: this.inFlight,
+      cap_reason: this.capReason,
+      attempted: this.attempted,
+      settled: this.settled,
+      refused: this.refused,
+      by_owner: { ...this.byOwner },
+    };
   }
 }
