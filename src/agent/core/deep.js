@@ -128,6 +128,9 @@ export async function runDeepQuery({
       branches: plan.sub_questions.length,
       maxPerBranch: limits.maxToolCallsPerBranch,
     });
+    // Held back until the sweep is known to be unnecessary, so a borrowing
+    // branch cannot spend the capacity a later phase still needs.
+    slots.setSweepReserve(allocation.reserve);
     emit('budget_allocated', { total: poolSize, branches: plan.sub_questions.length, per_branch: allocation.perBranch, reserved: allocation.reserve });
 
     const branchResults = await runBranches({
@@ -244,6 +247,7 @@ export async function runDeepQuery({
           settled: slots.settled,
           refused: slots.refused,
           branch_refused: slots.branchRefused,
+          borrowed: slots.borrowed,
           branch_claimed: slots.byOwner.branch ?? 0,
           sweep_claimed: slots.byOwner.sweep ?? 0,
           stop_reason: stopReason,
@@ -449,7 +453,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       } catch (err) {
         log.warn('branch_failed', { run_id: runId, branch: sub.id, err: err.message });
         recorder.recordError(`branch:${sub.id}`, err);
-        emit('branch_done', { id: sub.id, question: sub.question, sources: 0, capped: true, termination_reason: 'error', summary: `Not researched: ${err.message}`, budget: null });
+        slots?.finishBranch(sub.id);
+    emit('branch_done', { id: sub.id, question: sub.question, sources: 0, capped: true, termination_reason: 'error', summary: `Not researched: ${err.message}`, budget: null });
         results.push({
           id: sub.id,
           question: sub.question,
@@ -478,6 +483,9 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
     );
 
     const sourcesBefore = ledger.sources.length;
+    // The pool needs to know what this branch is still owed before it lends
+    // any of its capacity to another.
+    slots?.registerBranch(sub.id, allocation?.perBranch ?? limits.maxToolCallsPerBranch);
     emit('branch_start', { id: sub.id, question: sub.question, why: sub.why, budget: branchBudget.snapshot() });
 
     const result = await runResearchLoop({
@@ -563,6 +571,8 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
    */
   const planned = plan?.sub_questions?.length ?? 0;
   if (planned && ledger.citable.length >= planned * 2) {
+    // Nothing further is coming, so the reserve is not reserved for anything.
+    slots?.releaseSweepReserve();
     emit('sweep_skipped', { reason: 'sufficient_evidence', sources: ledger.citable.length, planned });
     return [];
   }
@@ -571,7 +581,10 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
   const candidates = [...ledger.candidates.values()]
     .filter((c) => c.url && !domainsRead.has(c.domain))
     .slice(0, limits.maxSubQuestions + 2);
-  if (!candidates.length) return [];
+  if (!candidates.length) {
+    slots?.releaseSweepReserve();
+    return [];
+  }
 
   emit('sweep_start', { considering: candidates.length });
   const fetched = [];

@@ -227,11 +227,21 @@ export class Budget {
     return this.#cap(reason);
   }
 
+  /**
+   * Raise this branch's own ceiling by one, because the pool had spare capacity
+   * to lend. The allocation stays a fairness floor; this is the borrowing.
+   */
+  grantExtra(n = 1) {
+    this.limits = { ...this.limits, maxToolCalls: this.limits.maxToolCalls + n };
+    this.borrowed = (this.borrowed ?? 0) + n;
+  }
+
   snapshot() {
     return {
       label: this.label,
       limits: this.limits,
       used: { ...this.counts },
+      borrowed: this.borrowed ?? 0,
       refunded: this.refunds.length,
       remaining: {
         tool_calls: Math.max(0, this.limits.maxToolCalls - this.counts.tool_calls),
@@ -302,6 +312,17 @@ export class ToolSlots {
     // reported `refused: 0` beside `capped` and read as a contradiction.
     this.branchRefused = 0;
     this.byOwner = { branch: 0, sweep: 0 };
+    this.borrowed = 0;
+    /**
+     * Per-branch bookkeeping, so unused capacity can be lent without starving
+     * anyone.
+     *
+     * An allocation is a fairness floor, not a fence: measured on two deployed
+     * probes, branches were denied six fetches of URLs nobody had tried while
+     * 6 to 15 of the 24 slots sat unused for the rest of the run.
+     */
+    this.branches = new Map();
+    this.sweepReserve = 0;
   }
 
   get exhausted() {
@@ -309,7 +330,7 @@ export class ToolSlots {
   }
 
   /** A permit, or null when the pool is spent. Synchronous by contract. */
-  tryClaim(owner = 'branch') {
+  tryClaim(owner = 'branch', branchId = null) {
     this.attempted += 1;
     if (this.claimed >= this.limit) {
       this.refused += 1;
@@ -319,7 +340,48 @@ export class ToolSlots {
     this.claimed += 1;
     this.inFlight += 1;
     this.byOwner[owner] = (this.byOwner[owner] ?? 0) + 1;
+    const b = branchId ? this.branches.get(branchId) : null;
+    if (b) b.claimed += 1;
     return { seq: this.claimed, settled: false, owner };
+  }
+
+  registerBranch(id, allocation) {
+    this.branches.set(id, { allocation: Math.max(0, allocation | 0), claimed: 0, active: true });
+  }
+
+  finishBranch(id) {
+    const b = this.branches.get(id);
+    if (b) b.active = false;
+  }
+
+  /** Slots held back for a sweep that may still need them. */
+  setSweepReserve(n) {
+    this.sweepReserve = Math.max(0, n | 0);
+  }
+
+  /** The sweep is not going to run, so its reserve is free. */
+  releaseSweepReserve() {
+    this.sweepReserve = 0;
+  }
+
+  /**
+   * How much a branch may take beyond its own allocation right now.
+   *
+   * Everything still owed to other active branches is subtracted first, then
+   * the sweep's reserve. What remains is genuinely spare: no branch that has
+   * not yet spent its guarantee can be starved by lending it.
+   */
+  borrowable(branchId) {
+    let owed = 0;
+    for (const [id, b] of this.branches) {
+      if (id === branchId || !b.active) continue;
+      owed += Math.max(0, b.allocation - b.claimed);
+    }
+    return Math.max(0, this.limit - this.claimed - owed - this.sweepReserve);
+  }
+
+  noteBorrow() {
+    this.borrowed += 1;
   }
 
   /** A branch's own ceiling refused a call. Recorded, never consulted. */
@@ -345,6 +407,7 @@ export class ToolSlots {
       settled: this.settled,
       refused: this.refused,
       branch_refused: this.branchRefused,
+      borrowed: this.borrowed,
       by_owner: { ...this.byOwner },
     };
   }

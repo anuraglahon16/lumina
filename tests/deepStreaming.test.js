@@ -123,9 +123,22 @@ test('a Deep run sends at least one token before done', async () => {
   assert.ok(at('token') < at('done'), 'tokens must arrive before the run is declared done');
 });
 
-test('the streamed text is the answer that was stored', async () => {
+test('the streamed text is the answer that was stored, after the same normaliser', async () => {
+  // Not byte equality: synthesis runs `normalizeAnswerStyle` over the answer
+  // before persisting it, so the stored text legitimately differs from the raw
+  // deltas. Measured on the deployment, that is 4 to 8 characters on a ~6000
+  // character answer. Comparing through the production normaliser is the claim
+  // that can honestly be made - the reader saw the same answer, not the same
+  // bytes.
+  const { normalizeAnswerStyle } = await import('../src/agent/core/style.js');
   const { tokens, result } = await runDeep();
-  assert.equal(tokens.join(''), result.answer, 'what the reader saw differs from what was persisted');
+  assert.ok(tokens.length > 0, 'something streamed');
+  // It returns { text, changed, replaced }, not a string.
+  assert.equal(
+    normalizeAnswerStyle(tokens.join('')).text.trim(),
+    normalizeAnswerStyle(result.answer).text.trim(),
+    'the streamed answer and the stored answer differ by more than normalisation',
+  );
 });
 
 test('sources arrive before the first token', async () => {

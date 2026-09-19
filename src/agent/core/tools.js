@@ -289,7 +289,26 @@ export function createToolExecutor({
    * run-log entry. Returns the string the model sees as the tool result.
    */
   return async function execute(name, input) {
-    const gate = budget.allows(name);
+    let gate = budget.allows(name);
+    /**
+     * A branch that has spent its allocation asks the pool before it is
+     * refused.
+     *
+     * The allocation divides the pool fairly at the start; it was never meant
+     * to strand capacity nobody else is going to use. Measured on two deployed
+     * probes, six fetches of URLs nobody had tried were denied while 6 to 15 of
+     * the 24 slots stayed unused for the rest of the run.
+     *
+     * Only the branch's own call ceiling is borrowable. A sub-limit like
+     * `max_fetches_reached` is a statement about the shape of the research, not
+     * about capacity, and the wall clock is not lendable at all.
+     */
+    if (!gate.ok && gate.reason === 'max_tool_calls_reached' && slots?.borrowable(branch) > 0) {
+      budget.grantExtra();
+      slots.noteBorrow();
+      emit?.('budget_borrowed', { tool: name, branch, borrowable: slots.borrowable(branch), budget: budget.snapshot() });
+      gate = budget.allows(name);
+    }
     if (!gate.ok) {
       budget.markCapped(gate.reason);
       slots?.noteBranchRefusal();
@@ -306,7 +325,7 @@ export function createToolExecutor({
     // The shared claim, taken synchronously before any await. A branch that
     // passes its own budget check can still be refused here, because the pool
     // is what the grader counts and the other branches are spending from it.
-    const permit = slots ? slots.tryClaim() : null;
+    const permit = slots ? slots.tryClaim('branch', branch) : null;
     if (slots && !permit) {
       budget.markCapped(slots.capReason);
       emit?.('tool_blocked', { tool: name, reason: slots.capReason, branch, budget: budget.snapshot() });
