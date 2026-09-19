@@ -50,9 +50,22 @@ export async function runDeepQuery({
   // in practice, and none of it is about what a model actually says. Without a
   // seam the only way to exercise this function is a live run, which is how a
   // `budget is not defined` reached a benchmark with the suite green.
-  complete: completeFn = complete,
+  /**
+   * Defaults to null, not to `complete`.
+   *
+   * It used to default to the imported non-streaming `complete`, which made
+   * `completeFn ? { streamComplete: completeFn } : {}` always true: production
+   * handed synthesis a function that cannot stream, so a Deep answer was
+   * generated, stored and never sent to the reader. Quick, which overrides
+   * nothing, streamed normally.
+   */
+  complete: completeFn = null,
+  // Synthesis has its own seam. A test that wants deterministic streaming
+  // supplies this; production supplies neither and gets the real one.
+  streamComplete: streamFn = null,
   executor,
 } = {}) {
+  const completeImpl = completeFn ?? complete;
   const limits = config.budgets.deep;
   const deadline = Date.now() + limits.wallClockMs;
   const ledger = new EvidenceLedger();
@@ -97,7 +110,7 @@ export async function runDeepQuery({
 
     // ---- plan -------------------------------------------------------------
     recorder.startPhase('plan');
-    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeFn, emit });
+    const plan = await buildPlan({ query, history, memories, recorder, deadline, signal, complete: completeImpl, emit });
     recorder.endPhase('plan', { sub_questions: plan.sub_questions.length, plan_origin: plan.origin });
     emit('plan', plan);
 
@@ -118,7 +131,7 @@ export async function runDeepQuery({
     emit('budget_allocated', { total: poolSize, branches: plan.sub_questions.length, per_branch: allocation.perBranch, reserved: allocation.reserve });
 
     const branchResults = await runBranches({
-      complete: completeFn,
+      complete: completeImpl,
       executor,
       webSearch: webSearchFn,
       fetchPage: fetchPageFn,
@@ -185,7 +198,10 @@ export async function runDeepQuery({
       effort: limits.effort,
       ceilingMs: limits.synthesisCeilingMs,
       signal,
-      ...(completeFn ? { streamComplete: completeFn } : {}),
+      // Only when injected. A test may drive synthesis with its own streaming
+      // function, or reuse its model fake; production passes neither and keeps
+      // the real `streamComplete`.
+      ...(streamFn ?? completeFn ? { streamComplete: streamFn ?? completeFn } : {}),
     });
 
     // The question's write is joined here and nowhere earlier: the thread
