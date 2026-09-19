@@ -112,6 +112,30 @@ test('a necessary call with nothing left to lend is refused', () => {
   assert.equal(slots.capReason, 'deep_tool_budget_exhausted');
 });
 
+test('a branch that has not started yet is still owed its allocation', () => {
+  // The defect this caught on the deployment: registration happened at
+  // branch_start, and `branchConcurrency` is 3, so a four-question plan left q4
+  // unknown to the pool while q1 to q3 were borrowing. q4 began with two of its
+  // five already lent away and was refused by the pool - borrowing had starved
+  // the guarantee it exists to protect. Every planned branch is now registered
+  // before any of them runs.
+  const slots = new ToolSlots(TOTAL);
+  for (const id of ['q1', 'q2', 'q3', 'q4']) slots.registerBranch(id, 5);
+  slots.setSweepReserve(4);
+
+  // The first three run and spend everything they were given.
+  for (const id of ['q1', 'q2', 'q3']) {
+    for (let i = 0; i < 5; i += 1) slots.settle(slots.tryClaim('branch', id));
+  }
+  // q4 has not started. It is still owed five, so nothing may be lent.
+  assert.equal(slots.borrowable('q1'), 0, 'q4 is owed its allocation before it starts');
+
+  // And when q4 does run, its five are there.
+  for (let i = 0; i < 5; i += 1) {
+    assert.ok(slots.tryClaim('branch', 'q4'), `q4 claim ${i + 1} of 5 was refused`);
+  }
+});
+
 /* --------------------------------------------- driven through real orchestration */
 
 const body = 'Reciprocal rank fusion sums one over k plus rank across ranked lists. '.repeat(6);

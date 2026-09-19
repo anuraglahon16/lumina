@@ -131,6 +131,16 @@ export async function runDeepQuery({
     // Held back until the sweep is known to be unnecessary, so a borrowing
     // branch cannot spend the capacity a later phase still needs.
     slots.setSweepReserve(allocation.reserve);
+    /**
+     * Every planned branch is registered before any of them runs.
+     *
+     * Registering at branch_start looked equivalent and was not:
+     * `branchConcurrency` is 3, so a four-question plan leaves q4 unknown to
+     * the pool while q1 to q3 are borrowing. Measured on a deployed probe, q4
+     * then started with two of its five already lent away and was refused by
+     * the pool - borrowing had starved the guarantee it exists to protect.
+     */
+    for (const sub of plan.sub_questions) slots.registerBranch(sub.id, allocation.perBranch);
     emit('budget_allocated', { total: poolSize, branches: plan.sub_questions.length, per_branch: allocation.perBranch, reserved: allocation.reserve });
 
     const branchResults = await runBranches({
@@ -453,8 +463,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       } catch (err) {
         log.warn('branch_failed', { run_id: runId, branch: sub.id, err: err.message });
         recorder.recordError(`branch:${sub.id}`, err);
-        slots?.finishBranch(sub.id);
-    emit('branch_done', { id: sub.id, question: sub.question, sources: 0, capped: true, termination_reason: 'error', summary: `Not researched: ${err.message}`, budget: null });
+            slots?.finishBranch(sub.id);
+        emit('branch_done', { id: sub.id, question: sub.question, sources: 0, capped: true, termination_reason: 'error', summary: `Not researched: ${err.message}`, budget: null });
         results.push({
           id: sub.id,
           question: sub.question,
@@ -483,9 +493,6 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
     );
 
     const sourcesBefore = ledger.sources.length;
-    // The pool needs to know what this branch is still owed before it lends
-    // any of its capacity to another.
-    slots?.registerBranch(sub.id, allocation?.perBranch ?? limits.maxToolCallsPerBranch);
     emit('branch_start', { id: sub.id, question: sub.question, why: sub.why, budget: branchBudget.snapshot() });
 
     const result = await runResearchLoop({
@@ -523,6 +530,8 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
 
     const sourceCount = ledger.sources.length - sourcesBefore;
     const summary = result.notes.join('\n').slice(0, 1500) || 'No findings recorded.';
+    // Whatever this branch did not spend is now lendable.
+    slots?.finishBranch(sub.id);
     emit('branch_done', {
       id: sub.id,
       question: sub.question,
