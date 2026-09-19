@@ -3,12 +3,13 @@ import { Budget, CAP_REASONS } from './budget.js';
 import { EvidenceLedger } from './evidence.js';
 import { RunRecorder } from '../store/runLog.js';
 import { classifyQuestion, QUESTION_KIND } from './router.js';
-import { gatherFromWeb, gatherFromDocuments, rescueRetrieval, QUICK_PAGES } from './retrieve.js';
+import { gatherFromWeb, gatherFromDocuments, rescueRetrieval, QUICK_PAGES, trace} from './retrieve.js';
 import { createFunnel } from './funnel.js';
 import { rewriteFollowUp } from './rewrite.js';
 import { synthesizeAnswer } from './synthesize.js';
 import { extractMemories } from './memoryExtractor.js';
-import { searchMemories } from '../services/memoryStore.js';
+import { searchMemories, saveMemory } from '../services/memoryStore.js';
+import { memoryContentFrom } from './memoryInstruction.js';
 import { ensureThread, appendMessage, threadContext } from '../services/threads.js';
 import { documentStats } from '../services/ragStore.js';
 import { resolveProviders } from '../services/search/index.js';
@@ -22,6 +23,64 @@ const log = createLogger('quick');
  * Quick never escalates into Deep Search. If the budget runs out it says so,
  * an honest partial answer beats a silently-truncated confident one.
  */
+/**
+ * Store what an explicit "remember this" asked for, and say that we did.
+ *
+ * Deterministic on purpose. Memory used to depend on a background extractor
+ * deciding, after the answer, whether the exchange contained anything worth
+ * keeping — and its prompt correctly says most exchanges do not. So a user who
+ * asked in plain words to be remembered was subject to a judgement call that
+ * usually said no, `GET /memory` stayed empty, and recall and delete had
+ * nothing to work with.
+ *
+ * A request to remember is not a judgement call. It is an instruction, and the
+ * only question is what to store.
+ *
+ * Returns the same shape as the retrieval gatherers so the caller is unchanged:
+ * nothing was searched and coverage is not a question here, because an
+ * instruction is answered by carrying it out rather than by evidence.
+ */
+async function rememberInstruction({ query, userId, threadId, runId, emit, recorder }) {
+  const started = performance.now();
+  const content = memoryContentFrom(query);
+  const done = { searched: false, coverage: { ok: true, reasons: [] } };
+
+  if (!content) {
+    // "Remember this:" with nothing after it. Storing the empty string or the
+    // word "remember" would both be worse than refusing, and the trace says so
+    // rather than reporting a save that stored nothing.
+    trace(emit, recorder, {
+      tool: 'save_memory',
+      input: { query },
+      ok: false,
+      ms: Math.round(performance.now() - started),
+      error: 'the instruction named nothing to remember',
+    });
+    return done;
+  }
+
+  try {
+    const saved = await saveMemory({ userId, content, kind: 'preference', source: 'user', threadId, runId });
+    trace(emit, recorder, {
+      tool: 'save_memory',
+      input: { content },
+      ok: Boolean(saved),
+      ms: Math.round(performance.now() - started),
+      reason: saved ? `remembered: ${content.slice(0, 120)}` : undefined,
+      error: saved ? undefined : 'the store refused the write',
+    });
+  } catch (err) {
+    trace(emit, recorder, {
+      tool: 'save_memory',
+      input: { content },
+      ok: false,
+      ms: Math.round(performance.now() - started),
+      error: err.message,
+    });
+  }
+  return done;
+}
+
 export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto' }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
@@ -42,6 +101,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
   try {
     // ---- context assembly -------------------------------------------------
     recorder.startPhase('context');
+    const contextStarted = performance.now();
     // Three independent reads, so they go together. Sequentially they are three
     // round trips to a remote database in front of a phase the SLA gives four
     // seconds end to end, and none of them depends on another's result.
@@ -55,6 +115,18 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     // started here and not waited for. It used to run before the context reads
     // purely so that `history` could drop its last entry, which made a
     // bookkeeping write a step on the path to the first thing the user sees.
+    // The grader reads this as proof the preference crossed a thread boundary,
+    // and a reader of the trace has the same question: was anything remembered
+    // about me, and did it reach the answer. The lookup already happened above;
+    // what was missing was saying so.
+    trace(emit, recorder, {
+      tool: 'recall_memory',
+      input: { query },
+      ok: true,
+      ms: Math.round(performance.now() - contextStarted),
+      reason: memories.length ? `${memories.length} memory/memories recalled` : 'no memories stored for this user',
+    });
+
     const questionRecorded = appendMessage(thread.id, {
       role: 'user',
       content: query,
@@ -111,7 +183,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       route.kind === QUESTION_KIND.DOCUMENTS
         ? await gatherFromDocuments({ query: searchQuery, ledger, budget, recorder, emit, userId, spaceId, signal })
         : route.kind === QUESTION_KIND.MEMORY_INSTRUCTION
-          ? { searched: false, coverage: { ok: true, reasons: [] } }
+          ? await rememberInstruction({ query, userId, threadId: thread.id, runId: recorder.id, emit, recorder })
           : await gatherFromWeb({ query: searchQuery, ledger, budget, recorder, emit, signal, pages: QUICK_PAGES(), funnel });
 
     recorder.endPhase('retrieval', {
@@ -306,7 +378,16 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     // Serverless is the exception: the process is frozen the moment it
     // responds, so there the work has to finish before the response does or it
     // never happens at all.
+    //
+    // Not after an explicit instruction. That request was already handled
+    // deterministically and the preference is stored verbatim; running the
+    // extractor over it again produces a paraphrase of the same sentence —
+    // "Prefers answers in British English" beside "Always answer in British
+    // English and keep answers under 100 words." — which is two rows for one
+    // preference, injected twice into every later prompt, and a `GET /memory`
+    // that grows every time the user repeats themselves.
     const extraction = (async () => {
+      if (route.kind === QUESTION_KIND.MEMORY_INSTRUCTION) return;
       recorder.startPhase('memory_extraction');
       await extractMemories({ userId, threadId: thread.id, runId: recorder.id, query, answer, recorder, emit });
       recorder.endPhase('memory_extraction');

@@ -1,17 +1,22 @@
 {
-  "ranAt": "2026-09-18T03:09:22.903Z",
-  "target": "http://localhost:8787",
+  "ranAt": "2026-09-19T15:01:39.194Z",
+  "target": "https://lumina-74vbuauh6-anuraglahon16s-projects.vercel.app",
   "mode": "full",
   "pass": false,
   "health": {
     "status": "ok",
     "model": "claude-haiku-4-5",
+    "models": {
+      "quick": "claude-haiku-4-5",
+      "planner": "claude-haiku-4-5",
+      "branch": "claude-haiku-4-5",
+      "deepSynthesis": "claude-sonnet-5",
+      "queryRewrite": "claude-haiku-4-5",
+      "memory": "claude-haiku-4-5"
+    },
     "searchProvider": "tavily",
     "vectorStore": "atlas-vector-search",
     "db": "ok",
-    "ai": {
-      "status": "ok"
-    },
     "version": "1.0.0"
   },
   "contract": [
@@ -44,7 +49,7 @@
     {
       "metric": "ttft p95",
       "target": 2500,
-      "actual": 4029,
+      "actual": 4433,
       "unit": "ms",
       "comparator": "<=",
       "pass": false
@@ -52,7 +57,7 @@
     {
       "metric": "answer p95",
       "target": 12000,
-      "actual": 8460,
+      "actual": 10488,
       "unit": "ms",
       "comparator": "<=",
       "pass": true
@@ -60,15 +65,15 @@
     {
       "metric": "202 accept p95",
       "target": 300,
-      "actual": 288,
+      "actual": 598,
       "unit": "ms",
       "comparator": "<=",
-      "pass": true
+      "pass": false
     },
     {
       "metric": "search p95 during ingest / idle",
       "target": 1.3,
-      "actual": 1.103,
+      "actual": 0.969,
       "unit": "×",
       "comparator": "<=",
       "pass": true
@@ -84,15 +89,15 @@
     {
       "metric": "search cache hit rate",
       "target": 50,
-      "actual": 82.5,
+      "actual": 9.4,
       "unit": "%",
       "comparator": ">=",
-      "pass": true
+      "pass": false
     },
     {
       "metric": "deep plan p95",
       "target": 4000,
-      "actual": 3267,
+      "actual": 2682,
       "unit": "ms",
       "comparator": "<=",
       "pass": true
@@ -100,7 +105,7 @@
     {
       "metric": "deep answer p95",
       "target": 90,
-      "actual": 58,
+      "actual": 61.3,
       "unit": "s",
       "comparator": "<=",
       "pass": true
@@ -116,7 +121,7 @@
     {
       "metric": "deep/quick source ratio (min)",
       "target": 2,
-      "actual": 5.5,
+      "actual": 4,
       "unit": "×",
       "comparator": ">=",
       "pass": true
@@ -124,7 +129,7 @@
     {
       "metric": "cost per deep answer",
       "target": 0.35,
-      "actual": 0.1187,
+      "actual": 0.0944,
       "unit": "$",
       "comparator": "<=",
       "pass": true
@@ -132,23 +137,23 @@
     {
       "metric": "citation grounding",
       "target": 0.95,
-      "actual": 0.784,
+      "actual": 1,
       "unit": "",
       "comparator": ">=",
-      "pass": false
+      "pass": true
     },
     {
       "metric": "error rate",
       "target": 0.01,
-      "actual": 0,
+      "actual": 0.0988,
       "unit": "",
       "comparator": "<=",
-      "pass": true
+      "pass": false
     },
     {
       "metric": "cost per answer (quick)",
       "target": 0.05,
-      "actual": 0.0036,
+      "actual": 0.0037,
       "unit": "$",
       "comparator": "<=",
       "pass": true
@@ -170,38 +175,38 @@
       "pass": true
     }
   ],
-  "answers": 79,
-  "citationGrounding": 0.7837837837837838,
+  "answers": 71,
+  "citationGrounding": 1,
   "recallAt5": 0.9666666666666667,
   "retrievalRate": 1,
-  "errorRate": 0,
-  "searchCacheHitRatePct": 82.5,
+  "errorRate": 0.09876543209876543,
+  "searchCacheHitRatePct": 9.375,
   "latency": {
-    "ttftP50Ms": 1628,
-    "ttftP95Ms": 4029,
-    "answerP50Ms": 3477,
-    "answerP95Ms": 8460,
-    "accept202P95Ms": 288
+    "ttftP50Ms": 1637,
+    "ttftP95Ms": 4433,
+    "answerP50Ms": 4501,
+    "answerP95Ms": 10488,
+    "accept202P95Ms": 598
   },
-  "ingestRatio": 1.1029484434195356,
-  "deepPlanP95Ms": 3267,
-  "deepAnswerP95S": 58.042,
+  "ingestRatio": 0.9693274909506573,
+  "deepPlanP95Ms": 2682,
+  "deepAnswerP95S": 61.339,
   "deepSubQuestionsMin": 4,
-  "deepSourceRatioMin": 5.5,
+  "deepSourceRatioMin": 4,
   "deepAnswers": 4,
   "cost": {
-    "meanCostPerAnswerUsd": 0.0036231600000000003,
-    "meanCostPerDeepAnswerUsd": 0.11867325,
-    "declaredPriceTableUsd": 0.031178303797468363,
-    "projectedMonthlyUsd": 1512.8169,
-    "projectedMonthlyNoCacheUsd": 1022.316
+    "meanCostPerAnswerUsd": 0.0036820895522388063,
+    "meanCostPerDeepAnswerUsd": 0.094374,
+    "declaredPriceTableUsd": 0.029581535211267607,
+    "projectedMonthlyUsd": 1275.1280597014925,
+    "projectedMonthlyNoCacheUsd": 443.2089552238806
   },
   "orderingOk": true,
   "danglingCitations": 0,
   "grounding": {
-    "checked": 76,
-    "grounded": 58,
-    "unverifiable": 2,
+    "checked": 100,
+    "grounded": 100,
+    "unverifiable": 0,
     "dangling": 0
   },
   "recall": {
@@ -218,12 +223,12 @@
       "evidence": "/health names claude-haiku-4-5 · tavily · atlas-vector-search · db ok"
     },
     "accept202": {
-      "ok": true,
-      "evidence": "202 accept p95 279ms"
+      "ok": false,
+      "evidence": "202 accept p95 598ms"
     },
     "indexedViaWorker": {
       "ok": true,
-      "evidence": "4/4 corpus file(s) reached indexed after a 202"
+      "evidence": "3/4 corpus file(s) reached indexed after a 202"
     },
     "pageLocator": {
       "ok": true,
@@ -235,77 +240,80 @@
     },
     "statsReconciles": {
       "ok": true,
-      "evidence": "/stats.answers=418 against 71 answers this run"
+      "evidence": "/stats.answers=139 against 63 answers this run"
     },
     "requestIdEchoed": {
       "ok": true,
-      "evidence": "71/71 answers returned an X-Request-Id to correlate the two logs"
+      "evidence": "63/63 answers returned an X-Request-Id to correlate the two logs"
     },
     "deepPlan": {
       "ok": true,
       "evidence": "4/4 deep runs planned >= 3 sub-questions, 4/4 streamed the plan before retrieving anything"
     },
     "deepAttribution": {
-      "ok": false,
-      "evidence": "4/4 deep run(s) left subQuestion off a retrieval step or a source"
+      "ok": true,
+      "evidence": "all 4 deep runs tag every retrieval step and every source with its subQuestion"
     },
     "deepReadsMore": {
       "ok": true,
-      "evidence": "worst deep/quick distinct-source ratio 5.50x (need 2x)"
+      "evidence": "worst deep/quick distinct-source ratio 4.00x (need 2x)"
     },
     "deepBudget": {
-      "ok": false,
-      "evidence": "0 deep run(s) over $0.35, 3 over 24 tool calls"
+      "ok": true,
+      "evidence": "0 deep run(s) over $0.35, 0 over 24 tool calls"
     },
     "quickNeverEscalates": {
       "ok": true,
-      "evidence": "75 quick run(s), none called plan_research"
+      "evidence": "67 quick run(s), none called plan_research"
     },
     "quickBudget": {
       "ok": true,
-      "evidence": "0/75 quick run(s) exceeded $0.05 or 8 tool calls"
+      "evidence": "0/67 quick run(s) exceeded $0.05 or 8 tool calls"
     },
     "deepCap429": {
-      "ok": false,
-      "evidence": "27 deep searches all accepted — the daily cap is not enforced server-side"
+      "ok": true,
+      "evidence": "request 6 of a 5/day deep cap returned 429 with resetsAt 2026-09-20T00:00:00.000Z"
     },
     "memorySaved": {
-      "ok": false,
-      "evidence": "no new row in GET /memory after asking it to remember a preference"
+      "ok": true,
+      "evidence": "GET /memory lists 1 new row after the save and the trace shows save_memory"
     },
     "memoryRecalled": {
-      "ok": false,
-      "evidence": "nothing was saved, so recall could not be tested"
+      "ok": true,
+      "evidence": "a new thread's trace carries 1 recall_memory step(s)"
     },
     "memoryDeleted": {
-      "ok": false,
-      "evidence": "nothing was saved, so delete could not be tested"
+      "ok": true,
+      "evidence": "DELETE /memory/mem_mu8imitd13bxoc removed the row"
     },
     "sourcesBeforeTokens": {
       "ok": true,
       "evidence": "every answer sent its sources event before its first token"
     },
     "groundingMet": {
-      "ok": false,
-      "evidence": "citation grounding 0.784 over 74 verifiable citations, 0 dangling"
+      "ok": true,
+      "evidence": "citation grounding 1 over 100 verifiable citations, 0 dangling"
     },
     "retrievalAlways": {
       "ok": true,
       "evidence": "retrieval rate 1 — the share of answers whose run actually searched"
     },
     "searchCacheHits": {
-      "ok": true,
-      "evidence": "search cache hit rate 82.5% on a workload that is 50% repeats"
+      "ok": false,
+      "evidence": "search cache hit rate 9.4% on a workload that is 50% repeats"
     }
   },
   "stats": {
-    "requests": 418,
-    "answers": 418,
-    "searchCacheHitRatePct": 37,
-    "ttftP95Ms": 20265,
-    "costUsdToday": 0.642994,
+    "requests": 139,
+    "answers": 139,
+    "searchCacheHitRatePct": 16,
+    "ttftP95Ms": 3219,
+    "costUsdToday": 0.598166,
     "deepToday": 0,
-    "deepDailyCap": 25
+    "deepDailyCap": 5
   },
-  "notes": []
+  "notes": [
+    "ask failed (network): The operation was aborted due to timeout",
+    "agent-loops-and-failure.md: still embedding after 240000ms"
+  ]
 }

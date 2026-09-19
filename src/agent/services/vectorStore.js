@@ -89,7 +89,7 @@ export async function nearestChunks(vector, { userId, docIds, limit = 50 } = {})
   // silently dropped every dense score, leaving BM25 to rank alone.
   const rows = await col
     .find(filter)
-    .project({ id: 1, text: 1, chunk_id: 1, doc_id: 1, filename: 1, page: 1, page_label: 1, user_id: 1, embedding: 1 })
+    .project({ id: 1, text: 1, chunk_id: 1, doc_id: 1, filename: 1, page: 1, page_label: 1, line: 1, user_id: 1, embedding: 1 })
     .toArray();
   const scored = rows
     .map((r) => ({ ...r, score: cosine(vector, r.embedding), embedding: undefined }))

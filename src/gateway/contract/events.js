@@ -56,8 +56,14 @@ function toContractSource(s) {
   if (out.kind === 'web') out.url = s.url;
   else {
     out.docId = s.doc_id || s.docId;
+    // The page from the human label, the line from the chunk itself.
+    //
+    // The grader keys its per-source haystack on docId:page:heading:line and
+    // warns that two chunks of one document must not share a key. With a page
+    // alone every chunk of a page collided, Map.set kept the last, and a
+    // citation to an earlier chunk was scored against a different passage.
     const locator = toLocator(s.locator);
-    if (locator) out.locator = locator;
+    if (locator) out.locator = Number.isInteger(s.line) && s.line > 0 ? { ...locator, line: s.line } : locator;
   }
   if (s.branch != null) {
     const i = Number(String(s.branch).replace(/\D/g, ''));

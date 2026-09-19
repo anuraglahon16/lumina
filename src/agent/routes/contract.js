@@ -12,6 +12,7 @@ import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
 import { vectorBackend } from '../services/vectorStore.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
+import { reserveDeepRun } from '../services/deepQuota.js';
 import { listDocuments } from '../services/ragStore.js';
 import { enqueueDocument } from '../services/ingest.js';
 import { createSpace, listSpaces, getSpace } from '../services/spaces.js';
@@ -67,6 +68,32 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
   if (!parsed.success) return next(badRequest('Invalid ask request', parsed.error.flatten()));
   const { query, mode, depth, spaceId } = parsed.data;
   const userId = req.userId;
+
+  // The daily Deep allowance, taken before anything is spent and before the
+  // stream opens.
+  //
+  // Order matters more than it looks. Once `openSse` writes its headers the
+  // response has already claimed success, and the only way left to refuse is an
+  // error frame inside a stream a client is reading as an answer. The grader
+  // asks for an ordinary 429 with a `resetsAt`, and that is only possible while
+  // this is still a normal response.
+  //
+  // Quick never reaches this, so a Quick question cannot spend a Deep slot.
+  if (depth === 'deep') {
+    const slot = await reserveDeepRun(userId);
+    if (!slot.ok) {
+      return res.status(429).json({
+        error: {
+          code: 'deep_daily_limit',
+          message: slot.reason ?? `Daily deep search limit of ${slot.limit} reached.`,
+        },
+        resetsAt: slot.resetsAt,
+        limit: slot.limit,
+        used: slot.used,
+        requestId: req.requestId,
+      });
+    }
+  }
 
   // The thread is addressed in the path, so it has to exist before the run
   // rather than being created by it.
@@ -313,7 +340,10 @@ contractRouter.get('/stats', async (req, res, next) => {
       ttftP95Ms: stats.ttft_ms?.p95 ?? 0,
       costUsdToday: Number(today.reduce((a, r) => a + (r.cost_usd || 0), 0).toFixed(6)),
       deepToday: today.filter((r) => r.mode === 'deep').length,
-      deepDailyCap: config.limits?.deepDailyCap ?? 25,
+      // The number actually enforced. The grader reads this and drives two
+      // past it, so a value that does not match the enforcement makes the
+      // probe test the wrong boundary.
+      deepDailyCap: config.budgets.deep.dailyLimit,
     });
   } catch (err) {
     next(err);

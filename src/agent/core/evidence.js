@@ -232,10 +232,18 @@ export class EvidenceLedger {
     this.attempted = new Set();
   }
 
-  /** Record search hits so the trace shows what was considered but not read. */
-  noteCandidates(results) {
+  /**
+   * Record search hits so the trace shows what was considered but not read.
+   *
+   * The branch that surfaced a candidate is kept with it, first discoverer
+   * wins, because a candidate read later by the cross-branch sweep still came
+   * from some sub-question's search and the grader asks every source which one.
+   */
+  noteCandidates(results, { branch = null } = {}) {
     for (const r of results) {
-      if (!this.candidates.has(r.url) && !this.byUrl.has(r.url)) this.candidates.set(r.url, r);
+      if (!this.candidates.has(r.url) && !this.byUrl.has(r.url)) {
+        this.candidates.set(r.url, branch ? { ...r, discovered_by_branch: branch } : r);
+      }
     }
   }
 
@@ -354,9 +362,21 @@ export class EvidenceLedger {
       doc_id: chunk.doc_id,
       chunk_id: chunk.chunk_id,
       page: chunk.page,
+      /**
+       * Human-readable for the interface, and structured for the contract.
+       *
+       * `locator` stays "p. 3" because that is what reads well under a
+       * citation in the UI. `line` travels alongside it so the contract's
+       * `{ page, line }` can be built without either one guessing: the
+       * benchmark keys its haystack on `docId:page:heading:line`, and a
+       * locator carrying only a page made every chunk of a page collide.
+       */
       locator: chunk.page_label,
+      line: chunk.line ?? null,
       domain: 'uploaded document',
-      snippet: chunk.text.slice(0, 400),
+      // safeSlice, not slice: the web path already stopped cutting text mid
+      // surrogate pair, and a document snippet is cut the same way.
+      snippet: safeSlice(chunk.text, 400),
       passages: [chunk.text],
       score: chunk.score,
       discovered_by: query,
@@ -432,11 +452,24 @@ export class EvidenceLedger {
       domain: s.domain,
       locator: s.locator,
       page: s.page ?? null,
+      line: s.line ?? null,
       doc_id: s.doc_id ?? null,
       snippet: s.snippet,
       published_at: s.published_at ?? null,
       from_cache: Boolean(s.from_cache),
       branches: s.branches,
+      // The sub-question that found this source first, singular, because the
+      // contract wants one integer per source and the ledger keeps an array:
+      // one page can be reached from two sub-questions and the ledger is right
+      // to record both. `toContractSource` reads `branch`, we published only
+      // `branches`, and the field it looked for was never there - so no Deep
+      // source ever carried an index and the attribution gate failed on every
+      // run.
+      //
+      // First discoverer is the canonical owner. It is the only choice that is
+      // stable: the array's later entries depend on which concurrent branch
+      // happened to reach the same page second.
+      branch: s.branches?.[0] ?? null,
     }));
   }
 

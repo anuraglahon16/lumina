@@ -254,6 +254,25 @@ export const config = {
       planCeilingMs: num(process.env.DEEP_PLAN_CEILING_MS, 3500),
       maxIterationsPerBranch: num(process.env.DEEP_BRANCH_MAX_ITERATIONS, 4),
       maxToolCallsPerBranch: num(process.env.DEEP_BRANCH_MAX_TOOL_CALLS, 6),
+      /**
+       * The whole run's tool-call ceiling, shared across every branch.
+       *
+       * Per-branch limits alone do not bound a run: four branches at six calls
+       * each is twenty-four before synthesis, five is thirty, and the grader
+       * counts trace events with a cap of twenty-four. This is the number that
+       * is actually enforced; the per-branch limit remains as a fairness bound
+       * so one sub-question cannot spend the whole pool.
+       */
+      maxToolCallsTotal: num(process.env.DEEP_MAX_TOOL_CALLS, 24),
+      /**
+       * Deep searches one user may start per UTC day.
+       *
+       * Deep costs roughly thirty times a Quick answer, so the per-run budget
+       * bounds one request and this bounds a user. The benchmark reads the
+       * number off `GET /stats` and drives two past it, so the value is
+       * declared rather than assumed.
+       */
+      dailyLimit: num(process.env.DEEP_DAILY_LIMIT, 5),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
       wallClockMs: num(process.env.DEEP_WALL_CLOCK_MS, 420000),

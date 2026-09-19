@@ -74,7 +74,9 @@ test('the iteration limit stops the loop and names itself', async () => {
   const model = scriptedModel([useTool('web_search', { query: 'x' })]);
   const result = await run({ complete: model, budget: budget({ maxIterations: 2 }) });
   assert.equal(result.termination_reason, 'max_iterations_reached');
-  assert.equal(result.capped, true);
+  // Named, but not capped: the loop ran the iterations it was allocated and
+  // stopped. Nothing was refused, so nothing was cut short.
+  assert.equal(result.capped, false, 'an allocation spent in full is a normal finish');
   assert.equal(model.calls.length, 2, 'it stops at the limit rather than one turn past it');
 });
 

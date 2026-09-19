@@ -38,7 +38,7 @@ const log = createLogger('retrieve');
  * which reads as a model answering from memory — the precise thing this system
  * exists to make impossible.
  */
-function trace(emit, recorder, { tool, input, ok, ms, reason, error, cached = false, meta }) {
+export function trace(emit, recorder, { tool, input, ok, ms, reason, error, cached = false, meta }) {
   emit?.('tool_call', { tool, input });
   emit?.('tool_result', { tool, ok, duration_ms: ms, summary: reason, detail: error, cached });
   recorder?.recordToolCall({ name: tool, input, durationMs: ms, ok, summary: reason, error, cached, meta });

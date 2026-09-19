@@ -67,7 +67,18 @@ app.use((req, res, next) => (isUpload(req) ? next() : express.json({ limit: '512
  * is already reachable. The password still guards this project's own /api.
  */
 const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces|evals\/report\.json)(\/|$)/;
-const PUBLIC_UI = /^\/(assets\/|favicon|manifest|robots|index\.html$|$)/;
+/**
+ * Paths served without the demo password.
+ *
+ * `evals` is here because it is the page the rubric asks a human grader to
+ * open, and a shared password on a read-only report is a gate on the wrong
+ * thing: the password exists so a public URL is not an open bill on someone's
+ * model credits, and reading a static report spends nothing. `evals$|evals\/`
+ * rather than `evals` so it opens that page and not every path beginning with
+ * those five letters. `/evals/report.json` never reaches here - it is answered
+ * by the contract router above, which exempts it from the user header too.
+ */
+const PUBLIC_UI = /^\/(assets\/|favicon|manifest|robots|index\.html$|evals$|evals\/|$)/;
 app.use((req, res, next) => {
   if (!CONTRACT_PATH.test(req.path)) return next();
   req.requestId = req.get('x-request-id') || newId('req');

@@ -129,12 +129,35 @@ export class Budget {
   }
 
   /** Why the run must stop, or null if it may continue. */
+  /**
+   * Whether the loop should stop before asking the model for anything more.
+   *
+   * Two different things end a branch and they are not the same event:
+   *
+   * - Its allocation is spent. The branch planned a number of calls, made
+   *   them, and has nothing left to do. That is a normal finish, so the reason
+   *   is returned without marking the budget capped.
+   * - The wall clock ran out. The branch had work left and time took it away.
+   *   That is curtailment, and it is marked.
+   *
+   * An actual refusal - the model asking for a call and `allows()` saying no -
+   * goes through `markCapped` instead, which is the only other way `capped`
+   * is set. Collapsing the first case into `capped` is what made every deep
+   * run that used its allowance report as cut short: measured on the deployed
+   * benchmark, 15 of 15 refusals were a branch asking for one more
+   * `fetch_page` after a loop that had already decided to stop.
+   */
   checkStop() {
     if (this.capped) return this.capped;
     if (Date.now() >= this.deadline) return this.#cap('wall_clock_exceeded');
-    if (this.counts.iterations >= this.limits.maxIterations) return this.#cap('max_iterations_reached');
-    if (this.counts.tool_calls >= this.limits.maxToolCalls) return this.#cap('max_tool_calls_reached');
+    if (this.counts.iterations >= this.limits.maxIterations) return 'max_iterations_reached';
+    if (this.counts.tool_calls >= this.limits.maxToolCalls) return 'max_tool_calls_reached';
     return null;
+  }
+
+  /** The allocation is spent but nothing was denied: a normal finish. */
+  get allocationSpent() {
+    return !this.capped && (this.counts.tool_calls >= this.limits.maxToolCalls || this.counts.iterations >= this.limits.maxIterations);
   }
 
   /** Whether one specific tool call is still affordable. */
@@ -204,11 +227,21 @@ export class Budget {
     return this.#cap(reason);
   }
 
+  /**
+   * Raise this branch's own ceiling by one, because the pool had spare capacity
+   * to lend. The allocation stays a fairness floor; this is the borrowing.
+   */
+  grantExtra(n = 1) {
+    this.limits = { ...this.limits, maxToolCalls: this.limits.maxToolCalls + n };
+    this.borrowed = (this.borrowed ?? 0) + n;
+  }
+
   snapshot() {
     return {
       label: this.label,
       limits: this.limits,
       used: { ...this.counts },
+      borrowed: this.borrowed ?? 0,
       refunded: this.refunds.length,
       remaining: {
         tool_calls: Math.max(0, this.limits.maxToolCalls - this.counts.tool_calls),
@@ -231,3 +264,151 @@ export const CAP_REASONS = {
   wall_clock_exceeded: 'the time limit',
   max_tokens: 'the output token limit',
 };
+
+/**
+ * One pool of tool-call slots for a whole Deep run.
+ *
+ * Each branch used to build its own Budget with `maxToolCallsPerBranch`, so a
+ * four or five sub-question plan permitted 24 to 30 calls before synthesis and
+ * there was no shared number for any of them to exceed. The grader counts trace
+ * events and caps a Deep run at 24; three of four runs were over, and the run
+ * read end to end in Phase 1 finished at 25 after a call at step 14 had already
+ * been refused.
+ *
+ * A slot is claimed synchronously, before any `await`. On a single-threaded
+ * runtime that is what makes the check atomic: a caller cannot observe the
+ * count, yield, and act on a number another branch has since changed. The
+ * in-flight count exists for the same reason the defect existed — a limit that
+ * only counts finished calls passes while the calls that will break it are
+ * still in the air.
+ *
+ * Settling never returns a slot. A call that has been made emitted its
+ * `tool_result`, the grader counted that event, and handing the slot back buys
+ * a call that will be counted twice. This is deliberately unlike `Budget.refund`,
+ * which exists so a blocked publisher does not truncate a Quick run: that
+ * reasoning is about useful work, and this limit is about how many calls were
+ * made.
+ */
+export class ToolSlots {
+  constructor(limit) {
+    this.limit = Math.max(0, Number(limit) || 0);
+    this.claimed = 0;
+    this.inFlight = 0;
+    this.capReason = null;
+    /**
+     * Counted so the run log can say what happened rather than be inferred
+     * from it. `attempted` minus `claimed` is `refused`, and who spent the
+     * pool - branches or the sweep - is the difference between a budget that
+     * was shared and one that was taken.
+     *
+     * These are records, not decisions: nothing here is read by tryClaim.
+     */
+    this.attempted = 0;
+    this.settled = 0;
+    this.refused = 0;
+    // Refusals by a branch's own gate rather than by the pool. Counted here so
+    // one summary can answer "was anything refused", which `refused` alone
+    // could not: a run whose four branches were each denied a sixth call
+    // reported `refused: 0` beside `capped` and read as a contradiction.
+    this.branchRefused = 0;
+    this.byOwner = { branch: 0, sweep: 0 };
+    this.borrowed = 0;
+    /**
+     * Per-branch bookkeeping, so unused capacity can be lent without starving
+     * anyone.
+     *
+     * An allocation is a fairness floor, not a fence: measured on two deployed
+     * probes, branches were denied six fetches of URLs nobody had tried while
+     * 6 to 15 of the 24 slots sat unused for the rest of the run.
+     */
+    this.branches = new Map();
+    this.sweepReserve = 0;
+  }
+
+  get exhausted() {
+    return this.claimed >= this.limit;
+  }
+
+  /** A permit, or null when the pool is spent. Synchronous by contract. */
+  tryClaim(owner = 'branch', branchId = null) {
+    this.attempted += 1;
+    if (this.claimed >= this.limit) {
+      this.refused += 1;
+      this.capReason = 'deep_tool_budget_exhausted';
+      return null;
+    }
+    this.claimed += 1;
+    this.inFlight += 1;
+    this.byOwner[owner] = (this.byOwner[owner] ?? 0) + 1;
+    const b = branchId ? this.branches.get(branchId) : null;
+    if (b) b.claimed += 1;
+    return { seq: this.claimed, settled: false, owner };
+  }
+
+  registerBranch(id, allocation) {
+    this.branches.set(id, { allocation: Math.max(0, allocation | 0), claimed: 0, active: true });
+  }
+
+  finishBranch(id) {
+    const b = this.branches.get(id);
+    if (b) b.active = false;
+  }
+
+  /** Slots held back for a sweep that may still need them. */
+  setSweepReserve(n) {
+    this.sweepReserve = Math.max(0, n | 0);
+  }
+
+  /** The sweep is not going to run, so its reserve is free. */
+  releaseSweepReserve() {
+    this.sweepReserve = 0;
+  }
+
+  /**
+   * How much a branch may take beyond its own allocation right now.
+   *
+   * Everything still owed to other active branches is subtracted first, then
+   * the sweep's reserve. What remains is genuinely spare: no branch that has
+   * not yet spent its guarantee can be starved by lending it.
+   */
+  borrowable(branchId) {
+    let owed = 0;
+    for (const [id, b] of this.branches) {
+      if (id === branchId || !b.active) continue;
+      owed += Math.max(0, b.allocation - b.claimed);
+    }
+    return Math.max(0, this.limit - this.claimed - owed - this.sweepReserve);
+  }
+
+  noteBorrow() {
+    this.borrowed += 1;
+  }
+
+  /** A branch's own ceiling refused a call. Recorded, never consulted. */
+  noteBranchRefusal() {
+    this.branchRefused += 1;
+  }
+
+  /** Mark a claimed call finished. Idempotent: a double settle is not a credit. */
+  settle(permit) {
+    if (!permit || permit.settled) return;
+    permit.settled = true;
+    this.settled += 1;
+    this.inFlight = Math.max(0, this.inFlight - 1);
+  }
+
+  snapshot() {
+    return {
+      limit: this.limit,
+      claimed: this.claimed,
+      in_flight: this.inFlight,
+      cap_reason: this.capReason,
+      attempted: this.attempted,
+      settled: this.settled,
+      refused: this.refused,
+      branch_refused: this.branchRefused,
+      borrowed: this.borrowed,
+      by_owner: { ...this.byOwner },
+    };
+  }
+}

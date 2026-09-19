@@ -10,7 +10,22 @@ test('budget refuses tool calls past its limits and names the reason', () => {
   budget.consume('web_search');
   assert.equal(budget.allows('web_search').reason, 'max_tool_calls_reached');
   assert.equal(budget.checkStop(), 'max_tool_calls_reached');
+  // Spending the allocation is not the same event as being refused. `capped`
+  // is reserved for a call that was attempted and denied, or for the wall
+  // clock; a loop that stops because it has done what it planned finished.
+  assert.equal(budget.snapshot().capped, null, 'an allocation spent in full is not a cap');
+  assert.equal(budget.allocationSpent, true);
+
+  // And the refusal path still marks it, which is what `cap` is for.
+  budget.markCapped('max_tool_calls_reached');
   assert.equal(budget.snapshot().capped, 'max_tool_calls_reached');
+});
+
+test('the wall clock is curtailment and is marked as such', () => {
+  const budget = new Budget({ maxIterations: 9, maxToolCalls: 9, maxFetches: 9, wallClockMs: -1 });
+  assert.equal(budget.checkStop(), 'wall_clock_exceeded');
+  assert.equal(budget.snapshot().capped, 'wall_clock_exceeded', 'time taken away is a cap');
+  assert.equal(budget.allocationSpent, false);
 });
 
 test('wall-clock exhaustion stops a run even with budget left', () => {

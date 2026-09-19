@@ -138,7 +138,28 @@ export function toolDefinitionsFor({ hasDocuments, retrievalMode = 'auto' }) {
  * Search branch). It is responsible for budget accounting, ledger updates,
  * trace emission, and converting results into compact text for the model.
  */
-export function createToolExecutor({ ledger, budget, recorder, emit, userId, threadId, runId, branch = null, spaceId = null }) {
+export function createToolExecutor({
+  ledger,
+  budget,
+  recorder,
+  emit,
+  userId,
+  threadId,
+  runId,
+  branch = null,
+  spaceId = null,
+  // The Deep run's shared pool. Absent for Quick, which has its own budget and
+  // one loop to spend it.
+  slots = null,
+  // Injected the same way `gatherFromWeb` injects them, and for the same
+  // reason: what is worth testing here is attribution, budgets and ledger
+  // bookkeeping, none of which is about the network. Without this a Deep test
+  // must replace the whole executor, which then writes no sources and cannot
+  // exercise deduplication - the exact shape of disconnection this codebase
+  // has been bitten by before.
+  webSearch: searchFn = webSearch,
+  fetchPage: fetchFn = fetchPage,
+}) {
   async function run(name, rawInput) {
     const checked = validateToolInput(name, rawInput);
     if (!checked.ok) {
@@ -167,8 +188,8 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
 
   async function runWebSearch({ query, recency }) {
     const q = recency === 'recent' ? `${query} ${new Date().getFullYear()}` : query;
-    const { results, provider, cached, degraded, provider_errors } = await webSearch(q, { recorder });
-    ledger.noteCandidates(results);
+    const { results, provider, cached, degraded, provider_errors } = await searchFn(q, { recorder });
+    ledger.noteCandidates(results, { branch });
     if (!results.length) {
       return {
         ok: false,
@@ -194,7 +215,7 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
   }
 
   async function runFetchPage({ url, reason }) {
-    const page = await fetchPage(url, { recorder });
+    const page = await fetchFn(url, { recorder });
     if (!page.ok) {
       return {
         ok: false,
@@ -268,9 +289,29 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
    * run-log entry. Returns the string the model sees as the tool result.
    */
   return async function execute(name, input) {
-    const gate = budget.allows(name);
+    let gate = budget.allows(name);
+    /**
+     * A branch that has spent its allocation asks the pool before it is
+     * refused.
+     *
+     * The allocation divides the pool fairly at the start; it was never meant
+     * to strand capacity nobody else is going to use. Measured on two deployed
+     * probes, six fetches of URLs nobody had tried were denied while 6 to 15 of
+     * the 24 slots stayed unused for the rest of the run.
+     *
+     * Only the branch's own call ceiling is borrowable. A sub-limit like
+     * `max_fetches_reached` is a statement about the shape of the research, not
+     * about capacity, and the wall clock is not lendable at all.
+     */
+    if (!gate.ok && gate.reason === 'max_tool_calls_reached' && slots?.borrowable(branch) > 0) {
+      budget.grantExtra();
+      slots.noteBorrow();
+      emit?.('budget_borrowed', { tool: name, branch, borrowable: slots.borrowable(branch), budget: budget.snapshot() });
+      gate = budget.allows(name);
+    }
     if (!gate.ok) {
       budget.markCapped(gate.reason);
+      slots?.noteBranchRefusal();
       emit?.('tool_blocked', { tool: name, reason: gate.reason, branch, budget: budget.snapshot() });
       recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${gate.reason}`, error: gate.reason, branch });
       return {
@@ -278,6 +319,22 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
         blocked: true,
         reason: gate.reason,
         content: `Budget limit reached (${gate.reason}). No further ${name} calls are possible. Stop calling tools and finish with the evidence already gathered.`,
+      };
+    }
+
+    // The shared claim, taken synchronously before any await. A branch that
+    // passes its own budget check can still be refused here, because the pool
+    // is what the grader counts and the other branches are spending from it.
+    const permit = slots ? slots.tryClaim('branch', branch) : null;
+    if (slots && !permit) {
+      budget.markCapped(slots.capReason);
+      emit?.('tool_blocked', { tool: name, reason: slots.capReason, branch, budget: budget.snapshot() });
+      recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${slots.capReason}`, error: slots.capReason, branch });
+      return {
+        ok: false,
+        blocked: true,
+        reason: slots.capReason,
+        content: `The deep search tool budget is spent (${slots.capReason}). No further tool calls are possible in this run. Finish with the evidence already gathered.`,
       };
     }
 
@@ -311,6 +368,10 @@ export function createToolExecutor({ ledger, budget, recorder, emit, userId, thr
       recorder?.recordToolCall({ name, input, durationMs, ok: false, summary: 'error', error: err.message, branch });
       emit?.('tool_result', { tool: name, ok: false, summary: `error: ${err.message}`, duration_ms: durationMs, branch });
       return { ok: false, content: `Tool ${name} failed: ${err.message}. Continue with another approach.` };
+    } finally {
+      // The slot stays spent; settling only clears the in-flight count, so a
+      // call that threw does not leave the pool believing it is still running.
+      slots?.settle(permit);
     }
   };
 }
@@ -325,9 +386,13 @@ function publicSource(s) {
     domain: s.domain,
     locator: s.locator,
     page: s.page ?? null,
+    line: s.line ?? null,
     snippet: s.snippet,
     published_at: s.published_at ?? null,
     from_cache: Boolean(s.from_cache),
+    // Same reason as publicSources: the contract reads `branch`, singular, and
+    // the first discoverer is the stable owner.
+    branch: s.branches?.[0] ?? null,
   };
 }
 
