@@ -1,7 +1,7 @@
 {
   "project": "lumina",
-  "checkedAt": "2026-09-19T03:56:30.937Z",
-  "runs": 87,
+  "checkedAt": "2026-09-19T15:02:58.540Z",
+  "runs": 82,
   "errors": 2,
   "warnings": 2,
   "results": [
@@ -17,21 +17,21 @@
       "title": "Tool errors surface as errors",
       "severity": "error",
       "status": "pass",
-      "detail": "87 run(s)"
+      "detail": "82 run(s)"
     },
     {
       "id": "A2",
       "title": "The loop terminates because it finished",
       "severity": "error",
       "status": "fail",
-      "detail": "req_mu7upct3qus33l: terminated=\"cap\"; req_mu7uqz7nk5oh3f: terminated=\"cap\"; req_mu7urpc6nea496: terminated=\"cap\"; req_mu7us8x04e2f6z: terminated=\"cap\""
+      "detail": "req_mu8ie30v0b9w73: terminated=\"cap\"; req_mu8if799fxq2gb: terminated=\"cap\"; req_mu8igsupbbvim6: terminated=\"cap\"; req_mu8ihxe8cb5kin: terminated=\"cap\"; req_mu8iiudzkhyfte: terminated=\"cap\"; req_mu8ik4o38zzy6q: terminated=\"cap\"; req_mu8ikyveemdxzh: terminated=\"cap\"; req_mu8iloe8x3ykn0: terminated=\"cap\""
     },
     {
       "id": "A3",
       "title": "No tool thrash",
       "severity": "warn",
       "status": "fail",
-      "detail": "req_mu7u4gpuyeadhy: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u4jsxoph7jv: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u4k8rqbs4ls: \"fetch_page\" called 5x consecutively (cap 4); req_mu7u5g5nvjyl7b: \"fetch_page\" called 5x consecutively (cap 4); req_mu7ulkqfqf4b2s: \"fetch_page\" called 10x consecutively (cap 4); req_mu7umpaos5h5ss: \"fetch_page\" called 10x consecutively (cap 4); req_mu7unvnxpll044: \"fetch_page\" called 12x consecutively (cap 4); req_mu7upct3qus33l: \"fetch_page\" called 12x consecutively (cap 4); req_mu7uqbcabl3ys5: \"fetch_page\" called 12x consecutively (cap 4); req_mu7uqz7nk5oh3f: \"fetch_page\" called 7x consecutively (cap 4); req_mu7urpc6nea496: \"fetch_page\" called 11x consecutively (cap 4); req_mu7us8x04e2f6z: \"fetch_page\" called 10x consecutively (cap 4); req_mu7ut0bw4j9x4h: \"fetch_page\" called 6x consecutively (cap 4)"
+      "detail": "req_mu8hxjqq1yk4g7: \"fetch_page\" called 6x consecutively (cap 4); req_mu8hxprco2bpe7: \"fetch_page\" called 5x consecutively (cap 4); req_mu8hxrjnfh5guo: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i3tsxsnut98: \"fetch_page\" called 6x consecutively (cap 4); req_mu8i46a4kml8f4: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i49lhksd01f: \"fetch_page\" called 5x consecutively (cap 4); req_mu8ie30v0b9w73: \"fetch_page\" called 9x consecutively (cap 4); req_mu8if0ebska4ra: \"fetch_page\" called 5x consecutively (cap 4); req_mu8if799fxq2gb: \"web_search\" called 8x consecutively (cap 4); req_mu8igsupbbvim6: \"fetch_page\" called 8x consecutively (cap 4); req_mu8ihxe8cb5kin: \"fetch_page\" called 12x consecutively (cap 4); req_mu8iiudzkhyfte: \"fetch_page\" called 10x consecutively (cap 4); req_mu8ijhhcidej8t: \"fetch_page\" called 9x consecutively (cap 4); req_mu8ik4o38zzy6q: \"fetch_page\" called 10x consecutively (cap 4); req_mu8ikyveemdxzh: \"fetch_page\" called 10x consecutively (cap 4); req_mu8iloe8x3ykn0: \"fetch_page\" called 11x consecutively (cap 4)"
     },
     {
       "id": "R1",
@@ -59,7 +59,7 @@
       "title": "Declared eval thresholds are met",
       "severity": "error",
       "status": "fail",
-      "detail": "errorRate=0.0247 > 0.01"
+      "detail": "errorRate=0.0988 > 0.01"
     },
     {
       "id": "E3",
@@ -73,21 +73,21 @@
       "title": "Token budget respected",
       "severity": "error",
       "status": "pass",
-      "detail": "87 run(s)"
+      "detail": "82 run(s)"
     },
     {
       "id": "B2",
       "title": "Latency budget respected",
       "severity": "warn",
       "status": "pass",
-      "detail": "87 run(s)"
+      "detail": "82 run(s)"
     },
     {
       "id": "B3",
       "title": "Cost budget respected",
       "severity": "warn",
       "status": "pass",
-      "detail": "87 run(s)"
+      "detail": "82 run(s)"
     },
     {
       "id": "P1",

@@ -27,7 +27,7 @@
     "smoke": "node tools/smoke.js",
     "test": "node --test tests/*.test.js",
     "runlogs": "node tools/export-runlogs.mjs --scope benchmark",
-    "report": "node eval/build-report.mjs --student \"Anurag Lahon\" --successful req_mu7u5dw4wvyjjn --successful-notes \"$(cat reports/trajectories/successful.md)\" --failing req_mu7upct3qus33l --failing-notes \"$(cat reports/trajectories/failing.md)\""
+    "report": "node eval/build-report.mjs --student \"Anurag Lahon\" --successful req_mu8i4mbc6zzc9d --successful-notes \"$(cat reports/trajectories/successful.md)\" --failing req_mu8ihxe8cb5kin --failing-notes \"$(cat reports/trajectories/failing.md)\""
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.70.0",

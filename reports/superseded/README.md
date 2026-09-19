@@ -19,3 +19,12 @@ known to be wrong about it:**
 
 The authoritative run is the one made against the deployed Preview URL and
 recorded in `reports/phase7-deployed.md`. Read these only as history.
+
+## bench-deployed-ec88475.json
+
+The first deployed benchmark (commit `ec88475`, 2026-09-19T03:55Z). Superseded
+rather than wrong: its citation grounding of 1.000 and recall@5 of 0.967 were
+real. It is kept because the run that replaces it was taken after four fixes it
+could not have measured — Deep answers that never streamed to the client, the
+sweep spending outside the 24-call pool, branch allocations that stranded
+capacity, and termination labels that inverted which runs were curtailed.
