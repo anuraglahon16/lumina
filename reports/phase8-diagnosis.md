@@ -86,3 +86,57 @@ where TTFT work has to go, not into retrieval.
   space lookup round trip; not worth restructuring the accept path that is
   already correct.
 - Cache-key diagnostics (item 4) are next and are genuinely measurable.
+
+---
+
+# Deployed Deep probes (commit 9f0a9bf, `lumina-jnf7s94r6`)
+
+Three four-sub-question Deep runs against the deployed allocation fix. The
+budget behaviour is fully verified; the evidence-bearing behaviour is not,
+because the search provider ran out of quota mid-verification.
+
+| probe | allocations | attempted | claimed | settled | refused | branch | sweep | traces | terminated | attribution |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|---|
+| BM25 vs dense | q1–q4 = 5 each, 4 reserved | 20 | 20 | 20 | 0 | 20 | 0 | 20 | `completed` | 0 missing |
+| SSE vs WebSockets | q1–q4 = 5 each, 4 reserved | 22 | 22 | 22 | 0 | 22 | 0 | 22 | `completed` | 0 missing |
+| cost at 100k/month | q1–q4 = 5 each, 4 reserved | 20 | 20 | 20 | 0 | 20 | 0 | 20 | `completed` | 0 missing |
+
+Every invariant holds on the deployed runtime:
+
+- `claimed <= 24` — 20, 22, 20
+- `settled == claimed` in all three
+- `attempted == claimed + refused` in all three
+- `branch_claimed + sweep_claimed == claimed` in all three
+- **recorded provider calls == pool claims** — 20/20, 22/22, 20/20. This is the
+  one that would have caught the original defect, where a run made 29–32 calls
+  against 22 claimed.
+- `refused == 0` and `terminated == done` agree
+- traces stayed at or under 24 with no refusal
+
+The same three questions were `cap` with `reason=null` before the fix. They are
+now `completed`, and the run log says why rather than leaving it to be inferred.
+
+## What these probes did not verify
+
+`sources = 0` on all three, and every tool call failed with
+`0 results (no provider)`. The cause is external and confirmed directly against
+the provider:
+
+```
+tavily http=433
+{"detail":{"error":"This request exceeds the pay-as-you-go limit."}}
+```
+
+The Tavily account reached its pay-as-you-go limit during this phase's work —
+the benchmark, the 60-request error reproduction and these probes. So the runs
+above researched nothing, answered from nothing, and completed honestly with no
+evidence. That is correct behaviour for a provider outage, but it means these
+probes say nothing about sources, citations, grounding or the sweep, and the
+deliberately constrained cap probe is not worth running until search works: a
+cap on a run with no evidence would prove nothing.
+
+Blocked until the Tavily limit is raised:
+
+- the constrained probe that must `cap`
+- sweep capacity usage against real candidates
+- the final deployed benchmark and quality run
