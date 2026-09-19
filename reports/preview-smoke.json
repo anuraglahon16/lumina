@@ -1,0 +1,171 @@
+{
+  "ranAt": "2026-09-19T01:46:03.539Z",
+  "target": "https://lumina-1q8mjcpg9-anuraglahon16s-projects.vercel.app",
+  "users": {
+    "primary": "smoke_mu7pyp0sruiu",
+    "memory": "smoke_mem_mu7pyp0sruiu",
+    "quota": "smoke_cap_mu7pyp0sruiu",
+    "documents": "smoke_doc_mu7pyp0sruiu"
+  },
+  "spaceId": "spc_mu7q72qx9mt900",
+  "results": [
+    {
+      "id": 3,
+      "name": "health responds and reports ok",
+      "ok": true,
+      "detail": "db=ok vectorStore=atlas-vector-search quick=claude-haiku-4-5 deepSynthesis=claude-sonnet-5"
+    },
+    {
+      "id": 6,
+      "name": "Voyage is not the active embedding provider",
+      "ok": true,
+      "detail": "embedding_provider=local (status 200)"
+    },
+    {
+      "id": 7,
+      "name": "local embeddings are not reported as degraded",
+      "ok": true,
+      "detail": "status=ok search_degraded=false vector_backend=atlas-vector-search"
+    },
+    {
+      "id": 8,
+      "name": "four contract probes pass",
+      "ok": true,
+      "detail": "pass POST /threads (201)\npass GET /threads\npass GET /memory\npass POST /threads without X-User-Id → 401"
+    },
+    {
+      "id": 4,
+      "name": "a real Anthropic request succeeds",
+      "ok": true,
+      "detail": "tokens out=136 model=claude-haiku-4-5 cost=$0.002539"
+    },
+    {
+      "id": 5,
+      "name": "Tavily search runs live, returns results, no fallback",
+      "ok": false,
+      "detail": "provider=tavily web_search calls=1 sources=1 searchCached=true\nsearch_last={}"
+    },
+    {
+      "id": 9,
+      "name": "Quick answer completes with sources before tokens",
+      "ok": true,
+      "detail": "sources=1 at frame 3, first token at 4, invalid frames=0, terminated=done, ttft=547ms"
+    },
+    {
+      "id": "10a",
+      "name": "Deep emits plan before any retrieval",
+      "ok": true,
+      "detail": "plan at frame 0 with 4 sub-questions, first trace at 1"
+    },
+    {
+      "id": "10b",
+      "name": "every retrieval trace carries an integer subQuestion",
+      "ok": true,
+      "detail": "23/23 traces carry one"
+    },
+    {
+      "id": "10c",
+      "name": "every source carries an integer subQuestion",
+      "ok": true,
+      "detail": "9/9 sources carry one"
+    },
+    {
+      "id": "10d",
+      "name": "Deep stays inside 24 tool calls",
+      "ok": true,
+      "detail": "23 tool calls, terminated=cap, subQuestions=4, invalid frames=0"
+    },
+    {
+      "id": "11a",
+      "name": "an explicit save creates a memory row",
+      "ok": true,
+      "detail": "1 row(s): \"I am writing a thesis on retrieval-augmented generation.\""
+    },
+    {
+      "id": "11b",
+      "name": "a new thread recalls it",
+      "ok": true,
+      "detail": "recall_memory: ok - 1 memory/memories recalled\nanswer: The evidence doesn't tell me what you're writing about. The block provided is a list of writing prompts and ideas for fiction writers, but it contains no information about your specific thesis or curr"
+    },
+    {
+      "id": "11c",
+      "name": "delete removes the row",
+      "ok": true,
+      "detail": "DELETE → 204"
+    },
+    {
+      "id": "11d",
+      "name": "the deleted row is gone",
+      "ok": true,
+      "detail": "id mem_mu7pzxk0he8oj9 absent; 1 unrelated row(s) remain"
+    },
+    {
+      "id": "12a",
+      "name": "the first 5 Deep runs are accepted",
+      "ok": true,
+      "detail": "statuses 200,200,200,200,200 (cap=5)"
+    },
+    {
+      "id": "12b",
+      "name": "cap+1 is refused with a JSON 429",
+      "ok": true,
+      "detail": "status=429 body={\"error\":{\"code\":\"deep_daily_limit\",\"message\":\"daily deep search limit reached\"},\"resetsAt\":\"2026-09-20T00:00:00.000Z\",\"limit\":5,\"used\":5,\"requestId\":\"req_mu7q72j1clrcmb\"}"
+    },
+    {
+      "id": "12c",
+      "name": "the refusal carries a valid future resetsAt",
+      "ok": true,
+      "detail": "resetsAt=2026-09-20T00:00:00.000Z"
+    },
+    {
+      "id": "12d",
+      "name": "the refused request creates no run",
+      "ok": true,
+      "detail": "requests before=5 after=5; deepToday=5"
+    },
+    {
+      "id": 13,
+      "name": "a document uploads, indexes and answers",
+      "ok": true,
+      "detail": "upload=202 docId=doc_mu7q72wyt3ke5w status=indexed sources=6 answerChars=563"
+    },
+    {
+      "id": 14,
+      "name": "same-page sources carry distinct real line locators",
+      "ok": true,
+      "detail": "6 doc sources, 6 distinct keys, 1 page(s) with more than one source\n[1] {\"page\":3,\"line\":1} [2] {\"page\":2,\"line\":26} [3] {\"page\":3,\"line\":14} [4] {\"page\":4,\"line\":1} [5] {\"page\":3,\"line\":27} [6] {\"page\":1,\"line\":15}"
+    },
+    {
+      "id": "15a",
+      "name": "/evals is served by the React app, not a server page",
+      "ok": true,
+      "detail": "authenticated status=200 bytes=736; unauthenticated status=401 (demo password gate - a grader needs the password)"
+    },
+    {
+      "id": "15b",
+      "name": "the report names Anurag Lahon",
+      "ok": true,
+      "detail": "submission=null"
+    },
+    {
+      "id": "15c",
+      "name": "a successful trajectory is present",
+      "ok": true,
+      "detail": "report keys: assignment, student, deployedAt, design, gates, rubric, bench, quality, trajectories"
+    },
+    {
+      "id": "15d",
+      "name": "a failing trajectory is present",
+      "ok": true,
+      "detail": ""
+    },
+    {
+      "id": 16,
+      "name": "no secret or connection string is browser-accessible",
+      "ok": true,
+      "detail": "checked 5 routes + /assets/index-BbE9p2Ps.js"
+    }
+  ],
+  "passed": 25,
+  "failed": 1
+}
