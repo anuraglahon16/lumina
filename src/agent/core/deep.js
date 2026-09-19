@@ -201,19 +201,17 @@ export async function runDeepQuery({
     });
     const run = recorder.finish({
       status: 'ok',
-      // Precedence, stated rather than emergent. A genuine synthesis or
-      // provider failure is an error and outranks everything, because the run
-      // produced nothing to describe. Otherwise a spent pool is a cap and says
-      // so with its exact reason: a run that visibly exhausted its budget used
-      // to be recorded as `error`, which kept it out of every cap statistic,
-      // and a later branch finishing normally could leave it reading `done`.
-      terminationReason: truncated
-        ? 'max_tokens'
-        : slots.exhausted
-          ? slots.capReason
-          : capped
-            ? 'capped'
-            : 'completed',
+      /**
+       * Why the run stopped, which is a different question from whether
+       * coverage was even. `capped` above still tells the reader a branch hit
+       * its ceiling; this says whether the run was cut short.
+       *
+       * A per-branch ceiling is a designed fairness bound, not a refusal of the
+       * run's work: the sub-question was still researched and synthesised. What
+       * curtails a run is the wall clock, the token ceiling, the shared pool
+       * refusing a call, or a sub-question that never got researched at all.
+       */
+      terminationReason: terminationFor({ truncated, refusedReason: slots.capReason, curtailed: capped }),
       answer,
       citations: {
         emitted: validation.cited.length + validation.invalid_citations.length,
@@ -544,4 +542,41 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
   }
   emit('sweep_done', { fetched: fetched.length });
   return fetched;
+}
+
+/**
+ * Why a deep run stopped, in one place.
+ *
+ * The rule is about whether work was abandoned, not about how close a counter
+ * came to its ceiling:
+ *
+ *   done — every planned sub-question was researched and synthesised, and
+ *          nothing was refused. A run that used its last slot and needed no
+ *          more finished; a full counter is a budget spent exactly, not a run
+ *          cut short.
+ *   cap  — a call the run still wanted was refused, by a branch's own gate or
+ *          by the shared pool, or a deadline or token ceiling ended it early.
+ *          `markCapped` fires only on an actual refusal, so `capped` already
+ *          means "someone asked and was told no" rather than "a counter is
+ *          full".
+ *   error — kept for genuine provider or synthesis failures, and set by the
+ *          catch, because a run that produced nothing has nothing to describe.
+ *
+ * This was `slots.exhausted ? slots.capReason : ...`, and the two are not the
+ * same question. `exhausted` is "the pool is full"; `capReason` is "the pool
+ * refused someone". A run that claimed its 24th slot and never asked for a
+ * 25th had `exhausted` true and `capReason` null, so the whole expression
+ * evaluated to null, `finish()` skipped the assignment, and the run persisted
+ * with no termination reason at all — which the contract reads as `done`.
+ *
+ * Measured on the deployed benchmark: the three runs where all four branches
+ * hit their ceiling recorded `null` and counted as finished, while three runs
+ * where only some branches hit it recorded `capped`. The more constrained runs
+ * were the ones reported as clean.
+ */
+export function terminationFor({ truncated, refusedReason, curtailed }) {
+  if (truncated) return 'max_tokens';
+  if (refusedReason) return refusedReason;
+  if (curtailed) return 'capped';
+  return 'completed';
 }
