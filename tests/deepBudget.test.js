@@ -191,10 +191,19 @@ test('budget exhaustion stops every branch, not just the one that hit it', async
   assert.ok(traces.length <= 24, `${traces.length} steps means branches continued past the cap`);
 });
 
-test('a run stopped by its budget terminates as cap, not done', async () => {
+test('a run that spends its allocation and is refused nothing is done', async () => {
+  // This asserted `cap`, and it was right to under the old design: branches
+  // were handed the raw per-branch ceiling, four of them summed to the whole
+  // pool, and every branch ended by being refused.
+  //
+  // The allocation is now decided before any branch starts, so the work is
+  // deliberately planned to fit: the branches here finish what they were
+  // given. Nothing is refused, so nothing was cut short. The cap path has its
+  // own tests in deepAllocation.test.js, including a genuinely necessary call
+  // being denied - this fixture is no longer that case.
   const { done, result } = await runDeep(6);
-  assert.equal(done?.terminated, 'cap', `the contract reports ${done?.terminated}`);
-  assert.match(String(result.run?.termination_reason ?? ''), /budget|cap/i, 'and the run log keeps the exact reason');
+  assert.equal(done?.terminated, 'done', `the contract reports ${done?.terminated}`);
+  assert.equal(result.run?.termination_reason, 'completed');
 });
 
 test('a capped run still answers from the evidence it did gather', async () => {

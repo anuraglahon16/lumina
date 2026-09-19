@@ -129,12 +129,35 @@ export class Budget {
   }
 
   /** Why the run must stop, or null if it may continue. */
+  /**
+   * Whether the loop should stop before asking the model for anything more.
+   *
+   * Two different things end a branch and they are not the same event:
+   *
+   * - Its allocation is spent. The branch planned a number of calls, made
+   *   them, and has nothing left to do. That is a normal finish, so the reason
+   *   is returned without marking the budget capped.
+   * - The wall clock ran out. The branch had work left and time took it away.
+   *   That is curtailment, and it is marked.
+   *
+   * An actual refusal - the model asking for a call and `allows()` saying no -
+   * goes through `markCapped` instead, which is the only other way `capped`
+   * is set. Collapsing the first case into `capped` is what made every deep
+   * run that used its allowance report as cut short: measured on the deployed
+   * benchmark, 15 of 15 refusals were a branch asking for one more
+   * `fetch_page` after a loop that had already decided to stop.
+   */
   checkStop() {
     if (this.capped) return this.capped;
     if (Date.now() >= this.deadline) return this.#cap('wall_clock_exceeded');
-    if (this.counts.iterations >= this.limits.maxIterations) return this.#cap('max_iterations_reached');
-    if (this.counts.tool_calls >= this.limits.maxToolCalls) return this.#cap('max_tool_calls_reached');
+    if (this.counts.iterations >= this.limits.maxIterations) return 'max_iterations_reached';
+    if (this.counts.tool_calls >= this.limits.maxToolCalls) return 'max_tool_calls_reached';
     return null;
+  }
+
+  /** The allocation is spent but nothing was denied: a normal finish. */
+  get allocationSpent() {
+    return !this.capped && (this.counts.tool_calls >= this.limits.maxToolCalls || this.counts.iterations >= this.limits.maxIterations);
   }
 
   /** Whether one specific tool call is still affordable. */

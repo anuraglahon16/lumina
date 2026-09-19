@@ -106,7 +106,16 @@ export async function runDeepQuery({
     // One pool for the whole run. Per-branch budgets remain as a fairness bound
     // so one sub-question cannot spend everything, but this is the number that
     // is actually enforced and the one the grader counts.
-    const slots = new ToolSlots(limits.maxToolCallsTotal ?? config.budgets.deep.maxToolCallsTotal);
+    const poolSize = limits.maxToolCallsTotal ?? config.budgets.deep.maxToolCallsTotal;
+    const slots = new ToolSlots(poolSize);
+    // Decided before any branch runs, so the sweep's capacity is set aside
+    // rather than being whatever the branches happen to leave.
+    const allocation = allocateDeepBudget({
+      total: poolSize,
+      branches: plan.sub_questions.length,
+      maxPerBranch: limits.maxToolCallsPerBranch,
+    });
+    emit('budget_allocated', { total: poolSize, branches: plan.sub_questions.length, per_branch: allocation.perBranch, reserved: allocation.reserve });
 
     const branchResults = await runBranches({
       complete: completeFn,
@@ -114,6 +123,7 @@ export async function runDeepQuery({
       webSearch: webSearchFn,
       fetchPage: fetchPageFn,
       slots,
+      allocation,
       retrievalMode,
       spaceId,
       plan,
@@ -135,7 +145,7 @@ export async function runDeepQuery({
 
     // ---- broader evidence sweep ------------------------------------------
     recorder.startPhase('sweep');
-    const swept = await sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn });
+    const swept = await sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn, slots, plan });
     recorder.endPhase('sweep', { fetched: swept.length });
 
     const cappedBranches = branchResults.filter((b) => b.capped);
@@ -363,7 +373,7 @@ async function planCall({ query, history, memories, recorder, signal, complete: 
   return parseJsonLoose(textOf(message));
 }
 
-async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, webSearch: webSearchFn = null, fetchPage: fetchPageFn = null, slots = null, retrievalMode = 'auto', spaceId = null }) {
+async function runBranches({ plan, ledger, recorder, emit, userId, threadId, runId, hasDocuments, limits, deadline, signal, complete: completeFn, executor, webSearch: webSearchFn = null, fetchPage: fetchPageFn = null, slots = null, allocation = null, retrievalMode = 'auto', spaceId = null }) {
   const queue = [...plan.sub_questions];
   const results = [];
 
@@ -415,9 +425,11 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
     const branchBudget = new Budget(
       {
         maxIterations: limits.maxIterationsPerBranch,
-        maxToolCalls: limits.maxToolCallsPerBranch,
-        maxFetches: limits.maxFetchesPerBranch,
-        maxSearches: limits.maxToolCallsPerBranch,
+        // The allocated share, not the raw ceiling: four branches at the raw
+        // ceiling spend the whole pool and leave the sweep nothing.
+        maxToolCalls: allocation?.perBranch ?? limits.maxToolCallsPerBranch,
+        maxFetches: Math.min(limits.maxFetchesPerBranch, allocation?.perBranch ?? limits.maxFetchesPerBranch),
+        maxSearches: allocation?.perBranch ?? limits.maxToolCallsPerBranch,
         // A branch may never outlive the overall Deep Search deadline.
         wallClockMs: Math.max(1000, Math.min(limits.wallClockMs, deadline - Date.now())),
       },
@@ -492,13 +504,27 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
  * usually the cross-cutting sources. Fetch the best few, so the merged answer
  * rests on more than the per-branch picks.
  */
-async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn = null }) {
+async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits, fetchPage: fetchPageFn = null, slots = null, plan = null }) {
   // Same narrow seam the branches use: the real fetcher unless a caller injects
   // one. Without this the sweep reached the network directly, which is why no
   // test could drive it and why its sources went unchecked.
   const fetch = fetchPageFn || fetchPage;
   const budgetMs = Math.min(30000, deadline - Date.now());
   if (budgetMs < 3000) return [];
+
+  /**
+   * Skip the sweep when the run already has what it needs.
+   *
+   * It existed as a phase that always ran, and a phase that always runs spends
+   * calls to justify itself. Two citable sources per sub-question is enough for
+   * a merged answer to rest on more than one publisher per part; below that the
+   * sweep earns its capacity.
+   */
+  const planned = plan?.sub_questions?.length ?? 0;
+  if (planned && ledger.citable.length >= planned * 2) {
+    emit('sweep_skipped', { reason: 'sufficient_evidence', sources: ledger.citable.length, planned });
+    return [];
+  }
 
   const domainsRead = new Set(ledger.sources.map((s) => s.domain));
   const candidates = [...ledger.candidates.values()]
@@ -512,6 +538,15 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
 
   for (const candidate of candidates) {
     if (Date.now() >= sweepDeadline || fetched.length >= 3) break;
+    // The sweep spends from the same pool as everything else. It used to call
+    // the fetcher directly, so its pages were real provider calls that no
+    // budget had counted - which is how runs reached 29 to 32 calls against a
+    // ceiling of 24.
+    const permit = slots ? slots.tryClaim() : null;
+    if (slots && !permit) {
+      emit('sweep_done', { fetched: fetched.length, stopped: slots.capReason });
+      return fetched;
+    }
     try {
       const page = await fetch(candidate.url, { recorder });
       if (!page.ok) continue;
@@ -538,6 +573,8 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
       fetched.push(source);
     } catch {
       /* a sweep failure is not worth failing the run over */
+    } finally {
+      slots?.settle(permit);
     }
   }
   emit('sweep_done', { fetched: fetched.length });
@@ -579,4 +616,31 @@ export function terminationFor({ truncated, refusedReason, curtailed }) {
   if (refusedReason) return refusedReason;
   if (curtailed) return 'capped';
   return 'completed';
+}
+
+/**
+ * How the 24 calls are divided before any branch starts.
+ *
+ * The ceiling is fixed. What was wrong was the division: `maxToolCallsPerBranch`
+ * 6 times four branches is exactly `maxToolCallsTotal` 24, so four branches
+ * using their allowance consumed the entire pool and the cross-branch sweep had
+ * nothing left. It took its pages anyway, outside the accounting — measured on
+ * the deployed benchmark, runs recorded 29 to 32 provider calls against a pool
+ * that only ever saw 22 claimed.
+ *
+ * So the reserve is subtracted first and the rest is shared. Fewer branches get
+ * a larger allowance, because the capacity exists either way and leaving it
+ * unspent helps nobody.
+ *
+ *   4 branches → 5 each, 4 reserved
+ *   3 branches → 6 each, 6 reserved
+ *
+ * The reserve is a floor for later phases, not a quota to spend: a run with
+ * enough evidence skips the sweep and simply does not use it.
+ */
+export function allocateDeepBudget({ total, branches, maxPerBranch, minReserve = 4 }) {
+  const count = Math.max(1, branches);
+  const reserve = Math.max(minReserve, total - count * maxPerBranch);
+  const perBranch = Math.max(1, Math.min(maxPerBranch, Math.floor((total - reserve) / count)));
+  return { perBranch, reserve: total - perBranch * count, total };
 }
