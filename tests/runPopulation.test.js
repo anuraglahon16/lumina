@@ -87,9 +87,9 @@ test('the exported population is described on disk, not left to be guessed', () 
 });
 
 test('failures are preserved rather than deleted', () => {
-  // runs/failing/ exists so the P1 trajectory stays readable and the count of
-  // genuine failures stays reportable. It is not a place failures go to be
-  // forgotten: build-report reads it, and this asserts it is populated.
+  // runs/failing/ is where runs that did not finish live: curtailed by a budget
+  // or failed outright. It is not a place failures go to be forgotten -
+  // build-report reads it, the manifest names it, and nothing is relabelled.
   const failing = path.join(ROOT, 'runs', 'failing');
   assert.ok(fs.existsSync(failing), 'the directory exists');
   const files = fs.readdirSync(failing).filter((f) => f.endsWith('.json'));
@@ -97,8 +97,37 @@ test('failures are preserved rather than deleted', () => {
 
   for (const f of files.slice(0, 20)) {
     const log = JSON.parse(fs.readFileSync(path.join(failing, f), 'utf8'));
-    assert.equal(log.terminated, 'error', `${f} is there because it errored, not because it was inconvenient`);
+    assert.ok(
+      ['error', 'cap'].includes(log.terminated),
+      `${f} is there because it did not finish, not because it was inconvenient (terminated=${log.terminated})`,
+    );
   }
+});
+
+test('the completed population contains only completed runs', () => {
+  // The other half of the split, and the one that makes A2 mean something: a
+  // directory asked "did the loop finish?" must not be seeded with runs already
+  // known to have been curtailed.
+  const dir = path.join(ROOT, 'runs');
+  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
+  assert.ok(files.length > 0, 'there are completed runs to evaluate');
+  for (const f of files.slice(0, 40)) {
+    const log = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    assert.equal(log.terminated, 'done', `${f} terminated=${log.terminated} and does not belong in runs/`);
+  }
+});
+
+test('the split is written down, not inferred', () => {
+  // In reports/, not in runs/: quality folds over every .json in runs/ and a
+  // manifest living there became a run with no `terminated` and failed A2 by
+  // existing.
+  const manifest = path.join(ROOT, 'reports', 'run-population.json');
+  assert.ok(fs.existsSync(manifest), 'reports/run-population.json records what each population means');
+  const m = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  assert.deepEqual(m.populations['runs/'].terminated, ['done']);
+  assert.deepEqual(m.populations['runs/failing/'].terminated, ['cap', 'error']);
+  assert.ok(m.scope, 'and which runs were exported');
+  assert.equal(m.total, m.populations['runs/'].count + m.populations['runs/failing/'].count);
 });
 
 test('the evaluated population contains no run that errored', () => {

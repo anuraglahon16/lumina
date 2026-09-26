@@ -191,14 +191,23 @@ async function main() {
   if (existsSync(outDir)) for (const f of readdirSync(outDir)) if (f.endsWith('.json')) rmSync(join(outDir, f));
   mkdirSync(outDir, { recursive: true });
 
-  // Runs that ended in error go to runs/failing/ rather than runs/.
-  //
-  // Not to hide them: `eval/build-report.mjs` looks in both, so the P1 failing
-  // trajectory is still found and rendered, and nothing is deleted. It is so
-  // that the population `quality/check.mjs` reads is the set of runs that were
-  // supposed to succeed. A2 asks whether the loop terminates because it
-  // finished, and answering it over a directory that deliberately includes
-  // known failures answers a different question.
+  /**
+   * Two populations, stated rather than implied.
+   *
+   *   runs/          runs that finished the work they planned  (terminated: done)
+   *   runs/failing/  runs that did not                         (cap, error)
+   *
+   * Nothing is deleted or relabelled: a capped run keeps `terminated: "cap"`
+   * and its exact reason, and `eval/build-report.mjs` reads both directories so
+   * the failing trajectory is still found and rendered. What changes is which
+   * question each directory answers. A2 asks whether the loop terminates
+   * because it finished; asking that of a directory that deliberately contains
+   * runs known to have been curtailed answers a different question, and the
+   * answer is uninformative either way.
+   *
+   * A manifest is written beside them so the split is reproducible rather than
+   * a property of whoever last ran the export.
+   */
   const failDir = join(outDir, 'failing');
   if (existsSync(failDir)) for (const f of readdirSync(failDir)) if (f.endsWith('.json')) rmSync(join(failDir, f));
   mkdirSync(failDir, { recursive: true });
@@ -208,12 +217,40 @@ async function main() {
     const log = toRunLog(run);
     counts[log.terminated] += 1;
     const id = run.request_id || run.id || String(run._id);
-    const dir = log.terminated === 'error' ? failDir : outDir;
+    const dir = log.terminated === 'done' ? outDir : failDir;
     writeFileSync(join(dir, `${id}.json`), `${JSON.stringify(log, null, 2)}\n`);
   }
 
-  console.log(`wrote ${runs.length} run log(s) to ${outDir}`);
-  console.log(`  terminated: done ${counts.done} · cap ${counts.cap} · error ${counts.error} (errors in ${failDir})`);
+  const manifest = {
+    exportedAt: new Date().toISOString(),
+    scope: windowNote,
+    populations: {
+      'runs/': { meaning: 'runs that finished the work they planned', terminated: ['done'], count: counts.done },
+      'runs/failing/': {
+        meaning: 'runs that did not finish: curtailed by a budget, or failed outright',
+        terminated: ['cap', 'error'],
+        count: counts.cap + counts.error,
+        breakdown: { cap: counts.cap, error: counts.error },
+      },
+    },
+    total: runs.length,
+  };
+  /**
+   * Written to reports/, not into runs/.
+   *
+   * `quality/check.mjs` folds over every .json in runs/ and treats each as a
+   * run, so a manifest placed there became a run with no `terminated` field and
+   * failed A2 by existing. The description of a population does not belong
+   * inside it.
+   */
+  const manifestPath = join(ROOT, 'reports', 'run-population.json');
+  mkdirSync(join(ROOT, 'reports'), { recursive: true });
+  writeFileSync(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`);
+
+  console.log(`wrote ${runs.length} run log(s)`);
+  console.log(`  ${outDir}            ${counts.done} completed`);
+  console.log(`  ${failDir}   ${counts.cap + counts.error} not completed (cap ${counts.cap} · error ${counts.error})`);
+  console.log(`  manifest: ${manifestPath}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) await main();
