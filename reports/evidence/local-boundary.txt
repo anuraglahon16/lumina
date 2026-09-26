@@ -1,0 +1,35 @@
+### Only the gateway publishes a port
+NAME IMAGE COMMAND SERVICE CREATED STATUS PORTS
+lumina-agent-1 lumina-agent "docker-entrypoint.s…" agent 5 minutes ago Up 5 minutes 
+lumina-gateway-1 lumina-gateway "docker-entrypoint.s…" gateway 5 minutes ago Up 5 minutes 0.0.0.0:8080->8080/tcp
+lumina-mongo-1 mongo:7 "docker-entrypoint.s…" mongo 7 minutes ago Up 7 minutes 27017/tcp
+lumina-worker-1 lumina-worker "docker-entrypoint.s…" worker 7 minutes ago Up 7 minutes 
+
+### Provider credentials per service
+  gateway  0
+  agent    2
+  worker   2
+
+### Listening sockets per service (LISTEN state only)
+  gateway  2
+  agent    2
+  worker   1
+
+### The agent is unreachable from outside the compose network
+  host -> agent:8787 = 000 (000 = unreachable)
+
+### Gateway health, which proves it reached the private agent
+{"status":"ok","model":"claude-haiku-4-5","searchProvider":"tavily","vectorStore":"mongo-cosine-scan","db":"ok","ai":{"status":"ok"},"version":"1.0.0"}
+### On the socket counts above
+
+Decoded, the listening sockets are:
+
+  gateway  8080  + 127.0.0.11:<ephemeral>
+  agent    8787  + 127.0.0.11:<ephemeral>
+  worker          127.0.0.11:<ephemeral>   <- only this
+
+127.0.0.11 is Docker's embedded DNS resolver, which exists in every container on
+a user-defined network. The worker has no application listener of its own: its
+only socket is the one Docker gives it for name resolution. That is the accurate
+form of "the worker has no HTTP listener" — the count is not zero, and saying so
+would be wrong.

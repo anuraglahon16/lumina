@@ -1,0 +1,16 @@
+### Upload returns before the worker does any work
+space: spc_muj07lr9ddii58
+{"docId":"doc_muj07lt1fvlcv3","status":"pending"}
+HTTP 202 in 0.053031s
+
+immediately after the response, the document is:
+{"documents":[{"docId":"doc_muj07lt1fvlcv3","title":"retrieval-basics.pdf","status":"pending","pct":0,"chunks":0}]}
+
+the worker (a different container) then does the work:
+
+and the document becomes:
+{"documents":[{"docId":"doc_muj07lt1fvlcv3","title":"retrieval-basics.pdf","status":"indexed","pct":100,"pages":4,"chunks":10}]}
+
+### The gateway logged no parsing or embedding at all
+gateway lines mentioning parse/chunk/embed: 0
+worker lines mentioning them: 1
