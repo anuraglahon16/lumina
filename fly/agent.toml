@@ -1,0 +1,50 @@
+# The private Agent, and the Worker beside it.
+#
+# No [http_service] and no [[services]] blocks: this app publishes no public
+# address at all. It is reachable only as `lumina-agent.internal` over Fly's
+# private IPv6 network, which is what makes "the browser cannot reach the
+# provider keys" a property of the deployment rather than of the code.
+#
+# The Worker is a process group in the same app because it is the same image and
+# the same credentials, just a different entry point. Two apps would be two
+# things to keep in step.
+
+app = "lumina-agent"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+[processes]
+  agent = "node src/agent/server.js"
+  worker = "node src/agent/worker.js"
+
+[env]
+  NODE_ENV = "production"
+  AGENT_PORT = "8787"
+  # Binds the private network rather than loopback. Without this the Gateway
+  # cannot reach it; with it, only 6PN peers can.
+  AGENT_HOST = "::"
+  EMBEDDING_PROVIDER = "local"
+  VECTOR_BACKEND = "atlas-vector-search"
+  JOB_LEASE_MS = "60000"
+  JOB_POLL_MS = "2000"
+
+# Secrets are set with `fly secrets set`, never here:
+#   ANTHROPIC_API_KEY  TAVILY_API_KEY  MONGODB_URI  MONGODB_DB  AUTH_SECRET
+
+[[vm]]
+  processes = ["agent"]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+# The Agent answers questions; a machine stopped mid-stream drops an answer, and
+# a Worker stopped mid-job loses its lease and repeats work another machine has
+# already started.
+[[restart]]
+  policy = "always"
