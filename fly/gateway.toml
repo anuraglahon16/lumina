@@ -24,8 +24,15 @@ primary_region = "iad"
   # The private Agent over 6PN. Nothing outside the organisation can resolve it.
   AGENT_URL = "http://lumina-al-agent.internal:8787"
 
-# Secrets here are about who may talk to the Gateway, not about providers:
-#   AUTH_SECRET  DEMO_PASSWORD
+# Secrets here are about access, never about providers:
+#
+#   INTERNAL_TOKEN  presented to the Agent as x-internal-token. Same generated
+#                   value as the Agent app; distinct from AUTH_SECRET.
+#   AUTH_SECRET     signs the user identity the Agent verifies
+#   DEMO_PASSWORD   the shared gate on the app UI
+#
+# Deliberately absent, and asserted absent by tests/serviceBoundary.test.js:
+#   ANTHROPIC_API_KEY  TAVILY_API_KEY  VOYAGE_API_KEY  MONGODB_URI
 
 [http_service]
   internal_port = 8080

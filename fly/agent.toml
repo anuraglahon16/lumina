@@ -30,8 +30,23 @@ primary_region = "iad"
   JOB_LEASE_MS = "60000"
   JOB_POLL_MS = "2000"
 
-# Secrets are set with `fly secrets set`, never here:
-#   ANTHROPIC_API_KEY  TAVILY_API_KEY  MONGODB_URI  MONGODB_DB  AUTH_SECRET
+# Secrets are set with `fly secrets set`, never here.
+#
+#   INTERNAL_TOKEN     authenticates Gateway -> Agent. The same generated value
+#                      must be set on both apps: src/agent/server.js refuses any
+#                      request without a matching x-internal-token, so without it
+#                      the private Agent trusts anything on the private network.
+#   ANTHROPIC_API_KEY  provider credentials, which live only here and in the
+#   TAVILY_API_KEY     Worker - never on the Gateway
+#   MONGODB_URI
+#   MONGODB_DB
+#   AUTH_SECRET        only because the Agent verifies the signed identity the
+#                      Gateway mints; it is not what secures this hop
+#
+# Not INTERNAL_TOKEN's job and not interchangeable with it: AUTH_SECRET signs
+# user identity. An earlier version of this comment listed AUTH_SECRET where
+# INTERNAL_TOKEN belonged, and the first deployment went out with the hop
+# unauthenticated as a result.
 
 [[vm]]
   processes = ["agent"]
