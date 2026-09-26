@@ -9,7 +9,7 @@
 # if it ever reaches a model client, a search client, a parser or the
 # orchestration.
 
-app = "lumina-gateway"
+app = "lumina-al-gateway"
 primary_region = "iad"
 
 [build]
@@ -22,7 +22,7 @@ primary_region = "iad"
   NODE_ENV = "production"
   GATEWAY_PORT = "8080"
   # The private Agent over 6PN. Nothing outside the organisation can resolve it.
-  AGENT_URL = "http://lumina-agent.internal:8787"
+  AGENT_URL = "http://lumina-al-agent.internal:8787"
 
 # Secrets here are about who may talk to the Gateway, not about providers:
 #   AUTH_SECRET  DEMO_PASSWORD
