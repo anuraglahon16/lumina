@@ -143,7 +143,13 @@ contractRouter.get('/health', async (req, res) => {
   let ai = { status: 'down' };
   let body = null;
   try {
-    const upstream = await fetch(AGENT('/contract/health'), { signal: AbortSignal.timeout(3000) });
+    const upstream = await fetch(AGENT('/contract/health'), {
+      // Like every other upstream call. Without it the Agent refuses with 403
+      // wherever INTERNAL_TOKEN is configured, the catch below swallows it, and
+      // public health reports `degraded` with `ai: down` on a healthy stack.
+      headers: { ...(process.env.INTERNAL_TOKEN ? { 'x-internal-token': process.env.INTERNAL_TOKEN } : {}) },
+      signal: AbortSignal.timeout(3000),
+    });
     body = await upstream.json();
     ai = { status: body.status === 'ok' ? 'ok' : 'down' };
   } catch {
