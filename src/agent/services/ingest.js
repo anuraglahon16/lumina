@@ -1,66 +1,93 @@
 import { jobQueue } from './jobs.js';
-import { parseDocument } from './parsers.js';
+import { parseDocument as parseDocumentImpl } from './parsers.js';
 import { chunkPages } from './chunker.js';
-import { createDocument, updateDocument, indexChunks, getDocument } from './ragStore.js';
+import { createDocument, updateDocument, indexChunks as indexChunksImpl, getDocument, searchChunks } from './ragStore.js';
+import { putFile, getFile, deleteFile } from './fileStore.js';
 import { createLogger } from '../../shared/logger.js';
-import { config } from '../../shared/config.js';
 
 const log = createLogger('ingest');
 
-// Buffers live in memory between enqueue and execution. The queue is
-// in-process, so there is no need to spill them to disk first.
-const pendingUploads = new Map();
-
 /**
- * Accept an upload and return immediately. Parsing, chunking, embedding, and
- * indexing all happen in the background job below; the client polls the
- * document (or the job) for progress.
+ * Accept an upload: store it, record it, queue it, answer.
+ *
+ * What this may do is the whole point. Authenticate and validate (the route),
+ * put the bytes somewhere durable, create the document record, create a durable
+ * job, return 202. Parsing, chunking, embedding, the vector write and the
+ * read-after-write check belong to the worker and happen after the response.
+ *
+ * It used to hold the bytes in a module-scope Map and, on a platform that
+ * freezes after responding, run the whole indexing pipeline inside the request -
+ * so the 202 described work that had already finished, and any restart in
+ * between lost the file.
  */
 export async function enqueueDocument({ userId, filename, mimetype, buffer, spaceId = null, onAccepted }) {
   const doc = await createDocument({ userId, filename, mimetype, size: buffer.length, spaceId });
-  pendingUploads.set(doc.id, buffer);
-  // The document exists and its bytes are held, so the upload can be
-  // acknowledged now. Everything below is bookkeeping for the worker.
-  onAccepted?.(doc);
+  // Durable before the caller is told anything. A worker on another machine has
+  // to be able to read these bytes.
+  await putFile(doc.id, buffer, { filename, contentType: mimetype });
   const job = await jobQueue.enqueue('index_document', { doc_id: doc.id }, { userId, maxAttempts: 2 });
   await updateDocument(doc.id, { job_id: job.id });
 
-  // On a platform that freezes the process once a response is sent, returning
-  // 202 and indexing afterwards means never indexing at all: the upload would
-  // sit at "queued" forever and the document would never become searchable.
-  // Waiting costs the user the indexing time on upload, which is the honest
-  // trade and the only one available.
-  if (config.runtime.serverless) await jobQueue.drain(job.id);
-
+  // Only now, with the file stored and the job durable, is the upload accepted.
+  onAccepted?.(doc);
   return { document: { ...(await getDocument(doc.id)) }, job: await jobQueue.get(job.id) };
 }
 
-jobQueue.register('index_document', async ({ doc_id: docId }, ctx) => {
+/**
+ * Index one document. This is the worker's body, exported so it can be driven
+ * directly by a test and by the legacy inline path.
+ *
+ * `parseDocument`, `indexChunks` and `verify` are injectable for the same reason
+ * the rest of this codebase injects its providers: the orchestration here - does
+ * the status move in the right order, is the document verified before it is
+ * called searchable - is what breaks, and none of it is about what a parser
+ * actually returns.
+ */
+export async function indexDocumentJob(
+  { doc_id: docId },
+  { progress = async () => {}, parseDocument = parseDocumentImpl, indexChunks = indexChunksImpl, verify = null } = {},
+) {
   const doc = await getDocument(docId);
   if (!doc) throw new Error(`document ${docId} no longer exists`);
-  const buffer = pendingUploads.get(docId);
-  if (!buffer) throw new Error('upload buffer is gone (the service restarted before indexing ran)');
+  const buffer = await getFile(docId);
+  if (!buffer) throw new Error(`no stored bytes for ${docId}`);
 
   try {
-    ctx.progress(0.05, 'parsing');
+    await progress(0.05, 'parsing');
     await updateDocument(docId, { status: 'processing', stage: 'parsing', progress: 0.05 });
     const { pages, meta } = await parseDocument(buffer, { filename: doc.filename, mimetype: doc.mimetype });
     if (!pages.length) throw new Error('no extractable text in this file');
 
-    ctx.progress(0.25, 'chunking');
+    await progress(0.25, 'chunking');
     await updateDocument(docId, { stage: 'chunking', progress: 0.25, page_count: meta.page_count });
     const chunks = chunkPages(pages);
     if (!chunks.length) throw new Error('document produced no usable chunks');
 
-    ctx.progress(0.35, 'embedding');
+    await progress(0.35, 'embedding');
     await updateDocument(docId, { stage: 'embedding', progress: 0.35, chunk_count: chunks.length });
     const { provider } = await indexChunks(doc, chunks, {
       onProgress: async (fraction) => {
-        const progress = 0.35 + fraction * 0.6;
-        await ctx.progress(progress, 'embedding');
-        await updateDocument(docId, { progress: Number(progress.toFixed(3)) });
+        const p = 0.35 + fraction * 0.55;
+        await progress(p, 'embedding');
+        await updateDocument(docId, { progress: Number(p.toFixed(3)) });
       },
     });
+
+    /**
+     * Read it back before calling it searchable.
+     *
+     * A document reached 95% "embedding" on the deployment and stopped there
+     * with no error recorded: the write looked like it had succeeded and
+     * nothing ever checked. `indexed` is a promise to the reader that a
+     * question can find this file, so it is only made after a query does.
+     */
+    await progress(0.95, 'verifying');
+    await updateDocument(docId, { stage: 'verifying', progress: 0.95 });
+    const probe = chunks[0].text.split(/\s+/).slice(0, 8).join(' ');
+    const found = verify
+      ? await verify(probe, doc)
+      : (await searchChunks(probe, { userId: doc.user_id, docIds: [docId], spaceId: doc.space_id ?? null })).results.length;
+    if (!found) throw new Error(`verification found no retrievable chunk for ${docId} after indexing`);
 
     await updateDocument(docId, {
       status: 'indexed',
@@ -72,12 +99,14 @@ jobQueue.register('index_document', async ({ doc_id: docId }, ctx) => {
       indexed_at: new Date().toISOString(),
       error: null,
     });
-    log.info('document_indexed', { doc_id: docId, chunks: chunks.length, pages: meta.page_count, provider });
+    log.info('document_indexed', { doc_id: docId, chunks: chunks.length, pages: meta.page_count, provider, verified: found });
+    // The original upload is no longer needed once its chunks are searchable.
+    await deleteFile(docId).catch(() => {});
     return { doc_id: docId, chunks: chunks.length, pages: meta.page_count, embedding_provider: provider };
   } catch (err) {
     await updateDocument(docId, { status: 'failed', stage: 'failed', error: err.message });
     throw err;
-  } finally {
-    pendingUploads.delete(docId);
   }
-});
+}
+
+jobQueue.register('index_document', async (payload, ctx) => indexDocumentJob(payload, { progress: ctx.progress }));

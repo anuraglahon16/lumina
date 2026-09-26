@@ -7,6 +7,9 @@ const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 /** Run both services in one terminal with prefixed, colourised output. */
 const services = [
   { name: 'agent', color: '\x1b[36m', script: 'src/agent/server.js' },
+  // The worker is its own process locally too, so development exercises the
+  // same boundary the deployment has rather than a convenient shortcut.
+  { name: 'worker', color: '\x1b[33m', script: 'src/agent/worker.js' },
   { name: 'gateway', color: '\x1b[35m', script: 'src/gateway/server.js' },
 ];
 

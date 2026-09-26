@@ -15,6 +15,7 @@ import { listMemories, deleteMemory } from '../services/memoryStore.js';
 import { reserveDeepRun } from '../services/deepQuota.js';
 import { listDocuments } from '../services/ragStore.js';
 import { enqueueDocument } from '../services/ingest.js';
+import { jobQueue } from '../services/jobs.js';
 import { createSpace, listSpaces, getSpace } from '../services/spaces.js';
 import { listRuns, runStats } from '../store/runLog.js';
 import { pingMongo } from '../store/mongo.js';
@@ -266,8 +267,22 @@ contractRouter.post('/spaces/:spaceId/documents', upload.single('file'), async (
       spaceId: space.id,
       onAccepted: (doc) => res.status(202).json({ docId: doc.id, status: 'pending' }),
     });
-    if (config.runtime.serverless) await accepted;
-    else accepted.catch((err) => log.error('contract_ingest_failed', { request_id: req.requestId, err: err.message }));
+    /**
+     * On a platform that freezes once it responds there is no worker to hand
+     * the job to, so this deployment runs it inline and says so.
+     *
+     * That is the defect the three-service deployment exists to remove - an
+     * HTTP request must not own parsing and embedding - and it is kept only
+     * while the single-function deployment is still serving. On Fly the Agent
+     * accepts and a separate worker process claims the job, which is why the
+     * inline call is named `runNow` rather than hidden inside `enqueue`.
+     */
+    if (config.runtime.serverless) {
+      const { job } = await accepted;
+      if (job?.id) await jobQueue.runNow(job.id);
+    } else {
+      accepted.catch((err) => log.error('contract_ingest_failed', { request_id: req.requestId, err: err.message }));
+    }
   } catch (err) {
     next(err);
   }

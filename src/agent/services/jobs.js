@@ -14,6 +14,8 @@ const jobs = collection('jobs');
  * which is why every handler is registered by name rather than by closure.
  */
 class JobQueue extends EventEmitter {
+  #claimChain = Promise.resolve();
+
   constructor({ concurrency = 2 } = {}) {
     super();
     this.concurrency = concurrency;
@@ -33,13 +35,33 @@ class JobQueue extends EventEmitter {
    * so only this instance's are reconciled.
    */
   async reconcile(instanceId) {
-    const { items } = await jobs.list({ status: { $in: ['running', 'queued'] } }, { limit: 1000 });
+    /**
+     * Only `running` jobs, and only ones whose lease has lapsed.
+     *
+     * This used to sweep `queued` as well, which was defensible when the queue
+     * was an in-process array - anything queued had no one to run it. Now a
+     * queued job is durable work waiting for any worker, and failing it on
+     * restart destroys exactly the thing the queue exists to protect. A
+     * running job with a live lease belongs to a worker that is still alive,
+     * so it is left alone too.
+     */
+    const { items: running } = await jobs.list({ status: 'running' }, { limit: 1000 });
+    const now = Date.now();
+    const items = running.filter((job) => {
+      const until = job.lease_until ? Date.parse(job.lease_until) : 0;
+      return !job.lease_until || Number.isNaN(until) || until <= now;
+    });
     for (const job of items) {
       if (instanceId && job.instance_id && job.instance_id !== instanceId) continue;
+      const attempts = job.attempts ?? 0;
+      const exhausted = attempts >= (job.max_attempts ?? 1);
       await jobs.patch(job.id, {
-        status: 'failed',
+        status: exhausted ? 'failed' : 'queued',
+        stage: exhausted ? 'failed' : 'requeued',
         error: 'interrupted by service restart',
-        ended_at: new Date().toISOString(),
+        worker_id: null,
+        lease_until: null,
+        ...(exhausted ? { ended_at: new Date().toISOString() } : {}),
       });
     }
     return items.length;
@@ -64,11 +86,136 @@ class JobQueue extends EventEmitter {
       error: null,
       started_at: null,
       ended_at: null,
+      // A claim is `queued -> running` plus a lease. A worker that dies stops
+      // renewing and the job comes back when the lease expires; a worker that
+      // is merely slow keeps renewing and keeps the job.
+      worker_id: null,
+      lease_until: null,
     });
-    this.queue.push(job.id);
+    // Flushed before the caller is told the job exists. The local store
+    // debounces writes by 120ms, so a job enqueued and then lost to a restart
+    // inside that window was never durable - and "durable job created before
+    // the 202" is the whole promise this queue is making. Mongo writes
+    // immediately and has no flush to call.
+    await jobs.flush?.();
     this.emit('update', job);
-    setImmediate(() => this.#pump());
+    /**
+     * Deliberately not started here.
+     *
+     * `enqueue` used to `setImmediate(() => this.#pump())`, so the process that
+     * accepted the upload also parsed, chunked and embedded it. That is the
+     * request path doing the worker's job: on a serverless function it was the
+     * only way indexing ever happened, and everywhere else it meant an HTTP
+     * handler holding a PDF parser open.
+     *
+     * A job now exists durably and waits to be claimed. The worker claims it.
+     */
     return job;
+  }
+
+  /**
+   * Take one queued job of the given types, atomically.
+   *
+   * There was no claim before: `enqueue` pushed an id onto an in-process array
+   * and whoever enqueued it also ran it. That works only while there is one
+   * process and it outlives the response, and the architecture this serves has
+   * neither - the worker is a different process on a different machine.
+   *
+   * Serialised through `#claimChain` because the local JSON store has no
+   * conditional update. Under Mongo the same guarantee comes from the store's
+   * own atomic patch; the chain makes the two behave alike, and the property
+   * the tests pin is that eight simultaneous callers produce exactly one
+   * winner.
+   */
+  async claimNext({ types, workerId, leaseMs = 60_000 } = {}) {
+    const wanted = new Set(types ?? []);
+    this.#claimChain = this.#claimChain.then(async () => {
+      const now = Date.now();
+      const { items } = await jobs.list({}, { limit: 500, sortKey: 'created_at', desc: false });
+      const candidate = items.find((job) => {
+        if (!wanted.has(job.type)) return false;
+        if (job.status === 'queued') return true;
+        // A running job whose lease has lapsed is abandoned, not owned.
+        if (job.status !== 'running') return false;
+        const until = job.lease_until ? Date.parse(job.lease_until) : 0;
+        return !Number.isNaN(until) && until <= now;
+      });
+      if (!candidate) return null;
+      const claimed = await jobs.patch(candidate.id, {
+        status: 'running',
+        worker_id: workerId ?? null,
+        lease_until: new Date(now + leaseMs).toISOString(),
+        attempts: candidate.status === 'queued' ? candidate.attempts : candidate.attempts,
+        started_at: candidate.started_at ?? new Date().toISOString(),
+        stage: 'claimed',
+      });
+      if (claimed) this.emit('update', claimed);
+      return claimed;
+    }, () => null);
+    return this.#claimChain;
+  }
+
+  /** Extend the lease on a job this worker still owns. */
+  async renew(jobId, { workerId, leaseMs = 60_000 } = {}) {
+    const job = await jobs.get(jobId);
+    if (!job || job.worker_id !== workerId) return null;
+    return this.update(jobId, { lease_until: new Date(Date.now() + leaseMs).toISOString() });
+  }
+
+  /** The work succeeded. */
+  async complete(jobId, result = null) {
+    return this.update(jobId, {
+      status: 'done',
+      progress: 1,
+      stage: 'done',
+      result,
+      error: null,
+      lease_until: null,
+      ended_at: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * The work threw. Back to the queue if attempts remain, otherwise failed
+   * with the reason kept - a job that has run out of attempts must not look
+   * like one still waiting its turn.
+   */
+  async fail(jobId, err) {
+    const job = await jobs.get(jobId);
+    if (!job) return null;
+    const attempts = (job.attempts ?? 0) + 1;
+    const message = err?.message ? String(err.message) : String(err);
+    if (attempts < (job.max_attempts ?? 1)) {
+      return this.update(jobId, {
+        status: 'queued',
+        attempts,
+        stage: 'retrying',
+        error: message,
+        worker_id: null,
+        lease_until: null,
+      });
+    }
+    return this.update(jobId, {
+      status: 'failed',
+      attempts,
+      stage: 'failed',
+      error: message,
+      worker_id: null,
+      lease_until: null,
+      ended_at: new Date().toISOString(),
+    });
+  }
+
+  /**
+   * Run a job in this process, on purpose.
+   *
+   * The single-function deployment freezes once it responds, so it has no
+   * worker to hand the job to and must run it inline. That is a property of
+   * that platform, not of the queue, so it says so at the call site instead of
+   * being the default everywhere.
+   */
+  async runNow(jobId) {
+    return this.#run(jobId);
   }
 
   async update(jobId, patch) {
