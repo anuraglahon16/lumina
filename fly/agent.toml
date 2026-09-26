@@ -43,8 +43,13 @@ primary_region = "iad"
   size = "shared-cpu-1x"
   memory = "1gb"
 
-# The Agent answers questions; a machine stopped mid-stream drops an answer, and
-# a Worker stopped mid-job loses its lease and repeats work another machine has
-# already started.
+# The Agent answers questions and the Worker holds leases, so neither may be
+# stopped for being idle: a machine killed mid-stream drops an answer, and one
+# killed mid-job loses its lease and hands another worker duplicate work.
+#
+# Note for whoever runs this next: a Fly trial account stops machines after five
+# minutes regardless of this setting - "Trial machine stopping. To run for
+# longer than 5m0s, add a credit card". That is what produced the single
+# dropped stream in a 40-request concurrency test, not anything here.
 [[restart]]
   policy = "always"

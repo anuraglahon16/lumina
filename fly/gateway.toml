@@ -30,7 +30,13 @@ primary_region = "iad"
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = "suspend"
+  # Not "suspend". A suspended machine drops whatever it was streaming, and an
+  # answer is a stream held open for tens of seconds: a machine that idles out
+  # mid-run turns a working Deep run into a client-side timeout, which is the
+  # failure this whole architecture exists to remove. Observed in exactly that
+  # form - `could not finish reading HTTP body from instance` at the proxy, and
+  # `TypeError: terminated` at the client.
+  auto_stop_machines = "off"
   auto_start_machines = true
   min_machines_running = 1
   processes = ["gateway"]
