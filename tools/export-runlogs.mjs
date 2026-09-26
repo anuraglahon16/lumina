@@ -74,6 +74,16 @@ const CAP_REASONS = new Set([
   'cap',
 ]);
 
+/**
+ * Which population a run log belongs to.
+ *
+ * Exported so the rule can be tested directly, with fixtures, rather than only
+ * by inspecting a directory that a clean clone does not have.
+ */
+export function populationFor(log) {
+  return log?.terminated === 'done' ? 'completed' : 'failing';
+}
+
 export function terminatedOf(run) {
   if (run.status === 'error' || (run.errors ?? []).length > 0) return 'error';
   const reason = run.termination_reason ?? '';
@@ -217,7 +227,7 @@ async function main() {
     const log = toRunLog(run);
     counts[log.terminated] += 1;
     const id = run.request_id || run.id || String(run._id);
-    const dir = log.terminated === 'done' ? outDir : failDir;
+    const dir = populationFor(log) === 'completed' ? outDir : failDir;
     writeFileSync(join(dir, `${id}.json`), `${JSON.stringify(log, null, 2)}\n`);
   }
 
