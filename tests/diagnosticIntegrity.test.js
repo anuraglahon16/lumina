@@ -159,19 +159,26 @@ test('a live reader never sees a run another process writes while it is running'
          process.stdout.write('SEEN:' + items.length + String.fromCharCode(10));
        });`,
     ],
-    { env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' }, stdio: ['pipe', 'pipe', 'ignore'] },
+    // stderr captured, not ignored: a child that failed to start reported
+    // "timed out waiting for READY; saw []" and took its reason with it.
+    { env: { ...process.env, DATA_DIR: dir, MONGODB_URI: '' }, stdio: ['pipe', 'pipe', 'pipe'] },
   );
 
   const lines = [];
+  const errs = [];
   reader.stdout.on('data', (d) => lines.push(...String(d).trim().split(String.fromCharCode(10))));
-  const waitFor = async (prefix, ms = 5000) => {
+  reader.stderr?.on('data', (d) => errs.push(String(d)));
+  // 20s rather than 5: a module child cold-starting on a constrained container
+  // is slower than on a developer's machine, and the budget was the difference
+  // between a green suite and a mystery.
+  const waitFor = async (prefix, ms = 20000) => {
     const until = Date.now() + ms;
     while (Date.now() < until) {
       const hit = lines.find((l) => l.startsWith(prefix));
       if (hit) return hit;
       await new Promise((r) => setTimeout(r, 25));
     }
-    throw new Error(`timed out waiting for ${prefix}; saw ${JSON.stringify(lines)}`);
+    throw new Error(`timed out waiting for ${prefix}; saw ${JSON.stringify(lines)}; stderr: ${errs.join('').slice(0, 300)}`);
   };
 
   try {

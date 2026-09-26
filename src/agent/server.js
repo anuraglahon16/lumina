@@ -70,7 +70,10 @@ jobQueue.reconcile().catch((err) => log.warn('job_reconcile_failed', { err: err.
 
 const server = app.listen(config.agent.port, host, () => {
   log.info('agent_listening', {
-    port: config.agent.port,
+    // The port actually bound, not the one configured. With AGENT_PORT=0 the
+    // OS chooses, and reporting the configured 0 tells a reader - or a test
+    // waiting to connect - nothing about where the service is.
+    port: server.address()?.port ?? config.agent.port,
     host,
     model: config.llm.model,
     llm_configured: Boolean(config.llm.apiKey),
