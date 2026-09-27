@@ -265,24 +265,23 @@ contractRouter.post('/spaces/:spaceId/documents', upload.single('file'), async (
       mimetype: req.file.mimetype,
       buffer: req.file.buffer,
       spaceId: space.id,
-      onAccepted: (doc) => res.status(202).json({ docId: doc.id, status: 'pending' }),
+      /**
+       * Where there is no worker, index before answering.
+       *
+       * A Vercel invocation ends when its response is flushed, so work awaited
+       * after `res.json()` never runs - documents sat at `queued` with zero
+       * attempts. The three-service deployment has a worker and takes the fast
+       * path; this one pays the indexing time on upload, which is the honest
+       * trade and the only one that platform offers.
+       */
+      runInline: config.runtime.serverless,
+      onAccepted: (doc) => res.status(202).json({ docId: doc.id, status: doc.status ?? 'pending' }),
     });
-    /**
-     * On a platform that freezes once it responds there is no worker to hand
-     * the job to, so this deployment runs it inline and says so.
-     *
-     * That is the defect the three-service deployment exists to remove - an
-     * HTTP request must not own parsing and embedding - and it is kept only
-     * while the single-function deployment is still serving. On Fly the Agent
-     * accepts and a separate worker process claims the job, which is why the
-     * inline call is named `runNow` rather than hidden inside `enqueue`.
-     */
-    if (config.runtime.serverless) {
-      const { job } = await accepted;
-      if (job?.id) await jobQueue.runNow(job.id);
-    } else {
-      accepted.catch((err) => log.error('contract_ingest_failed', { request_id: req.requestId, err: err.message }));
-    }
+    accepted.catch((err) => {
+      log.error('contract_ingest_failed', { request_id: req.requestId, err: err.message });
+      if (!res.headersSent) next(err);
+    });
+    if (config.runtime.serverless) await accepted;
   } catch (err) {
     next(err);
   }

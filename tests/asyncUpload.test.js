@@ -132,3 +132,27 @@ test('a queued upload survives the agent restarting', async () => {
   assert.equal(job.status, 'queued', `a restart left the job ${job.status}`);
   assert.ok(await getFile(document.id), 'and the bytes are still there to index');
 });
+
+test('runInline indexes before the response, for a platform with no worker', async () => {
+  // A Vercel invocation ends when its response is flushed, so work awaited after
+  // res.json() never ran: documents sat at `queued` with zero attempts. Where
+  // there is no worker the job runs before the caller is told anything, which is
+  // slower and true rather than fast and false.
+  let statusAtAccept = null;
+  const { document } = await accept({
+    runInline: true,
+    onAccepted: (doc) => { statusAtAccept = doc.status; },
+  });
+  const doc = await getDocument(document.id);
+  assert.equal(doc.status, 'indexed', `inline upload left it ${doc.status}`);
+  assert.ok((doc.chunk_count ?? 0) > 0, 'with chunks, before the response was sent');
+  assert.ok(statusAtAccept, 'and the accept callback still fired');
+});
+
+test('without runInline nothing is indexed on the request path', async () => {
+  // The default, and what every deployment with a worker uses.
+  const { document } = await accept();
+  const doc = await getDocument(document.id);
+  assert.ok(['pending', 'queued'].includes(doc.status), `status is ${doc.status}`);
+  assert.equal(doc.chunk_count ?? 0, 0);
+});

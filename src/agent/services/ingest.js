@@ -20,7 +20,7 @@ const log = createLogger('ingest');
  * so the 202 described work that had already finished, and any restart in
  * between lost the file.
  */
-export async function enqueueDocument({ userId, filename, mimetype, buffer, spaceId = null, onAccepted }) {
+export async function enqueueDocument({ userId, filename, mimetype, buffer, spaceId = null, onAccepted, runInline = false }) {
   const doc = await createDocument({ userId, filename, mimetype, size: buffer.length, spaceId });
   // Durable before the caller is told anything. A worker on another machine has
   // to be able to read these bytes.
@@ -28,7 +28,22 @@ export async function enqueueDocument({ userId, filename, mimetype, buffer, spac
   const job = await jobQueue.enqueue('index_document', { doc_id: doc.id }, { userId, maxAttempts: 2 });
   await updateDocument(doc.id, { job_id: job.id });
 
-  // Only now, with the file stored and the job durable, is the upload accepted.
+  /**
+   * On a platform with no worker, the work happens before the response.
+   *
+   * It used to happen after: the route sent 202 and then awaited the job. That
+   * looked equivalent and was not - a Vercel invocation ends when its response
+   * is flushed, so the await never ran and documents sat at `queued` with zero
+   * attempts forever. Verified in production, which is the only place the
+   * behaviour exists.
+   *
+   * So on that platform the upload is slow and correct rather than fast and a
+   * lie. Everywhere else the worker claims the job and this is skipped.
+   */
+  if (runInline) await jobQueue.runNow(job.id);
+
+  // Only now, with the file stored and the job durable - and indexed too where
+  // there is no worker to do it - is the upload accepted.
   onAccepted?.(doc);
   return { document: { ...(await getDocument(doc.id)) }, job: await jobQueue.get(job.id) };
 }
