@@ -259,14 +259,31 @@ test('a run that finishes inside its budget still terminates done', async () => 
   assert.equal(contract.find((e) => e.event === 'done')?.data?.terminated, 'done');
 });
 
-test('Quick keeps its own separate envelope', async () => {
-  // The shared pool is Deep's. Quick's budget is unchanged and much smaller,
-  // and a change to one must not silently move the other.
+test('Quick keeps its own separate envelope, inside the graded ceiling', async () => {
+  // The shared pool is Deep's. Quick's budget is its own and much smaller, and a
+  // change to one must not silently move the other.
+  //
+  // This asserted 10 and passed only because a local .env said 10: the committed
+  // default is 6, so a clean clone failed. The number that actually matters is
+  // the graded one - the benchmark checks Quick against an eight-call envelope -
+  // so the ceiling is asserted rather than one particular value, and the
+  // committed default is checked where it is declared.
   const { config } = await import('../src/shared/config.js');
-  assert.equal(config.budgets.quick.maxToolCalls, 10, 'quick still has its own tool-call ceiling');
-  assert.ok(config.budgets.deep.maxToolCallsTotal >= 8, 'and deep has a total of its own');
+  const quick = config.budgets.quick.maxToolCalls;
+  assert.ok(quick <= 8, `Quick's ceiling is ${quick}, above the eight-call envelope the benchmark checks`);
+  assert.ok(quick >= 1, 'and it can still make a call');
+  assert.ok(config.budgets.deep.maxToolCallsTotal >= 8, 'deep has a total of its own');
   assert.ok(
-    config.budgets.deep.maxToolCallsTotal > config.budgets.quick.maxToolCalls,
+    config.budgets.deep.maxToolCallsTotal > quick,
     'deep may spend more than quick, which is the point of deep',
   );
+});
+
+test('the committed Quick default is six, independent of any local env', () => {
+  // Read from the source rather than the loaded config, so a developer's .env
+  // cannot make this pass or fail.
+  const cfg = fs.readFileSync(new URL('../src/shared/config.js', import.meta.url), 'utf8');
+  assert.match(cfg, /maxToolCalls: num\(process\.env\.QUICK_MAX_TOOL_CALLS, 6\)/, 'the default is 6');
+  const example = fs.readFileSync(new URL('../.env.example', import.meta.url), 'utf8');
+  assert.match(example, /QUICK_MAX_TOOL_CALLS=6/, 'and the example agrees with it');
 });

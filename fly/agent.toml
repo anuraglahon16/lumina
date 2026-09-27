@@ -1,0 +1,70 @@
+# The private Agent, and the Worker beside it.
+#
+# No [http_service] and no [[services]] blocks: this app publishes no public
+# address at all. It is reachable only as `lumina-al-agent.internal` over Fly's
+# private IPv6 network, which is what makes "the browser cannot reach the
+# provider keys" a property of the deployment rather than of the code.
+#
+# The Worker is a process group in the same app because it is the same image and
+# the same credentials, just a different entry point. Two apps would be two
+# things to keep in step.
+
+app = "lumina-al-agent"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+[processes]
+  agent = "node src/agent/server.js"
+  worker = "node src/agent/worker.js"
+
+[env]
+  NODE_ENV = "production"
+  AGENT_PORT = "8787"
+  # Binds the private network rather than loopback. Without this the Gateway
+  # cannot reach it; with it, only 6PN peers can.
+  AGENT_HOST = "::"
+  EMBEDDING_PROVIDER = "local"
+  VECTOR_BACKEND = "atlas-vector-search"
+  JOB_LEASE_MS = "60000"
+  JOB_POLL_MS = "2000"
+
+# Secrets are set with `fly secrets set`, never here.
+#
+#   INTERNAL_TOKEN     authenticates Gateway -> Agent. The same generated value
+#                      must be set on both apps: src/agent/server.js refuses any
+#                      request without a matching x-internal-token, so without it
+#                      the private Agent trusts anything on the private network.
+#   ANTHROPIC_API_KEY  provider credentials, which live only here and in the
+#   TAVILY_API_KEY     Worker - never on the Gateway
+#   MONGODB_URI
+#   MONGODB_DB
+#   AUTH_SECRET        only because the Agent verifies the signed identity the
+#                      Gateway mints; it is not what secures this hop
+#
+# Not INTERNAL_TOKEN's job and not interchangeable with it: AUTH_SECRET signs
+# user identity. An earlier version of this comment listed AUTH_SECRET where
+# INTERNAL_TOKEN belonged, and the first deployment went out with the hop
+# unauthenticated as a result.
+
+[[vm]]
+  processes = ["agent"]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-1x"
+  memory = "1gb"
+
+# The Agent answers questions and the Worker holds leases, so neither may be
+# stopped for being idle: a machine killed mid-stream drops an answer, and one
+# killed mid-job loses its lease and hands another worker duplicate work.
+#
+# Note for whoever runs this next: a Fly trial account stops machines after five
+# minutes regardless of this setting - "Trial machine stopping. To run for
+# longer than 5m0s, add a credit card". That is what produced the single
+# dropped stream in a 40-request concurrency test, not anything here.
+[[restart]]
+  policy = "always"

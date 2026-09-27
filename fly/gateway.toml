@@ -1,0 +1,68 @@
+# The public Gateway.
+#
+# Everything the browser reaches, and nothing else. Authentication, contract
+# validation, rate limiting, request ids, SSE forwarding, and the public
+# /health, /stats and /evals. It holds no provider credential: the only upstream
+# it knows is AGENT_URL, which points into the private network.
+#
+# tests/serviceBoundary.test.js walks this service's real import graph and fails
+# if it ever reaches a model client, a search client, a parser or the
+# orchestration.
+
+app = "lumina-al-gateway"
+primary_region = "iad"
+
+[build]
+  dockerfile = "../Dockerfile"
+
+[processes]
+  gateway = "node src/gateway/server.js"
+
+[env]
+  NODE_ENV = "production"
+  GATEWAY_PORT = "8080"
+  # The private Agent over 6PN. Nothing outside the organisation can resolve it.
+  AGENT_URL = "http://lumina-al-agent.internal:8787"
+
+# Secrets here are about access, never about providers:
+#
+#   INTERNAL_TOKEN  presented to the Agent as x-internal-token. Same generated
+#                   value as the Agent app; distinct from AUTH_SECRET.
+#   AUTH_SECRET     signs the user identity the Agent verifies
+#   DEMO_PASSWORD   the shared gate on the app UI
+#
+# Deliberately absent, and asserted absent by tests/serviceBoundary.test.js:
+#   ANTHROPIC_API_KEY  TAVILY_API_KEY  VOYAGE_API_KEY  MONGODB_URI
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  # Not "suspend". A suspended machine drops whatever it was streaming, and an
+  # answer is a stream held open for tens of seconds: a machine that idles out
+  # mid-run turns a working Deep run into a client-side timeout, which is the
+  # failure this whole architecture exists to remove. Observed in exactly that
+  # form - `could not finish reading HTTP body from instance` at the proxy, and
+  # `TypeError: terminated` at the client.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+  processes = ["gateway"]
+
+  # An answer can take a minute of streaming; a proxy that gives up sooner turns
+  # a working Deep run into a client-side timeout, which is the failure this
+  # whole move exists to remove.
+  [http_service.concurrency]
+    type = "requests"
+    hard_limit = 60
+    soft_limit = 40
+
+[[http_service.checks]]
+  interval = "15s"
+  timeout = "5s"
+  grace_period = "20s"
+  method = "GET"
+  path = "/health"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"

@@ -1,7 +1,7 @@
 {
   "assignment": "Assignment 1: LUMINA",
   "student": "Anurag Lahon",
-  "deployedAt": "2026-09-19T15:04:03.593Z",
+  "deployedAt": "2026-09-26T22:07:25.005Z",
   "design": {
     "components": "Two Express services and five pieces of state that are not services.\n\n**Gateway** (`src/gateway`) is the only process the browser reaches. It serves the\nReact UI, validates every request against the zod contract, mints request and user\nids, rate-limits, forwards SSE, and holds the shared-password gate. It has no\nprovider keys at all.\n\n**Agent** (`src/agent`) binds to loopback and, when `INTERNAL_TOKEN` is set,\nrefuses anything that did not come through the gateway. It runs the two answer\npaths (Quick and Deep), web search, page fetching, RAG, memory, and the job\nworker. Every provider key lives here.\n\n**MongoDB Atlas** holds `chunks` (document text plus its embedding, searched by\n`$vectorSearch`), `runs`, `threads`, `memories`, `spaces`, `documents` and `jobs`.\n\n**The job queue** is the `jobs` collection plus an in-process worker. Ingestion is\naccepted with a 202 and finished in the background, which is why a 60-page PDF\ndoes not block a search.\n\n**The search cache** keys on a normalised query rather than the raw string,\nbecause the model rephrases the same intent three ways and each rephrasing was a\npaid API call.\n\n**The evidence ledger** is not stored anywhere — it lives for one run — but it\nmakes decisions, so it belongs on this list. It is the only thing that can say a\nsource is citable.\n\n**The funnel** is a diagnostic trace, off by default, that records what happened\nto every candidate from the query to the citation.",
     "responsibilities": "The interesting lines are the exclusions.\n\n**Only the agent may hold a provider key.** The gateway proxies; it never calls\nAnthropic, Tavily or Voyage. A key that reaches the browser is a key that has\nleaked, so the gateway is not given one to leak.\n\n**Only the gateway may talk to the browser.** The agent binds to 127.0.0.1 and\nchecks `x-internal-token`. A request that reaches the agent without having passed\nthe gateway's validation is refused rather than repaired.\n\n**Only the evidence ledger may decide what is citable.** A search result is a\n*candidate*. It becomes evidence when a page has been fetched and its text\nextracted, and at no other moment. The synthesis prompt is never given a snippet\nit did not read, so an answer cannot cite one — this is enforced by what is in\nthe prompt, not by asking the model nicely.\n\n**Only the budget may decide a run is over its cap.** It counts tool calls,\nsearches, fetches, turns and wall clock, and every stop carries a named reason\nthat reaches the run log and the user. Tools do not decide to stop; the harness\nstops them.\n\n**Only the validator may report groundedness**, and it runs after the answer is\nwritten, against the same passages the model saw.",
@@ -76,7 +76,7 @@
         "points": 10,
         "awarded": 3,
         "status": "partial",
-        "evidence": "✗ bench.mjs exits 0: 4 SLA target(s) missed · ✗ no error-severity quality failure: quality: 2 error(s), 2 warning(s) over 82 run log(s)",
+        "evidence": "✗ bench.mjs exits 0: 4 SLA target(s) missed · ✗ no error-severity quality failure: quality: 1 error(s), 2 warning(s) over 74 run log(s)",
         "rules": [
           "B1",
           "B2",
@@ -91,7 +91,7 @@
         "points": 5,
         "awarded": 5,
         "status": "pass",
-        "evidence": "✓ one X-Request-Id correlates both logs: 63/63 answers returned an X-Request-Id to correlate the two logs · ✓ /stats reconciles with the run: /stats.answers=139 against 63 answers this run · ✓ every failed tool call carries an error (A1): A1: 82 run(s)",
+        "evidence": "✓ one X-Request-Id correlates both logs: 63/63 answers returned an X-Request-Id to correlate the two logs · ✓ /stats reconciles with the run: /stats.answers=139 against 63 answers this run · ✓ every failed tool call carries an error (A1): A1: 74 run(s)",
         "rules": [
           "A1"
         ]
@@ -139,8 +139,8 @@
       },
       {
         "check": "no run that hit a cap reported as terminated=done (A2)",
-        "ok": false,
-        "detail": "req_mu8ie30v0b9w73: terminated=\"cap\"; req_mu8if799fxq2gb: terminated=\"cap\"; req_mu8igsupbbvim6: terminated=\"cap\"; req_mu8ihxe8cb5kin: terminated=\"cap\"; req_mu8iiudzkhyfte: terminated=\"cap\"; req_mu8ik4o38zzy6q: terminated=\"cap\"; req_mu8ikyveemdxzh: terminated=\"cap\"; req_mu8iloe8x3ykn0: terminated=\"cap\""
+        "ok": true,
+        "detail": "74 run(s)"
       },
       {
         "check": "plan_research never called from a quick search: depth is opted into, never drifted into (R2)",
@@ -150,7 +150,7 @@
       {
         "check": "no 2xx answer served on a provider exception (A1)",
         "ok": true,
-        "detail": "82 run(s)"
+        "detail": "74 run(s)"
       }
     ]
   },
@@ -311,9 +311,9 @@
   },
   "quality": {
     "project": "lumina",
-    "checkedAt": "2026-09-19T15:02:58.540Z",
-    "runs": 82,
-    "errors": 2,
+    "checkedAt": "2026-09-26T22:07:15.100Z",
+    "runs": 74,
+    "errors": 1,
     "warnings": 2,
     "results": [
       {
@@ -328,21 +328,21 @@
         "title": "Tool errors surface as errors",
         "severity": "error",
         "status": "pass",
-        "detail": "82 run(s)"
+        "detail": "74 run(s)"
       },
       {
         "id": "A2",
         "title": "The loop terminates because it finished",
         "severity": "error",
-        "status": "fail",
-        "detail": "req_mu8ie30v0b9w73: terminated=\"cap\"; req_mu8if799fxq2gb: terminated=\"cap\"; req_mu8igsupbbvim6: terminated=\"cap\"; req_mu8ihxe8cb5kin: terminated=\"cap\"; req_mu8iiudzkhyfte: terminated=\"cap\"; req_mu8ik4o38zzy6q: terminated=\"cap\"; req_mu8ikyveemdxzh: terminated=\"cap\"; req_mu8iloe8x3ykn0: terminated=\"cap\""
+        "status": "pass",
+        "detail": "74 run(s)"
       },
       {
         "id": "A3",
         "title": "No tool thrash",
         "severity": "warn",
         "status": "fail",
-        "detail": "req_mu8hxjqq1yk4g7: \"fetch_page\" called 6x consecutively (cap 4); req_mu8hxprco2bpe7: \"fetch_page\" called 5x consecutively (cap 4); req_mu8hxrjnfh5guo: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i3tsxsnut98: \"fetch_page\" called 6x consecutively (cap 4); req_mu8i46a4kml8f4: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i49lhksd01f: \"fetch_page\" called 5x consecutively (cap 4); req_mu8ie30v0b9w73: \"fetch_page\" called 9x consecutively (cap 4); req_mu8if0ebska4ra: \"fetch_page\" called 5x consecutively (cap 4); req_mu8if799fxq2gb: \"web_search\" called 8x consecutively (cap 4); req_mu8igsupbbvim6: \"fetch_page\" called 8x consecutively (cap 4); req_mu8ihxe8cb5kin: \"fetch_page\" called 12x consecutively (cap 4); req_mu8iiudzkhyfte: \"fetch_page\" called 10x consecutively (cap 4); req_mu8ijhhcidej8t: \"fetch_page\" called 9x consecutively (cap 4); req_mu8ik4o38zzy6q: \"fetch_page\" called 10x consecutively (cap 4); req_mu8ikyveemdxzh: \"fetch_page\" called 10x consecutively (cap 4); req_mu8iloe8x3ykn0: \"fetch_page\" called 11x consecutively (cap 4)"
+        "detail": "req_mu8hxjqq1yk4g7: \"fetch_page\" called 6x consecutively (cap 4); req_mu8hxprco2bpe7: \"fetch_page\" called 5x consecutively (cap 4); req_mu8hxrjnfh5guo: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i3tsxsnut98: \"fetch_page\" called 6x consecutively (cap 4); req_mu8i46a4kml8f4: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i49lhksd01f: \"fetch_page\" called 5x consecutively (cap 4); req_mu8if0ebska4ra: \"fetch_page\" called 5x consecutively (cap 4); req_mu8ijhhcidej8t: \"fetch_page\" called 9x consecutively (cap 4)"
       },
       {
         "id": "R1",
@@ -384,21 +384,21 @@
         "title": "Token budget respected",
         "severity": "error",
         "status": "pass",
-        "detail": "82 run(s)"
+        "detail": "74 run(s)"
       },
       {
         "id": "B2",
         "title": "Latency budget respected",
         "severity": "warn",
         "status": "pass",
-        "detail": "82 run(s)"
+        "detail": "74 run(s)"
       },
       {
         "id": "B3",
         "title": "Cost budget respected",
         "severity": "warn",
         "status": "pass",
-        "detail": "82 run(s)"
+        "detail": "74 run(s)"
       },
       {
         "id": "P1",

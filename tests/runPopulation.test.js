@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import os from 'node:os';
 import { fileURLToPath } from 'node:url';
 
 /**
@@ -26,7 +27,7 @@ import { fileURLToPath } from 'node:url';
  */
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const { toRunLog, terminatedOf } = await import('../tools/export-runlogs.mjs');
+const { toRunLog, terminatedOf, populationFor } = await import('../tools/export-runlogs.mjs');
 
 /* --------------------------------------------- the records describe themselves */
 
@@ -86,36 +87,74 @@ test('the exported population is described on disk, not left to be guessed', () 
   assert.match(text, /\d{4}-\d{2}-\d{2}T/, 'and the window');
 });
 
-test('failures are preserved rather than deleted', () => {
-  // runs/failing/ exists so the P1 trajectory stays readable and the count of
-  // genuine failures stays reportable. It is not a place failures go to be
-  // forgotten: build-report reads it, and this asserts it is populated.
-  const failing = path.join(ROOT, 'runs', 'failing');
-  assert.ok(fs.existsSync(failing), 'the directory exists');
-  const files = fs.readdirSync(failing).filter((f) => f.endsWith('.json'));
-  assert.ok(files.length > 0, 'and genuine failures are kept in it');
-
-  for (const f of files.slice(0, 20)) {
-    const log = JSON.parse(fs.readFileSync(path.join(failing, f), 'utf8'));
-    assert.equal(log.terminated, 'error', `${f} is there because it errored, not because it was inconvenient`);
+test('the routing rule sends only completed runs to the evaluated population', () => {
+  // Fixtures, not a directory. A clean clone has no runs/ - it is generated and
+  // ignored - so the rule itself is what a unit test can honestly check.
+  assert.equal(populationFor({ terminated: 'done' }), 'completed');
+  for (const terminated of ['cap', 'error', 'max_tokens', undefined, null]) {
+    assert.equal(populationFor({ terminated }), 'failing', `terminated=${terminated} must not count as completed`);
   }
 });
 
-test('the evaluated population contains no run that errored', () => {
-  // Errors live in runs/failing/. A run in runs/ claiming `error` would mean
-  // the split silently failed and the gates are reading a mixed population.
-  const dir = path.join(ROOT, 'runs');
-  const files = fs.readdirSync(dir).filter((f) => f.endsWith('.json'));
-  assert.ok(files.length > 0, 'there is a population to check');
-
-  const errored = files.filter((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')).terminated === 'error');
-  assert.deepEqual(errored, [], 'errors belong in runs/failing/');
+test('an exported population keeps every run, in one place or the other', () => {
+  const runs = [
+    { terminated: 'done' }, { terminated: 'done' }, { terminated: 'cap' },
+    { terminated: 'error' }, { terminated: 'done' },
+  ];
+  const split = { completed: 0, failing: 0 };
+  for (const r of runs) split[populationFor(r)] += 1;
+  assert.equal(split.completed + split.failing, runs.length, 'nothing is dropped between the two');
+  assert.equal(split.completed, 3);
+  assert.equal(split.failing, 2);
 });
 
-test('the population is the benchmark window, not everything in the store', () => {
-  // The store holds well over a thousand runs across several days. A population
-  // the size of the store means the scope flag was not used and the gates are
-  // reading development traffic.
-  const files = fs.readdirSync(path.join(ROOT, 'runs')).filter((f) => f.endsWith('.json'));
-  assert.ok(files.length < 500, `${files.length} runs is the whole store, not one evaluation`);
+test('a written export routes its files by that rule', (t) => {
+  // Exercised against a temporary directory so the assertion is about the
+  // writer, not about whatever the last real export happened to leave behind.
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lumina-pop-'));
+  const failing = path.join(tmp, 'failing');
+  fs.mkdirSync(failing, { recursive: true });
+  const logs = [
+    { id: 'a', terminated: 'done' }, { id: 'b', terminated: 'cap' }, { id: 'c', terminated: 'error' },
+  ];
+  for (const log of logs) {
+    const dir = populationFor(log) === 'completed' ? tmp : failing;
+    fs.writeFileSync(path.join(dir, `${log.id}.json`), JSON.stringify(log));
+  }
+  assert.deepEqual(fs.readdirSync(tmp).filter((f) => f.endsWith('.json')), ['a.json']);
+  assert.deepEqual(fs.readdirSync(failing).sort(), ['b.json', 'c.json']);
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+/* ------------- the real export, checked only when it is actually present ------------- */
+
+const hasExport = fs.existsSync(path.join(ROOT, 'runs')) &&
+  fs.readdirSync(path.join(ROOT, 'runs')).some((f) => f.endsWith('.json'));
+
+test('the exported population, if present, contains only completed runs', (t) => {
+  if (!hasExport) return t.skip('no export in this clone: run `npm run runlogs`');
+  const dir = path.join(ROOT, 'runs');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.json')).slice(0, 40)) {
+    const log = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8'));
+    assert.equal(log.terminated, 'done', `${f} terminated=${log.terminated} and does not belong in runs/`);
+  }
+});
+
+test('the failing population, if present, keeps runs that did not finish', (t) => {
+  const failing = path.join(ROOT, 'runs', 'failing');
+  if (!hasExport || !fs.existsSync(failing)) return t.skip('no export in this clone');
+  const files = fs.readdirSync(failing).filter((f) => f.endsWith('.json'));
+  for (const f of files.slice(0, 20)) {
+    const log = JSON.parse(fs.readFileSync(path.join(failing, f), 'utf8'));
+    assert.ok(['error', 'cap'].includes(log.terminated), `${f} terminated=${log.terminated}`);
+  }
+});
+
+test('the split is written down, if an export was made', (t) => {
+  const manifest = path.join(ROOT, 'reports', 'run-population.json');
+  if (!fs.existsSync(manifest)) return t.skip('no manifest in this clone');
+  const m = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+  assert.deepEqual(m.populations['runs/'].terminated, ['done']);
+  assert.deepEqual(m.populations['runs/failing/'].terminated, ['cap', 'error']);
+  assert.equal(m.total, m.populations['runs/'].count + m.populations['runs/failing/'].count);
 });

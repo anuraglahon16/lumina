@@ -35,24 +35,48 @@ let base = null;
 
 /** Start the agent on an ephemeral port and wait for it to answer. */
 async function startAgent() {
-  const port = 8100 + Math.floor(Math.random() * 800);
+  /**
+   * Port 0, and the port is read back from the child.
+   *
+   * This picked a random port in a 800-wide range, which collides: `node --test`
+   * runs files in parallel and several of them start a server. Two files landing
+   * on one port made one of them wait fifteen seconds for a service that was
+   * never going to answer, and it failed as "the agent never became ready" -
+   * reliably under a constrained container, intermittently everywhere else.
+   * Letting the OS choose cannot collide.
+   */
   const child = spawn(process.execPath, ['src/agent/server.js'], {
     env: {
       ...process.env,
       DATA_DIR: dataDir,
       MONGODB_URI: '',
       INTERNAL_TOKEN: TOKEN,
-      AGENT_PORT: String(port),
+      AGENT_PORT: '0',
       MEMORY_EXTRACT_ENABLED: 'false',
       EMBEDDING_PROVIDER: 'local',
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  child.stdout.on('data', () => {});
-  child.stderr.on('data', () => {});
+
+  let out = '';
+  const fail = [];
+  child.stdout.on('data', (d) => { out += d.toString(); });
+  child.stderr.on('data', (d) => fail.push(d.toString()));
+
+  // The agent announces the port it actually bound.
+  let port = null;
+  for (let i = 0; i < 120 && !port; i += 1) {
+    const m = /"msg":"agent_listening"[^}]*"port":(\d+)/.exec(out) || /"port":(\d+)[^}]*"msg":"agent_listening"/.exec(out);
+    if (m) port = Number(m[1]);
+    else await new Promise((r) => setTimeout(r, 250));
+  }
+  if (!port) {
+    child.kill();
+    throw new Error(`the agent never announced a port; stderr: ${fail.join('').slice(0, 300)}`);
+  }
 
   const url = `http://127.0.0.1:${port}`;
-  for (let i = 0; i < 60; i += 1) {
+  for (let i = 0; i < 120; i += 1) {
     try {
       const res = await fetch(`${url}/v1/health`);
       if (res.ok) return { child, url };
@@ -62,7 +86,7 @@ async function startAgent() {
     await new Promise((r) => setTimeout(r, 250));
   }
   child.kill();
-  throw new Error('the agent never became ready');
+  throw new Error(`the agent never became ready on ${url}; stderr: ${fail.join('').slice(0, 300)}`);
 }
 
 const headers = (userId, withToken = true) => ({
