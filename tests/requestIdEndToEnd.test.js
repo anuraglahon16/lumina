@@ -185,3 +185,82 @@ test('without a request id the frame simply omits it', async () => {
   emit('error', { status: 502, message: 'x' });
   assert.ok(!('requestId' in sent[0].data), 'never a null or an empty string in its place');
 });
+
+/* ------------------------------------------- bracketing the hop */
+
+/**
+ * One request produces an arrival line at the agent and both hop lines at the
+ * gateway, all under the same request id.
+ *
+ * Four asks in a deployed benchmark left no run record at all. The run record is
+ * written when a run finishes, so its absence could not distinguish "never
+ * reached the agent" from "reached it and died before finishing" - and the fix
+ * for the unbounded wait turns that hang into a 502, which is still an error. So
+ * the hop is now logged at three points: upstream started, first byte received,
+ * request arrived. A gap between any two says where the request was lost.
+ */
+test('one request is bracketed by upstream_start, upstream_first_byte and request_arrived', async () => {
+  const { createLogger } = await import('../src/shared/logger.js');
+
+  const lines = [];
+  const real = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (chunk, ...rest) => {
+    const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
+    for (const l of text.split('\n')) {
+      if (!l.trim()) continue;
+      try { lines.push(JSON.parse(l)); } catch { /* not ours */ }
+    }
+    return real(chunk, ...rest);
+  };
+  try {
+    // The three lines as the two services emit them, with one shared id.
+    const rid = 'req_hoptest';
+    createLogger('gateway').info('upstream_start', { request_id: rid, route: '/threads/:id/ask', target: '/contract/threads/x/ask' });
+    createLogger('agent').info('request_arrived', { request_id: rid, user_id: 'u', method: 'POST', route: '/threads/:id/ask' });
+    createLogger('gateway').info('upstream_first_byte', { request_id: rid, ms: 42, status: 200 });
+  } finally {
+    process.stdout.write = real;
+  }
+
+  const forId = lines.filter((l) => l.request_id === 'req_hoptest');
+  const msgs = forId.map((l) => l.msg);
+  for (const m of ['upstream_start', 'request_arrived', 'upstream_first_byte']) {
+    assert.ok(msgs.includes(m), `the hop is missing ${m}: ${msgs.join(',')}`);
+  }
+  assert.equal(forId.find((l) => l.msg === 'request_arrived')?.service, 'agent', 'arrival is the agent speaking');
+  assert.equal(forId.find((l) => l.msg === 'upstream_first_byte')?.service, 'gateway', 'first byte is the gateway speaking');
+  assert.ok(Number.isFinite(forId.find((l) => l.msg === 'upstream_first_byte')?.ms), 'and it carries how long the hop took');
+});
+
+test('the agent logs arrival before anything can await, and before the token check', () => {
+  const src = fs.readFileSync(new URL('../src/agent/server.js', import.meta.url), 'utf8');
+  const iArrived = src.indexOf("log.info('request_arrived'");
+  // The check itself, not the file header's prose about it.
+  const iToken = src.indexOf("if (process.env.INTERNAL_TOKEN &&");
+  const iFinish = src.indexOf("res.on('finish'");
+  assert.ok(iArrived > 0, 'the agent logs arrival');
+  assert.ok(iArrived < iFinish, 'before the completion line');
+  // A rejected request is also one that arrived, so arrival must not sit behind
+  // the auth check.
+  assert.ok(iArrived < iToken, 'arrival is logged before the internal-token check rejects anything');
+  // Scope to the middleware that contains the line: indexOf finds the first
+  // app.use in the file, which is a different one. Comments are stripped first -
+  // the prose above this line contains the word "await", which an earlier
+  // version of this assertion matched against itself.
+  const mwStart = src.lastIndexOf('app.use((req, res, next) => {', iArrived);
+  const before = src
+    .slice(mwStart, iArrived)
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+  assert.ok(!/\bawait\b/.test(before), `nothing awaits before arrival is logged: ${before.slice(0, 160)}`);
+});
+
+test('the gateway brackets the ask hop', () => {
+  const src = fs.readFileSync(new URL('../src/gateway/routes/contract.js', import.meta.url), 'utf8');
+  const iStart = src.indexOf("log.info('upstream_start'");
+  const iFetch = src.indexOf('const upstream = await fetch(target');
+  const iByte = src.indexOf("log.info('upstream_first_byte'");
+  assert.ok(iStart > 0 && iStart < iFetch, 'upstream_start is logged before the fetch');
+  assert.ok(iByte > iFetch, 'upstream_first_byte is logged after headers arrive');
+  assert.match(src, /ms: Date\.now\(\) - hopStarted/, 'and reports how long the hop took');
+});

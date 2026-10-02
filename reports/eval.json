@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-09-19T15:01:39.194Z",
-  "target": "https://lumina-74vbuauh6-anuraglahon16s-projects.vercel.app",
-  "citationGrounding": 1,
+  "ranAt": "2026-10-02T13:06:21.473Z",
+  "target": "https://lumina-al-gateway.fly.dev",
+  "citationGrounding": 0.987,
   "recallAt5": 0.967,
-  "retrievalRate": 1,
-  "errorRate": 0.0988
+  "retrievalRate": 0.973,
+  "errorRate": 0.1235
 }

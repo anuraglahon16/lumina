@@ -27,10 +27,35 @@ app.use(express.json({ limit: '1mb' }));
  * gateway sets, and when INTERNAL_TOKEN is configured it refuses anything that
  * did not come through it.
  */
+/**
+ * The route, with ids normalised out, so an arrival line groups with the
+ * gateway's line for the same request rather than being its own group.
+ */
+function routeOf(req) {
+  return (
+    req.path
+      .split('/')
+      .map((seg) => (/^[a-z]{3,4}_[A-Za-z0-9]{6,}$/.test(seg) || /^[0-9a-f]{24,}$/i.test(seg) ? ':id' : seg))
+      .join('/') || '/'
+  );
+}
+
 app.use((req, res, next) => {
   req.requestId = req.get('x-request-id') || newId('req');
   req.userId = req.get('x-user-id') || 'anonymous';
   res.set('x-request-id', req.requestId);
+
+  /**
+   * Arrival, logged synchronously before anything can await.
+   *
+   * Four asks in a deployed benchmark left no run record at all: they stopped
+   * before the agent persisted anything, and with only a completion log there
+   * was no way to tell "never arrived" from "arrived and died". The run record
+   * is written at finish; this line is written at entry, so the two together
+   * bracket where a request was lost. Before the token check as well, since a
+   * rejected request is also one that arrived.
+   */
+  log.info('request_arrived', { request_id: req.requestId, user_id: req.userId, method: req.method, route: routeOf(req) });
 
   if (process.env.INTERNAL_TOKEN && req.path !== '/v1/health') {
     if (req.get('x-internal-token') !== process.env.INTERNAL_TOKEN) {

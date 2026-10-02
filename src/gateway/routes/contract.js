@@ -62,6 +62,18 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
    */
   const ttfb = setTimeout(() => controller.abort(), config.gateway.agentTtfbTimeoutMs);
 
+  /**
+   * The hop, logged at both ends.
+   *
+   * Four asks in a deployed benchmark left no run record, and a completion log
+   * on each side could not say whether the request reached the agent at all.
+   * These two lines plus the agent's `request_arrived` bracket the hop: upstream
+   * started, first byte received, agent arrived. A gap between any two of them
+   * says where a request was lost.
+   */
+  const hopStarted = Date.now();
+  log.info('upstream_start', { request_id: req.requestId, route: '/threads/:id/ask', target: target.pathname });
+
   try {
     const upstream = await fetch(target, {
       method: 'POST',
@@ -75,6 +87,8 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
       signal: controller.signal,
     });
     clearTimeout(ttfb);
+    // Headers are the first byte: the agent has started answering.
+    log.info('upstream_first_byte', { request_id: req.requestId, ms: Date.now() - hopStarted, status: upstream.status });
 
     if (!upstream.ok && !upstream.headers.get('content-type')?.includes('text/event-stream')) {
       const text = await upstream.text();
@@ -108,7 +122,7 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
      */
     const aborted = controller.signal.aborted || err?.name === 'AbortError';
     if (aborted && !res.headersSent) {
-      log.warn('contract_ask_upstream_timeout', { request_id: req.requestId, after_ms: config.gateway.agentTtfbTimeoutMs });
+      log.warn('contract_ask_upstream_timeout', { request_id: req.requestId, after_ms: Date.now() - hopStarted, bound_ms: config.gateway.agentTtfbTimeoutMs });
       return next(upstreamError('The agent service did not start answering in time', { cause: `no response within ${config.gateway.agentTtfbTimeoutMs}ms` }));
     }
     if (aborted || err?.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
