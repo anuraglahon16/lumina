@@ -9,7 +9,7 @@ import { createLogger } from '../../shared/logger.js';
 import { contractStream, __testing as contractMap } from '../../gateway/contract/events.js';
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
-import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
+import { createThread, getThread, listThreads, ensureThread, threadMessages } from '../services/threads.js';
 import { retrievalBackend, vectorIndexStatus } from '../services/vectorStore.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
 import { reserveDeepRun } from '../services/deepQuota.js';
@@ -159,15 +159,21 @@ contractRouter.get('/threads/:threadId', async (req, res, next) => {
   try {
     const thread = await getThread(req.params.threadId, req.userId);
     if (!thread) return next(notFound('No such thread'));
+    // Messages are their own documents; the thread is a header. The response
+    // shape is unchanged.
+    const rows = await threadMessages(req.params.threadId);
     res.json({
       threadId: thread.id,
       title: thread.title || 'Untitled',
-      messages: (thread.messages || []).map((m) => ({
+      messages: rows.map((m) => ({
         role: m.role,
         content: m.content,
         ...(m.sources?.length ? { sources: m.sources.map(toContractSourceRow) } : {}),
-        ...(m.run_id ? { answerId: m.run_id } : {}),
-        ...(m.created_at ? { createdAt: m.created_at } : {}),
+        ...(m.answerId || m.run_id ? { answerId: m.answerId ?? m.run_id } : {}),
+        // `createdAt` first: this read only `m.created_at`, which the old append
+        // never set - it wrote `at` - so the field was silently absent from
+        // every message this endpoint has ever returned.
+        ...(m.createdAt || m.created_at || m.at ? { createdAt: m.createdAt ?? m.created_at ?? m.at } : {}),
       })),
     });
   } catch (err) {

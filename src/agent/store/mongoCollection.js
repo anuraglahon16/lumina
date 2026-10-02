@@ -48,6 +48,42 @@ export class MongoCollection {
     return stored;
   }
 
+  /**
+   * Insert a document that is known to be new.
+   *
+   * `put` reads the existing row first, so that a re-put preserves `created_at`.
+   * For an append-only collection that read is pure cost and, worse, it makes an
+   * append a read-modify-write: two appends racing both read the same state. A
+   * message has an id nobody else can have, so it is inserted, once.
+   */
+  async insert(item) {
+    const col = await this.#col();
+    const now = new Date().toISOString();
+    const stored = { ...item, created_at: item.created_at || now, updated_at: now };
+    await col.insertOne({ ...stored });
+    // insertOne mutates its argument to add _id when the document has none;
+    // returning the copy keeps an ObjectId out of the caller's hands.
+    return stored;
+  }
+
+  /**
+   * Set some fields and increment others, in one server-side update.
+   *
+   * The counterpart to `insert`. A message count maintained by reading the
+   * thread, adding one and writing it back loses an append whenever two land
+   * together; `$inc` is applied by the database to whatever the value is at the
+   * moment it runs.
+   */
+  async bump(id, { set = {}, inc = {} } = {}) {
+    const col = await this.#col();
+    const update = {};
+    const $set = { ...set, updated_at: new Date().toISOString() };
+    if (Object.keys($set).length) update.$set = $set;
+    if (Object.keys(inc).length) update.$inc = inc;
+    const res = await col.findOneAndUpdate({ id }, update, { returnDocument: 'after', projection: { _id: 0 } });
+    return res ?? null;
+  }
+
   async patch(id, patch) {
     const existing = await this.get(id);
     if (!existing) return null;

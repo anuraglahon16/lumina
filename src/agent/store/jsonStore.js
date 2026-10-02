@@ -105,6 +105,33 @@ export class Collection {
     return stored;
   }
 
+  /** The same append contract as the Mongo collection; see its comment. */
+  async insert(item) {
+    const now = new Date().toISOString();
+    const stored = { ...item, created_at: item.created_at || now, updated_at: now };
+    this.items.set(stored.id, stored);
+    this.#scheduleFlush();
+    return stored;
+  }
+
+  /**
+   * Set and increment in one step.
+   *
+   * Single-process, like `claimOne`, and for the same reason: there is no atomic
+   * primitive here. It matters anyway, because the semantics have to match - a
+   * caller that relies on `$inc` not clobbering a concurrent write must behave
+   * identically against both stores, or a test proves nothing about production.
+   */
+  async bump(id, { set = {}, inc = {} } = {}) {
+    const existing = this.items.get(id);
+    if (!existing) return null;
+    const stored = { ...existing, ...set, updated_at: new Date().toISOString() };
+    for (const [field, by] of Object.entries(inc)) stored[field] = (existing[field] ?? 0) + by;
+    this.items.set(id, stored);
+    this.#scheduleFlush();
+    return stored;
+  }
+
   async patch(id, patch) {
     const existing = this.items.get(id);
     if (!existing) return null;
