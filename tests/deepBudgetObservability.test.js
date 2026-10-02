@@ -300,3 +300,49 @@ test('a swept page is attributed, counted and claimed, all three', async () => {
   assert.ok(run.pool.sweep_claimed >= sweptSteps.length, `each swept page claimed a slot: ${run.pool.sweep_claimed} claims for ${sweptSteps.length} steps`);
   assert.equal(run.providerCalls, run.pool.claimed, 'and nothing reached the network outside the pool');
 });
+
+/* ------------------------------------------- searching is not reading */
+
+/**
+ * A branch has its own search cap, below its allocation.
+ *
+ * `maxSearches` was the branch's whole allocation, so a branch could spend every
+ * slot searching and never read a page. The deployed deep run shows exactly
+ * that: nine searches before any fetch, then six refusals when branches wanted
+ * to read what they had found. Searching is cheap; reading is the point.
+ */
+test('a branch cannot spend its whole allocation on searches', async () => {
+  const { config } = await import('../src/shared/config.js');
+  const d = config.budgets.deep;
+  const perBranch = Math.floor((d.maxToolCallsTotal - 4) / 4);
+  assert.ok(
+    d.maxSearchesPerBranch < perBranch,
+    `searches (${d.maxSearchesPerBranch}) must leave room for fetches inside an allocation of ${perBranch}`,
+  );
+
+  const src = fs.readFileSync(new URL('../src/agent/core/deep.js', import.meta.url), 'utf8');
+  assert.match(
+    src,
+    /maxSearches: Math\.min\(limits\.maxSearchesPerBranch, allocation\?\.perBranch \?\? limits\.maxToolCallsPerBranch\)/,
+    'the branch budget takes the lower of the two',
+  );
+});
+
+test('the exported trajectory keeps true order and names the sub-question', async () => {
+  // A3 counts consecutive identical names in a flat trajectory. Regrouping by
+  // branch would make it pass and would make the trajectory a story about
+  // branches rather than a record of what happened.
+  const { toolCallsOf } = await import('../tools/export-runlogs.mjs');
+  const run = {
+    tool_calls: [
+      { name: 'web_search', ok: true, duration_ms: 10, branch: 'q1' },
+      { name: 'web_search', ok: true, duration_ms: 11, branch: 'q2' },
+      { name: 'fetch_page', ok: false, duration_ms: 5, branch: 'q2', error: 'HTTP 403' },
+      { name: 'recall_memory', ok: true, duration_ms: 1 },
+    ],
+  };
+  const out = toolCallsOf(run);
+  assert.deepEqual(out.map((c) => c.name), ['web_search', 'web_search', 'fetch_page', 'recall_memory'], 'order is untouched');
+  assert.deepEqual(out.map((c) => c.subQuestion), [1, 2, 2, undefined], 'each branch call names its sub-question');
+  assert.equal(out[2].error, 'HTTP 403', 'and a failure still carries its error, which A1 requires');
+});

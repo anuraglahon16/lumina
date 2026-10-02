@@ -308,6 +308,17 @@ export const config = {
        */
       dailyLimit: num(process.env.DEEP_DAILY_LIMIT, 5),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
+      /**
+       * Searches a branch may make, separately from its total allocation.
+       *
+       * It had no cap of its own: `maxSearches` was the branch's whole
+       * allocation, so a branch could spend all five slots searching and never
+       * read a page. A deployed deep run shows what that looks like - nine
+       * searches before any fetch, then six refusals when branches wanted to
+       * read what they had found. Searching is cheap and finding is not the
+       * point; reading is. Two leaves three of a five-slot allocation for pages.
+       */
+      maxSearchesPerBranch: num(process.env.DEEP_BRANCH_MAX_SEARCHES, 2),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
       /**
        * 240 seconds, because `expectations.json` says so.

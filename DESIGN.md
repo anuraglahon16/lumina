@@ -257,6 +257,26 @@ region — a configuration change this project cannot make — and the pool work
 while it did not solve this, is kept because the 104–376ms cost of a cold
 connection is real and will bite the next cold path.
 
+**Two grader rules warn by design, and I left them warning.**
+
+`P2` requires every rule in `quality/rules.json` to cite a real precedent, and
+ships ten `TODO` placeholders written as instructions to a person — "record the
+first retry loop that burned budget without progress". That file is inside
+`quality/`, which the assignment lists as do-not-edit and says is checked. The
+rule therefore asks for authored content in a file I am forbidden to touch, so it
+warns, and `quality/` is untouched since the scaffold commit.
+
+`A3` ("no tool thrash") counts consecutive identical tool names in a flat
+trajectory and caps them at four. A deep run is four branches appended in
+completion order: two searches and three fetches each, inside the cap per branch,
+but nine in a row once interleaved. Measured before and after capping searches
+per branch: nine consecutive either way — the cap moved the block from `web_search`
+to `fetch_page` without shortening it, because the shape is search-phase then
+fetch-phase across concurrent branches. Regrouping the export by branch would
+make it pass; it would also make the trajectory a story about branches instead of
+a record of what happened, so the order stays true, each call carries its
+`subQuestion` so a reader can see why the block is long, and the rule warns.
+
 **The lexical half of retrieval reads the corpus, not an index.** `chunks_text` is
 declared and unbuilt, so BM25 is computed in this process over every chunk for the
 user or Space. That is why `allChunks` exists at all, and it is the one part of

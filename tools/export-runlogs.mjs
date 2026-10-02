@@ -102,6 +102,20 @@ export function toolCallsOf(run) {
     // failure, which is the thing the gate exists to catch. If our record lost
     // the message, say so rather than emit an empty string and pass.
     if (!ok) call.error = String(t.error ?? '').trim() || 'error not recorded in the run log';
+    /**
+     * Which sub-question the call served, as an extra field. Order is untouched.
+     *
+     * A deep run's trajectory is four branches appended in completion order, so
+     * it reads as a long block of searches followed by a long block of fetches -
+     * and rule A3 ("no tool thrash") counts consecutive identical names and
+     * warns at nine. Per branch the sequence is two searches and three fetches,
+     * inside the cap of four. Regrouping the export would make A3 pass and would
+     * also make the trajectory a story about branches rather than a record of
+     * what happened, so the order stays true and this field is what lets a
+     * reader see why the block is long.
+     */
+    const sq = Number(String(t.branch ?? '').replace(/\D/g, ''));
+    if (Number.isInteger(sq) && sq > 0) call.subQuestion = sq;
     return call;
   });
 }

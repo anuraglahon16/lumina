@@ -492,7 +492,9 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
         // ceiling spend the whole pool and leave the sweep nothing.
         maxToolCalls: allocation?.perBranch ?? limits.maxToolCallsPerBranch,
         maxFetches: Math.min(limits.maxFetchesPerBranch, allocation?.perBranch ?? limits.maxFetchesPerBranch),
-        maxSearches: allocation?.perBranch ?? limits.maxToolCallsPerBranch,
+        // Its own cap, below the allocation: a branch that spends every slot
+        // searching has found a great deal and read none of it.
+        maxSearches: Math.min(limits.maxSearchesPerBranch, allocation?.perBranch ?? limits.maxToolCallsPerBranch),
         // A branch may never outlive the overall Deep Search deadline.
         wallClockMs: Math.max(1000, Math.min(limits.wallClockMs, deadline - Date.now())),
       },
