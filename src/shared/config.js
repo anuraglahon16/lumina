@@ -93,6 +93,14 @@ export const config = {
      */
     minPoolSize: num(process.env.MONGO_MIN_POOL_SIZE, 5),
     maxPoolSize: num(process.env.MONGO_MAX_POOL_SIZE, 20),
+    /**
+     * How often to touch every pooled connection. 0 disables it.
+     *
+     * Twenty seconds is well inside the idle window that was dropping them -
+     * server-side acceptance time was bimodal at 45ms and 450ms, the difference
+     * being one reconnect - and costs five pings every twenty seconds.
+     */
+    keepaliveMs: num(process.env.MONGO_KEEPALIVE_MS, 20000),
   },
 
   /**

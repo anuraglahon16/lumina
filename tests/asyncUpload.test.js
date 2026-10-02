@@ -248,3 +248,30 @@ test('the pool is kept warm, because a cold connection costs more than the budge
     'before the index probe, so the probe measures the index and not a handshake',
   );
 });
+
+test('the pool is kept warm on a timer, not just at boot', async () => {
+  /**
+   * Warming once was not enough.
+   *
+   * Over twenty deployed uploads, server-side acceptance time was bimodal:
+   * 40-50ms or 390-490ms, almost nothing between. Three warm round trips cost
+   * ~45ms, so the slow group is that plus one reconnect - the 104-376ms a new
+   * connection to this cluster costs. The pool was losing connections between
+   * requests despite `maxIdleTimeMS: 0`, which only tells the DRIVER not to
+   * close them; the other side was. The driver's heartbeat does not cover this:
+   * it monitors topology on separate connections, not the pooled ones.
+   */
+  const { config } = await import('../src/shared/config.js');
+  assert.ok(config.mongo.keepaliveMs > 0, 'a keepalive interval is configured');
+  assert.ok(config.mongo.keepaliveMs <= 60_000, 'and is short enough to beat an idle timeout');
+
+  const mongo = fs.readFileSync(new URL('../src/agent/store/mongo.js', import.meta.url), 'utf8');
+  assert.match(mongo, /export function startPoolKeepalive/, 'the keepalive exists');
+  assert.match(mongo, /startPoolKeepalive\(\);/, 'and warming starts it');
+  // Concurrent, because a sequential ping touches one connection and leaves the
+  // rest to go stale.
+  const fn = mongo.slice(mongo.indexOf('export function startPoolKeepalive'), mongo.indexOf('export function stopPoolKeepalive'));
+  assert.match(fn, /Promise\.all\(Array\.from\(\{ length: n \}/, 'it touches every pooled connection, not one');
+  assert.match(fn, /keepalive\.unref\?\.\(\)/, 'and never holds the process open');
+  assert.match(fn, /log\.warn\('mongo_keepalive_failed'/, 'a failed keepalive is logged, not thrown at a request');
+});

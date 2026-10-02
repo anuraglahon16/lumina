@@ -80,11 +80,56 @@ export async function warmMongoPool() {
     await Promise.all(Array.from({ length: n }, () => db.command({ ping: 1 })));
     const ms = Date.now() - started;
     log.info('mongo_pool_warm', { connections: n, ms });
+    startPoolKeepalive();
     return `ok: ${n} connection(s) in ${ms}ms`;
   } catch (err) {
     log.warn('mongo_pool_warm_failed', { err: err.message, ms: Date.now() - started });
     return `failed: ${err.message}`;
   }
+}
+
+let keepalive = null;
+
+/**
+ * Touch every pooled connection on a timer, so none of them goes stale.
+ *
+ * Warming the pool once was not enough. Measured over twenty deployed uploads,
+ * server-side acceptance time was bimodal: either 40-50ms or 390-490ms, with
+ * almost nothing in between. Three warm round trips cost about 45ms, and the
+ * slow group is that plus one reconnect - the 104-376ms a new connection to this
+ * cluster costs. So the pool was losing connections between requests even though
+ * `maxIdleTimeMS: 0` tells the driver never to close one for idleness: something
+ * on the other side - shared-tier proxy, NAT, or the server's own idle timeout -
+ * was dropping them, and the driver only discovered it on the next operation.
+ *
+ * The driver's own heartbeat does not help: it monitors topology on separate
+ * connections, not the pooled ones application operations use.
+ *
+ * `minPoolSize` concurrent pings, because a sequential ping touches one
+ * connection and leaves the other four to rot. Cheap at this interval - a
+ * handful of operations a minute - and the interval is unref'd so it never holds
+ * the process open.
+ */
+export function startPoolKeepalive() {
+  if (keepalive || !mongoEnabled() || config.mongo.keepaliveMs <= 0) return;
+  const n = Math.max(1, config.mongo.minPoolSize);
+  keepalive = setInterval(async () => {
+    try {
+      const db = await mongoDb();
+      await Promise.all(Array.from({ length: n }, () => db.command({ ping: 1 })));
+    } catch (err) {
+      // A failed keepalive is not a failed request. The next real operation
+      // will reconnect or fail on its own terms, and /health reports the state.
+      log.warn('mongo_keepalive_failed', { err: err.message });
+    }
+  }, config.mongo.keepaliveMs);
+  keepalive.unref?.();
+  log.info('mongo_keepalive_started', { every_ms: config.mongo.keepaliveMs, connections: n });
+}
+
+export function stopPoolKeepalive() {
+  if (keepalive) clearInterval(keepalive);
+  keepalive = null;
 }
 
 export async function pingMongo() {
