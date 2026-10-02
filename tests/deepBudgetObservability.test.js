@@ -97,6 +97,8 @@ async function runDeep({ branches = 4, fetchPage = okFetch, webSearch = leads } 
     pool: result.run?.budget?.pool,
     terminated: contract.find((e) => e.event === 'done')?.data?.terminated,
     sources: contract.filter((e) => e.event === 'sources').flatMap((e) => e.data),
+    traces: contract.filter((e) => e.event === 'trace').map((e) => e.data),
+    logged: result.run?.tool_calls ?? [],
   };
 }
 
@@ -185,4 +187,116 @@ test('observability records rather than decides', () => {
   for (const counter of ['this.attempted >', 'this.refused >', 'this.settled >', 'byOwner[']) {
     assert.ok(!claim.includes(`if (${counter}`), `tryClaim branches on ${counter}`);
   }
+});
+
+/* ------------------------------------------- the trace is the same record as the log */
+
+/**
+ * A fixture in which the sweep actually fetches.
+ *
+ * `hungryModel` keeps fetching, so the ledger passes two citable sources per
+ * sub-question and the sweep skips itself for sufficient evidence - under which
+ * the agreement test below passed with the fix reverted, proving nothing. Here
+ * each branch searches once and reads one page, leaving the other leads unread,
+ * which is the condition the sweep exists for.
+ */
+const sweepLeads = async (query) => ({
+  results: [
+    { url: `https://read-${encodeURIComponent(query).slice(0, 12)}.test/a`, title: query, snippet: 'lead' },
+    { url: 'https://unread-one.test/x', title: 'cross-cutting one', snippet: 'lead' },
+    { url: 'https://unread-two.test/y', title: 'cross-cutting two', snippet: 'lead' },
+  ],
+  provider: 'stub',
+  cached: false,
+});
+
+function thriftyModel(n) {
+  const seen = new Map();
+  return async (params) => {
+    const purpose = params.purpose || '';
+    if (purpose === 'plan') return { content: [{ type: 'text', text: JSON.stringify(planOf(n)) }], stop_reason: 'end_turn', usage: {} };
+    if (purpose.startsWith('research:')) {
+      const b = purpose.slice('research:'.length);
+      const i = (seen.get(b) ?? 0) + 1;
+      seen.set(b, i);
+      if (i === 1) return { content: [{ type: 'tool_use', id: `s${b}`, name: 'web_search', input: { query: `lead ${b}` } }], stop_reason: 'tool_use', usage: {} };
+      if (i === 2) return { content: [{ type: 'tool_use', id: `f${b}`, name: 'fetch_page', input: { url: `https://read-lead%20${b}.test/a` } }], stop_reason: 'tool_use', usage: {} };
+      return { content: [{ type: 'text', text: `notes ${b}` }], stop_reason: 'end_turn', usage: {} };
+    }
+    params.onText?.('Merged [1].');
+    return { content: [{ type: 'text', text: 'Merged [1].' }], stop_reason: 'end_turn', usage: {} };
+  };
+}
+
+/** runDeep with the sweeping fixture, and the sweep's own count returned. */
+async function runSweeping(branches = 3) {
+  const contract = [];
+  const raw = [];
+  let providerCalls = 0;
+  const mapped = contractStream({ send: (e, d) => contract.push({ event: e, data: d }), depth: 'deep', answerId: 'a' });
+  const result = await runDeepQuery({
+    query: 'a genuinely multi-part question',
+    userId: `usr_${Math.random().toString(36).slice(2)}`,
+    threadId: null,
+    requestId: `req_sweep_${Math.random().toString(36).slice(2, 8)}`,
+    complete: thriftyModel(branches),
+    webSearch: async (...a) => { providerCalls += 1; return sweepLeads(...a); },
+    fetchPage: async (...a) => { providerCalls += 1; return okFetch(...a); },
+    emit: (e, d) => { raw.push({ event: e, data: d }); mapped(e, d); },
+  });
+  return {
+    result, raw, providerCalls,
+    pool: result.run?.budget?.pool,
+    terminated: contract.find((e) => e.event === 'done')?.data?.terminated,
+    traces: contract.filter((e) => e.event === 'trace').map((e) => e.data),
+    logged: result.run?.tool_calls ?? [],
+    swept: raw.filter((e) => e.event === 'sweep_done').reduce((n, e) => n + (e.data?.fetched ?? 0), 0),
+  };
+}
+
+test('the streamed trace accounts for every tool call the run log records', async () => {
+  // The sweep wrote itself to the run log and emitted no tool_result, so the
+  // two records disagreed by up to three fetch_page calls - and the grader
+  // measures the trace, so the ceiling it enforced was the lower of the two
+  // numbers. Agreement is the invariant; which number is larger is not the
+  // point.
+  const run = await runSweeping(3);
+  assert.ok(run.swept > 0, 'the fixture reached the sweep, so this test is not vacuous');
+  assertInvariants(run, 'trace/log agreement');
+
+  const logged = run.logged.map((c) => c.name).sort();
+  const traced = run.traces.map((t) => t.tool).sort();
+  assert.deepEqual(traced, logged, 'every logged call is a trace step and vice versa');
+});
+
+test('the swept pages are exactly the sweep steps in the trace', async () => {
+  const run = await runSweeping(3);
+  assert.ok(run.swept > 0, 'the fixture reached the sweep');
+  const sweepSteps = run.traces.filter((t) => t.tool === 'fetch_page' && /^sweep: /.test(t.reason ?? ''));
+  assert.equal(sweepSteps.length, run.swept, 'no swept page is missing from the trace');
+  for (const t of sweepSteps) {
+    assert.ok(Number.isInteger(t.subQuestion) && t.subQuestion > 0, `a swept step names its sub-question, got ${t.subQuestion}`);
+  }
+});
+
+test('the trace the grader counts stays inside the 24-call ceiling', async () => {
+  // bench.mjs: `(r.run.trace ?? []).length > callCap` with callCap 24. Now that
+  // the sweep's fetches are trace steps, this count went up by up to three, so
+  // it is worth asserting rather than assuming the pool covers it.
+  for (const branches of [3, 4, 6]) {
+    const run = await runDeep({ branches });
+    assert.ok(
+      run.traces.length <= TOTAL,
+      `${branches} branches produced ${run.traces.length} trace steps against a ceiling of ${TOTAL}`,
+    );
+    assert.ok(run.traces.length <= run.pool.total_limit, 'and never more than the pool allowed');
+  }
+});
+
+test('a swept page is attributed, counted and claimed, all three', async () => {
+  const run = await runSweeping(3);
+  assert.ok(run.swept > 0, 'the fixture reached the sweep');
+  const sweptSteps = run.traces.filter((t) => t.tool === 'fetch_page' && /^sweep: /.test(t.reason ?? ''));
+  assert.ok(run.pool.sweep_claimed >= sweptSteps.length, `each swept page claimed a slot: ${run.pool.sweep_claimed} claims for ${sweptSteps.length} steps`);
+  assert.equal(run.providerCalls, run.pool.claimed, 'and nothing reached the network outside the pool');
 });

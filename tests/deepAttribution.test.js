@@ -261,10 +261,56 @@ function searchingModel() {
 }
 
 test('the sweep actually runs under this fixture', async () => {
-  // Otherwise the next test proves nothing, the way the ones above did not.
+  // Otherwise the tests below prove nothing, the way the ones above did not.
+  //
+  // This asked for `source_added` with `branch: 'sweep'`, which is the literal
+  // the fix removes - the assertion encoded the defect as the expected value.
+  // The sweep's own events are the honest witness that it ran.
   const { raw } = await runDeep({ model: {}, run: { webSearch: sweepSearch, complete: searchingModel() } });
-  const swept = raw.filter((e) => e.event === 'source_added' && e.data?.branch === 'sweep');
-  assert.ok(swept.length > 0, 'the sweep fetched at least one cross-branch page');
+  const done = raw.filter((e) => e.event === 'sweep_done');
+  assert.ok(done.length > 0, 'the sweep phase ran');
+  assert.ok(
+    done.some((e) => (e.data?.fetched ?? 0) > 0),
+    `the sweep fetched at least one cross-branch page, got ${JSON.stringify(done.map((e) => e.data))}`,
+  );
+});
+
+test('no step or source is labelled with the literal "sweep"', async () => {
+  // 'sweep' strips to no digits, so the contract mapper drops the index and the
+  // source reaches the grader bare. There is no branch named 'sweep'.
+  const { raw } = await runDeep({ model: {}, run: { webSearch: sweepSearch, complete: searchingModel() } });
+  const labelled = raw.filter((e) => ['source_added', 'tool_call', 'tool_result'].includes(e.event) && e.data?.branch === 'sweep');
+  assert.deepEqual(
+    labelled.map((e) => `${e.event}:${e.data?.source?.url ?? e.data?.input?.url ?? e.data?.tool}`),
+    [],
+    'a sweep page is attributed to the sub-question that surfaced it',
+  );
+});
+
+test('the pages the sweep reads are trace steps, not just run-log rows', async () => {
+  // The sweep recorded itself to the run log and emitted no tool_result, so up
+  // to three fetch_page steps existed in runs/<id>.json and in no trace the
+  // client or the grader could see. The run log and the trace must agree.
+  const { traces, raw } = await runDeep({ model: {}, run: { webSearch: sweepSearch, complete: searchingModel() } });
+  const sweptCount = raw.filter((e) => e.event === 'sweep_done').reduce((n, e) => n + (e.data?.fetched ?? 0), 0);
+  assert.ok(sweptCount > 0, 'the sweep fetched something');
+
+  const sweepSteps = traces.filter((t) => t.tool === 'fetch_page' && /^sweep: /.test(t.reason ?? ''));
+  assert.equal(sweepSteps.length, sweptCount, `every swept page is a trace step (${sweepSteps.length} of ${sweptCount})`);
+  for (const t of sweepSteps) {
+    assert.ok(Number.isInteger(t.subQuestion) && t.subQuestion > 0, `a swept step carries its index, got ${t.subQuestion}`);
+    assert.ok(t.subQuestion <= PLAN.sub_questions.length, `index ${t.subQuestion} is inside the plan`);
+  }
+});
+
+test('an unattributable candidate is skipped rather than given a made-up index', async () => {
+  // Cannot happen on this path - every deep search passes its branch - but the
+  // failure mode if it did is a source with no sub-question, which is the thing
+  // being prevented. So the sweep declines it instead of inventing one.
+  const src = fs.readFileSync(new URL('../src/agent/core/deep.js', import.meta.url), 'utf8');
+  const sweep = src.slice(src.indexOf('async function sweepUnreadCandidates'));
+  assert.match(sweep, /sweep_skipped_candidate/, 'the sweep says when it declines a candidate');
+  assert.ok(!/discovered_by_branch \|\| 'sweep'/.test(sweep), 'and does not fall back to a label with no index in it');
 });
 
 test('a source the sweep added still says which sub-question found it', async () => {

@@ -601,6 +601,29 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
 
   for (const candidate of candidates) {
     if (Date.now() >= sweepDeadline || fetched.length >= 3) break;
+
+    /**
+     * The sub-question this page is attributed to, resolved before anything is
+     * spent on it.
+     *
+     * The contract derives `subQuestion` by stripping non-digits from `branch`,
+     * so the literal 'sweep' yielded nothing and every page this phase read
+     * reached the grader with no index at all - 3 of 14 sources on the deployed
+     * preview. The page is genuinely cross-cutting, but it entered the run
+     * through one branch's search, and first discoverer is the rule the rest of
+     * the ledger already follows (`Ledger.noteCandidates`).
+     *
+     * A candidate with no discoverer cannot occur on this path - every deep
+     * search goes through `runTools`, which passes its branch - so rather than
+     * invent an attribution, skip it and say so. An unattributable source is
+     * the pile this phase exists to avoid becoming.
+     */
+    const branch = candidate.discovered_by_branch || null;
+    if (!branch) {
+      emit('sweep_skipped_candidate', { url: candidate.url, reason: 'no discovering sub-question' });
+      continue;
+    }
+
     // The sweep spends from the same pool as everything else. It used to call
     // the fetcher directly, so its pages were real provider calls that no
     // budget had counted - which is how runs reached 29 to 32 calls against a
@@ -610,19 +633,30 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
       emit('sweep_done', { fetched: fetched.length, stopped: slots.capReason });
       return fetched;
     }
+    /**
+     * The sweep's fetch is a step, so it is a trace event.
+     *
+     * It recorded itself to the run log and stopped there, which meant the
+     * streamed trace was missing up to three `fetch_page` steps that the run
+     * log listed - the one place a reader checks whether the trace and the log
+     * agree. Only `tool_result` becomes a `trace` frame, so the sweep has to
+     * emit the pair the tool wrapper emits.
+     */
+    emit('tool_call', { tool: 'fetch_page', input: { url: candidate.url }, branch });
     try {
       const page = await fetch(candidate.url, { recorder });
-      if (!page.ok) continue;
-      /**
-       * Attributed to the sub-question that surfaced it, not to 'sweep'.
-       *
-       * The contract derives `subQuestion` by stripping non-digits, so 'sweep'
-       * produced nothing and these sources reached the grader without an index
-       * — 3 of 14 on the deployed preview. The page is genuinely cross-cutting,
-       * but it entered this run through one branch's search, and first
-       * discoverer is the rule the rest of the ledger already follows.
-       */
-      const source = ledger.addWebSource(page, { branch: candidate.discovered_by_branch || 'sweep', query: 'cross-branch sweep' });
+      if (!page.ok) {
+        emit('tool_result', {
+          tool: 'fetch_page',
+          ok: false,
+          summary: 'sweep: fetch returned no readable text',
+          detail: page.error || 'fetch_page returned ok:false',
+          duration_ms: page.duration_ms,
+          branch,
+        });
+        continue;
+      }
+      const source = ledger.addWebSource(page, { branch, query: 'cross-branch sweep' });
       recorder.recordToolCall({
         name: 'fetch_page',
         input: { url: candidate.url },
@@ -630,12 +664,30 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
         ok: true,
         summary: `sweep: ${source.title}`,
         cached: page.cached,
-        branch: 'sweep',
+        branch,
       });
-      emit('source_added', { source: { n: source.n, title: source.title, url: source.url, domain: source.domain, type: 'web', snippet: source.snippet }, branch: 'sweep' });
+      emit('tool_result', {
+        tool: 'fetch_page',
+        ok: true,
+        cached: Boolean(page.cached),
+        summary: `sweep: ${source.title}`,
+        duration_ms: page.duration_ms,
+        branch,
+      });
+      emit('source_added', { source: { n: source.n, title: source.title, url: source.url, domain: source.domain, type: 'web', snippet: source.snippet }, branch });
       fetched.push(source);
-    } catch {
-      /* a sweep failure is not worth failing the run over */
+    } catch (err) {
+      /* a sweep failure is not worth failing the run over, but it is still a step */
+      recorder.recordToolCall({
+        name: 'fetch_page',
+        input: { url: candidate.url },
+        durationMs: 0,
+        ok: false,
+        summary: 'sweep: error',
+        error: err.message,
+        branch,
+      });
+      emit('tool_result', { tool: 'fetch_page', ok: false, summary: `sweep: error: ${err.message}`, duration_ms: 0, branch });
     } finally {
       slots?.settle(permit);
     }
