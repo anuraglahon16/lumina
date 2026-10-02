@@ -156,11 +156,24 @@ contractRouter.get('/health', async (req, res) => {
     ai = { status: 'down' };
   }
 
+  /**
+   * The contract's fields, plus the agent's diagnostics passed through.
+   *
+   * This rebuilt the response from a fixed list, so `vectorIndexStatus`,
+   * `embeddingProvider` and the per-role `models` map existed on the agent and
+   * were dropped at the hop - and the agent has no public address, so they were
+   * visible from nowhere at all. `HealthResponse` is a non-strict object, so
+   * forwarding them validates; naming them rather than spreading `body` keeps
+   * the surface deliberate, since this response is public and unauthenticated.
+   */
   res.json({
     status: body && body.status === 'ok' ? 'ok' : 'degraded',
     model: body?.model ?? 'unknown',
+    ...(body?.models ? { models: body.models } : {}),
     searchProvider: body?.searchProvider ?? 'none',
     vectorStore: body?.vectorStore ?? 'none',
+    ...(body?.vectorIndexStatus ? { vectorIndexStatus: body.vectorIndexStatus } : {}),
+    ...(body?.embeddingProvider ? { embeddingProvider: body.embeddingProvider } : {}),
     db: body?.db ?? 'down',
     ai,
     version: body?.version ?? '1.0.0',

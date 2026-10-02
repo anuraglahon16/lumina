@@ -312,3 +312,25 @@ test('an empty corpus claims no backend at all', () => {
     'an empty Mongo corpus reports none, not the backend that would have served',
   );
 });
+
+test('the gateway forwards the agent diagnostics it used to drop', () => {
+  // The agent has no public address, so a field the gateway does not forward is
+  // visible from nowhere. /health rebuilt its response from a fixed list, which
+  // silently dropped vectorIndexStatus, embeddingProvider and the models map.
+  const gw = fs.readFileSync(new URL('../src/gateway/routes/contract.js', import.meta.url), 'utf8');
+  // /stats is declared BEFORE /health in this file, so slice forward from
+  // /health to the next route rather than to /stats - the third time a
+  // backwards slice in this suite has silently matched an empty string.
+  const start = gw.indexOf("contractRouter.get('/health'");
+  const handler = gw.slice(start, gw.indexOf('contractRouter.', start + 20));
+  for (const field of ['vectorIndexStatus', 'embeddingProvider', 'models']) {
+    assert.ok(handler.includes(field), `/health forwards ${field}`);
+  }
+  // Named, not spread: this response is public and unauthenticated.
+  assert.ok(!/\.\.\.body[,}\s]/.test(handler), 'the upstream body is not spread wholesale into a public response');
+});
+
+test('health names the embedder, because the index declares a width', () => {
+  const agent = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
+  assert.match(agent, /embeddingProvider: resolveEmbeddingProvider\(\)/, 'the agent reports what is live');
+});

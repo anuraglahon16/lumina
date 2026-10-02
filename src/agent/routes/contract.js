@@ -8,6 +8,7 @@ import { config, capabilities } from '../../shared/config.js';
 import { createLogger } from '../../shared/logger.js';
 import { contractStream, __testing as contractMap } from '../../gateway/contract/events.js';
 import { asContractSource } from '../core/contractSource.js';
+import { resolveEmbeddingProvider } from '../services/embeddings.js';
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread, threadMessages } from '../services/threads.js';
@@ -358,6 +359,11 @@ contractRouter.get('/health', async (req, res) => {
     // answer at all. An index that passes its boot probe is usable; that is not
     // evidence anything queried it, and the two were briefly conflated here.
     vectorIndexStatus: vectorIndexStatus(),
+    // Which embedder is live. The index declares a width, so a provider that
+    // does not produce it writes chunks `$vectorSearch` cannot reach - the
+    // deployment ran EMBEDDING_PROVIDER=local against a 1536-dimension index,
+    // and nothing on /health said so.
+    embeddingProvider: resolveEmbeddingProvider(),
     db,
     version: '1.0.0',
   });
