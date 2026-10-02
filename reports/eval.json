@@ -1,8 +1,8 @@
 {
-  "ranAt": "2026-10-02T13:06:21.473Z",
+  "ranAt": "2026-10-02T22:02:29.623Z",
   "target": "https://lumina-al-gateway.fly.dev",
-  "citationGrounding": 0.987,
+  "citationGrounding": 0.989,
   "recallAt5": 0.967,
-  "retrievalRate": 0.973,
-  "errorRate": 0.1235
+  "retrievalRate": 1,
+  "errorRate": 0.0506
 }

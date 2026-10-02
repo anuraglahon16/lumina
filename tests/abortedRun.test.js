@@ -114,12 +114,20 @@ test('an aborted run exports to runs/failing, not runs/', async () => {
 test('the agent finalises on close, and only when the response did not end', () => {
   const src = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
   assert.match(src, /await recorder\.begin\(\);/, 'the row is created before the run');
-  const handler = src.slice(src.indexOf("res.on('close'"), src.indexOf('const answerId = newId'));
-  assert.match(handler, /log\.warn\('client_closed'/, 'the close is logged');
-  for (const f of ['writable_ended', 'elapsed_ms', 'last_event', 'bytes_written']) {
+  // Comments stripped: the prose inside this handler names `bytes_written` to
+  // explain why it was removed, and an earlier version of this assertion matched
+  // that explanation instead of the code. Third time in this suite.
+  const handler = src
+    .slice(src.indexOf("res.on('close'"), src.indexOf('const answerId = newId'))
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/.*$/gm, '');
+  assert.match(handler, /log\.warn\('client_closed', line\)/, 'an abandoned stream warns');
+  assert.match(handler, /log\.info\('client_closed', line\)/, 'an ordinary close does not');
+  for (const f of ['writable_ended', 'elapsed_ms', 'last_event']) {
     assert.ok(handler.includes(f), `the close line carries ${f}`);
   }
-  assert.match(handler, /if \(!res\.writableEnded\) \{[\s\S]*?client_disconnected/, 'and only finalises an unfinished response');
+  assert.ok(!handler.includes('bytes_written'), 'and not a field that is always null');
+  assert.match(handler, /if \(abandoned\) \{[\s\S]*?client_disconnected/, 'and only finalises an unfinished response');
   // begin() must precede the thread lookup, which is the first await.
   assert.ok(
     src.indexOf('await recorder.begin()') < src.indexOf('await ensureThread('),

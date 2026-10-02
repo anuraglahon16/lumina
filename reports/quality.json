@@ -1,7 +1,7 @@
 {
   "project": "lumina",
-  "checkedAt": "2026-10-02T07:03:40.094Z",
-  "runs": 74,
+  "checkedAt": "2026-10-02T22:05:38.395Z",
+  "runs": 83,
   "errors": 1,
   "warnings": 2,
   "results": [
@@ -17,21 +17,21 @@
       "title": "Tool errors surface as errors",
       "severity": "error",
       "status": "pass",
-      "detail": "74 run(s)"
+      "detail": "83 run(s)"
     },
     {
       "id": "A2",
       "title": "The loop terminates because it finished",
       "severity": "error",
       "status": "pass",
-      "detail": "74 run(s)"
+      "detail": "83 run(s)"
     },
     {
       "id": "A3",
       "title": "No tool thrash",
       "severity": "warn",
       "status": "fail",
-      "detail": "req_mu8hxjqq1yk4g7: \"fetch_page\" called 6x consecutively (cap 4); req_mu8hxprco2bpe7: \"fetch_page\" called 5x consecutively (cap 4); req_mu8hxrjnfh5guo: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i3tsxsnut98: \"fetch_page\" called 6x consecutively (cap 4); req_mu8i46a4kml8f4: \"fetch_page\" called 5x consecutively (cap 4); req_mu8i49lhksd01f: \"fetch_page\" called 5x consecutively (cap 4); req_mu8if0ebska4ra: \"fetch_page\" called 5x consecutively (cap 4); req_mu8ijhhcidej8t: \"fetch_page\" called 9x consecutively (cap 4)"
+      "detail": "req_murhtsnm2wm2u6: \"fetch_page\" called 5x consecutively (cap 4); req_murhuyihploday: \"fetch_page\" called 5x consecutively (cap 4); req_muri9q9uqtqdm2: \"web_search\" called 9x consecutively (cap 4); req_murialvq6g39u1: \"web_search\" called 8x consecutively (cap 4); req_murib9kv31hc25: \"web_search\" called 9x consecutively (cap 4); req_muric35lx4ox1u: \"web_search\" called 9x consecutively (cap 4); req_muricolrrwjkpi: \"web_search\" called 6x consecutively (cap 4); req_muridage1r1675: \"web_search\" called 8x consecutively (cap 4)"
     },
     {
       "id": "R1",
@@ -59,7 +59,7 @@
       "title": "Declared eval thresholds are met",
       "severity": "error",
       "status": "fail",
-      "detail": "errorRate=0.0988 > 0.01"
+      "detail": "errorRate=0.0506 > 0.01"
     },
     {
       "id": "E3",
@@ -73,21 +73,21 @@
       "title": "Token budget respected",
       "severity": "error",
       "status": "pass",
-      "detail": "74 run(s)"
+      "detail": "83 run(s)"
     },
     {
       "id": "B2",
       "title": "Latency budget respected",
       "severity": "warn",
       "status": "pass",
-      "detail": "74 run(s)"
+      "detail": "83 run(s)"
     },
     {
       "id": "B3",
       "title": "Cost budget respected",
       "severity": "warn",
       "status": "pass",
-      "detail": "74 run(s)"
+      "detail": "83 run(s)"
     },
     {
       "id": "P1",

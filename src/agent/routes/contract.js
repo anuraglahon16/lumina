@@ -144,14 +144,25 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
   let lastEventSent = 'none';
   res.on('close', () => {
     controller.abort();
-    log.warn('client_closed', {
+    /**
+     * `info` for an ordinary close, `warn` only for a stream that died.
+     *
+     * Every answer ends with the client closing after `done`, so logging all of
+     * them at warn made the normal case the loudest thing in the log - and a
+     * warning that fires on success trains a reader to ignore it. `bytes_written`
+     * came from `res.socket?.bytesWritten`, which is null by the time close
+     * fires; a field that is always null is worse than no field.
+     */
+    const abandoned = !res.writableEnded;
+    const line = {
       request_id: req.requestId,
       writable_ended: res.writableEnded,
       elapsed_ms: Date.now() - openedAt,
       last_event: lastEventSent,
-      bytes_written: res.socket?.bytesWritten ?? null,
-    });
-    if (!res.writableEnded) {
+    };
+    if (abandoned) log.warn('client_closed', line);
+    else log.info('client_closed', line);
+    if (abandoned) {
       recorder.finish({ status: 'aborted', terminationReason: 'client_disconnected' });
     }
   });
