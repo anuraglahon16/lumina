@@ -181,10 +181,24 @@ test('the bytes are durable before the job is claimable', async () => {
   // Observe the sequence through the stores the path actually writes to.
   const docs = collection('documents');
   const jobsCol = collection('jobs');
+  /**
+   * `insert`, not `put`.
+   *
+   * The acceptance path moved off `put` because `put` reads before it writes, so
+   * three writes were six round trips. This test watched `put` and therefore saw
+   * nothing at all - it reported "the document is written once, got 0", which is
+   * the right answer to the wrong question.
+   */
+  const realDocInsert = docs.insert.bind(docs);
+  const realJobInsert = jobsCol.insert.bind(jobsCol);
   const realDocPut = docs.put.bind(docs);
   const realJobPut = jobsCol.put.bind(jobsCol);
-  docs.put = async (d) => { order.push(`document(job_id=${d.job_id ? 'set' : 'MISSING'})`); return realDocPut(d); };
-  jobsCol.put = async (j) => { order.push('job'); return realJobPut(j); };
+  docs.insert = async (d) => { order.push(`document(job_id=${d.job_id ? 'set' : 'MISSING'})`); return realDocInsert(d); };
+  jobsCol.insert = async (j) => { order.push('job'); return realJobInsert(j); };
+  // A `put` on either collection during acceptance would be the read-then-write
+  // this change removed, so it is recorded distinctly rather than ignored.
+  docs.put = async (d) => { order.push('document(put: read-then-write)'); return realDocPut(d); };
+  jobsCol.put = async (j) => { order.push('job(put: read-then-write)'); return realJobPut(j); };
 
   const { putFile } = await import('../src/agent/services/fileStore.js');
   const fileStore = await import('../src/agent/services/fileStore.js');
@@ -201,6 +215,8 @@ test('the bytes are durable before the job is claimable', async () => {
       runInline: false,
     });
   } finally {
+    docs.insert = realDocInsert;
+    jobsCol.insert = realJobInsert;
     docs.put = realDocPut;
     jobsCol.put = realJobPut;
   }
@@ -209,6 +225,10 @@ test('the bytes are durable before the job is claimable', async () => {
   const docWrites = order.filter((o) => o.startsWith('document'));
   assert.equal(docWrites.length, 1, `the document is written once, got ${docWrites.length}: ${order.join(' -> ')}`);
   assert.match(docWrites[0], /job_id=set/, 'and carries its job id in that write');
+  assert.ok(
+    !order.some((o) => o.includes('read-then-write')),
+    `acceptance must not read before it writes: ${order.join(' -> ')}`,
+  );
 
   // The job is enqueued after the document, and the 202 after everything.
   assert.ok(order.indexOf('job') > order.indexOf(docWrites[0]), `job after document: ${order.join(' -> ')}`);
@@ -220,6 +240,11 @@ test('the acceptance path does not patch the document after inserting it', () =>
   const src = fs.readFileSync(new URL('../src/agent/services/ingest.js', import.meta.url), 'utf8');
   const fn = src.slice(src.indexOf('export async function enqueueDocument'), src.indexOf('export async function indexDocumentJob'));
   assert.ok(!/updateDocument\(doc(Id)?\.?i?d?, \{ job_id/.test(fn), 'the job_id update round trip is gone');
+  // And the two writes are inserts, so neither reads first.
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  assert.match(rag, /return documents\.insert\(\{/, 'createDocument inserts');
+  const jobs = fs.readFileSync(new URL('../src/agent/services/jobs.js', import.meta.url), 'utf8');
+  assert.match(jobs, /const job = await jobs\.insert\(\{/, 'enqueue inserts');
   assert.match(fn, /const docId = newId\('doc'\);/, 'both ids are generated up front');
   assert.match(fn, /const jobId = newId\('job'\);/);
   // Order pinned in source too: a later edit that parallelises these loses the

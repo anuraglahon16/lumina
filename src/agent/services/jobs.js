@@ -79,7 +79,10 @@ class JobQueue extends EventEmitter {
    * generates it is not a property of the queue.
    */
   async enqueue(type, payload, { maxAttempts = 2, userId = null, id = null } = {}) {
-    const job = await jobs.put({
+    // `insert`, for the reason given in createDocument: a new job has nothing to
+    // preserve, and `put`'s read-before-write doubled the round trips on the
+    // path with a 300ms budget.
+    const job = await jobs.insert({
       id: id || newId('job'),
       type,
       payload,

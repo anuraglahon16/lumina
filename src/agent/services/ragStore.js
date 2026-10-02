@@ -12,7 +12,16 @@ const documents = collection('documents');
 const chunks = collection('chunks');
 
 export async function createDocument({ userId, filename, mimetype, size, spaceId = null, docId = null, jobId = null }) {
-  return documents.put({
+  /**
+   * `insert`, not `put`.
+   *
+   * `put` reads the existing row first so that a re-put preserves `created_at` -
+   * which means every "three sequential writes" on the acceptance path was
+   * really six round trips: a findOne and a replaceOne each. The id here is
+   * freshly generated, so there is nothing to preserve and a collision should be
+   * loud rather than silently merged.
+   */
+  return documents.insert({
     id: docId || newId('doc'),
     user_id: userId,
     space_id: spaceId,
