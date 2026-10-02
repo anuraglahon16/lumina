@@ -25,8 +25,18 @@ primary_region = "iad"
   # Binds the private network rather than loopback. Without this the Gateway
   # cannot reach it; with it, only 6PN peers can.
   AGENT_HOST = "::"
-  EMBEDDING_PROVIDER = "local"
+  # The embedder and the index have to agree on width. `local` is a 512-dimension
+  # hashed bag-of-words and `chunks_vector` declares 1536, so this pairing wrote
+  # chunks the index could not hold - upserted, marked `indexed`, unreachable by
+  # `$vectorSearch`. indexChunks now refuses that combination outright.
+  EMBEDDING_PROVIDER = "openai"
+  OPENAI_EMBEDDING_MODEL = "text-embedding-3-small"
   VECTOR_BACKEND = "atlas-vector-search"
+  # Named explicitly rather than defaulted: the first deployment probed
+  # `chunk_vector_index`, a name no index has ever had.
+  VECTOR_INDEX = "chunks_vector"
+  MEMORY_VECTOR_INDEX = "memories_vector"
+  VECTOR_DIM = "1536"
   JOB_LEASE_MS = "60000"
   JOB_POLL_MS = "2000"
 
@@ -38,6 +48,7 @@ primary_region = "iad"
 #                      the private Agent trusts anything on the private network.
 #   ANTHROPIC_API_KEY  provider credentials, which live only here and in the
 #   TAVILY_API_KEY     Worker - never on the Gateway
+#   OPENAI_API_KEY     embeddings; EMBEDDING_PROVIDER=openai fails loud without it
 #   MONGODB_URI
 #   MONGODB_DB
 #   AUTH_SECRET        only because the Agent verifies the signed identity the

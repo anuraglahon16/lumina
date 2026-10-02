@@ -196,39 +196,68 @@ export async function countChunks(userId) {
  * index do the work; the scan path pulls the user's chunks and computes cosine
  * here, which is fine at development scale and honest about not being more.
  */
-export async function nearestChunks(vector, { userId, docIds, limit = 50 } = {}) {
+export async function nearestChunks(vector, { userId, docIds, spaceId, limit = 30, numCandidates = 150 } = {}) {
   const col = (await mongoDb()).collection('chunks');
-  const filter = { user_id: userId };
-  if (docIds?.length) filter.doc_id = { $in: docIds };
 
   if (config.mongo.vectorBackend === 'atlas-vector-search') {
+    /**
+     * The filter goes INSIDE `$vectorSearch`, and uses the index's own paths.
+     *
+     * `chunks_vector` declares `userId` and `spaceId` as filter fields. Two
+     * things follow, and both were wrong here:
+     *
+     *   - The paths are camelCase. This passed `user_id` and `doc_id`, which the
+     *     index does not know, so the stage either errors or matches nothing.
+     *     Chunks are dual-written with both spellings for exactly this.
+     *   - Filtering afterwards in a `$match` is not the same operation.
+     *     `$vectorSearch` returns its `limit` nearest neighbours across the
+     *     whole index and a later stage then discards the ones from other
+     *     Spaces, so a Space with few documents is crowded out by a larger one
+     *     and recall silently drops. Inside the stage, the search itself is
+     *     restricted.
+     *
+     * `docId` is NOT a declared filter field, so it cannot go inside. It is
+     * post-filtered, which is sound only because `numCandidates` is far larger
+     * than `limit`: there is room for the selected documents' chunks to survive
+     * the cut.
+     */
+    const filter = { userId };
+    if (spaceId) filter.spaceId = spaceId;
+
+    const pipeline = [
+      {
+        $vectorSearch: {
+          index: config.mongo.vectorIndex,
+          path: 'embedding',
+          queryVector: vector,
+          numCandidates: Math.max(numCandidates, limit * 5),
+          limit,
+          filter,
+        },
+      },
+      { $addFields: { score: { $meta: 'vectorSearchScore' } } },
+    ];
+    if (docIds?.length) pipeline.push({ $match: { docId: { $in: docIds } } });
+    pipeline.push({ $project: { embedding: 0 } });
+
     try {
-      const candidates = await col
-        .aggregate([
-          {
-            $vectorSearch: {
-              index: config.mongo.vectorIndex,
-              path: 'embedding',
-              queryVector: vector,
-              numCandidates: Math.max(limit * 10, 100),
-              limit,
-              filter,
-            },
-          },
-          { $addFields: { score: { $meta: 'vectorSearchScore' } } },
-          { $project: { embedding: 0 } },
-        ])
-        .toArray();
+      const candidates = await col.aggregate(pipeline).toArray();
       // The only place this backend may be claimed from.
       noteVectorSearchServed();
       return { backend: 'atlas-vector-search', candidates };
     } catch (err) {
       // An index that is still building, or a cluster that is not Atlas after
       // all. Degrade to the scan rather than returning nothing: a slower
-      // answer beats a wrong claim that the corpus is empty.
+      // answer beats a wrong claim that the corpus is empty. The caller is told
+      // which backend answered, so the degrade is in the trace rather than
+      // hidden behind a successful-looking result.
       log.warn('vector_search_failed_scanning', { err: String(err.message).slice(0, 160) });
     }
   }
+
+  const filter = { user_id: userId };
+  if (docIds?.length) filter.doc_id = { $in: docIds };
+  if (spaceId) filter.space_id = spaceId;
 
   // `id` must be projected: fusion keys candidates by it, and omitting it
   // silently dropped every dense score, leaving BM25 to rank alone.
@@ -244,10 +273,55 @@ export async function nearestChunks(vector, { userId, docIds, limit = 50 } = {})
 }
 
 /** All of a user's chunks, for the lexical half of hybrid retrieval. */
-export async function allChunks({ userId, docIds } = {}) {
+/**
+ * Semantic recall over long-term memory, through the index that was built for it.
+ *
+ * `memories_vector` declares `userId` as its one filter field, so the scope lives
+ * inside the stage for the same reason it does for chunks: a `$match` afterwards
+ * would let one user's memories crowd out another's before being discarded.
+ *
+ * Returns `null` rather than an empty list when the index cannot serve the query,
+ * so the caller can tell "this user has no matching memories" from "the index did
+ * not answer" and fall back to scanning instead of reporting an empty recall.
+ */
+export async function nearestMemories(vector, { userId, limit = 20, numCandidates = 150 } = {}) {
+  if (config.mongo.vectorBackend !== 'atlas-vector-search') return null;
+  const col = (await mongoDb()).collection('memories');
+  try {
+    const candidates = await col
+      .aggregate([
+        {
+          $vectorSearch: {
+            index: config.mongo.memoryVectorIndex,
+            path: 'embedding',
+            queryVector: vector,
+            numCandidates: Math.max(numCandidates, limit * 5),
+            limit,
+            filter: { userId },
+          },
+        },
+        { $addFields: { score: { $meta: 'vectorSearchScore' } } },
+        // `tokens` stays: the caller blends the index score with term overlap.
+        { $project: { embedding: 0 } },
+      ])
+      .toArray();
+    noteVectorSearchServed();
+    return candidates;
+  } catch (err) {
+    log.warn('memory_vector_search_failed_scanning', { err: String(err.message).slice(0, 160) });
+    return null;
+  }
+}
+
+export async function allChunks({ userId, docIds, spaceId } = {}) {
   const col = (await mongoDb()).collection('chunks');
   const filter = { user_id: userId };
   if (docIds?.length) filter.doc_id = { $in: docIds };
+  // The Space scope, for the path that no longer expands it into a document
+  // list. Snake_case here: this is a plain `find`, not the search index.
+  if (spaceId) filter.space_id = spaceId;
+  // No `embedding`: 1536 floats per chunk is most of the document, the lexical
+  // half does not want them, and the dense half asks the index instead.
   return col.find(filter).project({ embedding: 0 }).toArray();
 }
 

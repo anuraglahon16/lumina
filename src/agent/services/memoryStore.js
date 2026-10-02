@@ -2,7 +2,10 @@ import { config } from '../../shared/config.js';
 import { newId, sha256 } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
+import { nearestMemories } from './vectorStore.js';
+import { createLogger } from '../../shared/logger.js';
 
+const log = createLogger('memory');
 const memories = collection('memories');
 
 export const MEMORY_KINDS = ['preference', 'fact', 'project', 'constraint'];
@@ -46,6 +49,16 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
     last_seen_at: new Date().toISOString(),
     tokens: tokenize(text),
     embedding,
+    /**
+     * The same identity in camelCase, because `memories_vector` declares its
+     * filter path that way.
+     *
+     * Dual-written for the same reason chunks are: every reader here uses
+     * `user_id`, and a filter inside `$vectorSearch` on a path that does not
+     * exist matches nothing - which would look exactly like a user having no
+     * memories.
+     */
+    userId,
   });
 
   // Bounded store: evict the least useful (oldest, least-hit) beyond the cap.
@@ -60,8 +73,6 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
 }
 
 export async function searchMemories(query, { userId, topK = config.memory.injectTopK } = {}) {
-  const pool = await memories.all({ user_id: userId });
-  if (!pool.length) return [];
   const { vector, provider } = await embedQuery(query);
   const queryTerms = new Set(tokenize(query));
 
@@ -71,15 +82,33 @@ export async function searchMemories(query, { userId, topK = config.memory.injec
   const denseWeight = provider === 'local' ? 0.4 : 0.75;
   const floor = provider === 'local' ? 0.06 : 0.12;
 
-  return pool
-    .map((m) => {
-      const terms = m.tokens?.length ? new Set(m.tokens) : new Set();
-      let shared = 0;
-      for (const t of queryTerms) if (terms.has(t)) shared += 1;
-      // Symmetric overlap: a short memory matching a long query still scores.
-      const overlap = queryTerms.size && terms.size ? shared / Math.min(queryTerms.size, terms.size) : 0;
-      return { memory: m, score: denseWeight * cosine(vector, m.embedding) + (1 - denseWeight) * overlap };
-    })
+  /**
+   * Ask the index first, and fall back to a scan only if it cannot answer.
+   *
+   * Recall was a full scan of the user's memories with cosine in JavaScript.
+   * That is correct and does not scale, and it left `memories_vector` - declared,
+   * built and probed at boot - with no caller at all. The index returns its own
+   * similarity, which takes the place of the cosine; the term-overlap half is
+   * unchanged, because it needs no vectors and is what keeps a local-embedded
+   * memory reachable.
+   */
+  const fromIndex = await nearestMemories(vector, { userId, limit: Math.max(topK * 4, 20) });
+  const scoreOf = (m, dense) => {
+    const terms = m.tokens?.length ? new Set(m.tokens) : new Set();
+    let shared = 0;
+    for (const t of queryTerms) if (terms.has(t)) shared += 1;
+    // Symmetric overlap: a short memory matching a long query still scores.
+    const overlap = queryTerms.size && terms.size ? shared / Math.min(queryTerms.size, terms.size) : 0;
+    return denseWeight * dense + (1 - denseWeight) * overlap;
+  };
+
+  const ranked = fromIndex
+    ? fromIndex.map((m) => ({ memory: m, score: scoreOf(m, m.score ?? 0) }))
+    : (await memories.all({ user_id: userId })).map((m) => ({ memory: m, score: scoreOf(m, cosine(vector, m.embedding)) }));
+
+  if (!ranked.length) return [];
+
+  return ranked
     .filter((r) => r.score > floor)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)

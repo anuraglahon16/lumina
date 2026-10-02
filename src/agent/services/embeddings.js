@@ -153,7 +153,29 @@ export async function embedBatch(texts, { inputType = 'document', recorder, prov
     const dim = vectors[0]?.length || 0;
     return { vectors, provider, model: modelFor(provider), dim, namespace: embeddingNamespace({ provider, dim }) };
   } catch (err) {
-    // All of it, or none of it.
+    /**
+     * A chosen provider that fails is an error, not a quieter result.
+     *
+     * This fell back to the local embedder in every case. The call returned
+     * successfully, the document reached `indexed`, and its vectors were
+     * 512-dimension hashed bag-of-words in a namespace the Atlas index
+     * (1536 dimensions) cannot even hold - so the chunks were unreachable by
+     * `$vectorSearch` and the only honest signal was a warning line in a log
+     * nobody greps. That is the Live Translate shape exactly: an `except` that
+     * returns something plausible while the real cause is an exception.
+     *
+     * So the fallback now applies only where it was actually asked for.
+     * `EMBEDDING_PROVIDER=auto` means "pick what is reachable", and degrading is
+     * the behaviour that setting requests. `EMBEDDING_PROVIDER=openai`, or a
+     * caller naming a provider because it is the one that embedded the chunks
+     * being searched, is a requirement; failing it quietly substitutes vectors
+     * that cannot be compared to the ones on disk.
+     */
+    const asked = Boolean(forced) || config.embeddings.provider !== 'auto';
+    if (asked) {
+      log.error('embedding_provider_failed', { provider, texts: texts.length, err: err.message });
+      throw new Error(`embedding provider ${provider} failed: ${err.message}`);
+    }
     log.warn('embedding_provider_failed_using_local', { provider, texts: texts.length, err: err.message });
     const dim = config.embeddings.localDim;
     return { vectors: texts.map(localEmbed), provider: 'local', model: modelFor('local'), dim, namespace: embeddingNamespace({ provider: 'local', dim }) };

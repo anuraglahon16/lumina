@@ -63,11 +63,68 @@ test('health and stats report the observed backend, not the configured one', () 
 });
 
 test('retrieval reports the dense path it actually used', () => {
-  // Pinned against the source so that wiring $vectorSearch in later must also
-  // change what the label says, rather than leaving the old claim behind.
+  // Pinned against the source so that changing how the dense half runs must also
+  // change what the label says, rather than leaving the old claim behind. It
+  // used to pin `hybrid-bm25-cosine`, which was itself wrong: on Mongo the dense
+  // half scored nothing, because `allChunks` projects `embedding` out.
   const src = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
-  assert.match(src, /backend = 'hybrid-bm25-cosine'/, 'the JS cosine path says so');
-  assert.match(src, /noteRetrievalBackend\(backend\)/, 'and records it for health to read');
+  assert.match(src, /noteRetrievalBackend\(backend\)/, 'the label is recorded for health to read');
+  assert.ok(!/backend = 'hybrid-bm25-cosine'/.test(src), 'and no longer claims a cosine half that did not run');
+  // The label comes from what nearestChunks reports served the query.
+  assert.match(src, /backend: served/, 'the dense half returns the backend that answered it');
+});
+
+test('the dense half on Mongo asks the index, not the stripped corpus', () => {
+  // The corpus carries no vectors, so scoring it in JavaScript produced an empty
+  // dense ranking and BM25 ranked alone while the label said hybrid. Pinned
+  // both ways: the index is asked, and the corpus is not scored.
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  assert.match(rag, /async function denseFromIndex/, 'there is a path that asks the index');
+  assert.match(rag, /await nearestChunks\(/, 'and it calls nearestChunks');
+
+  const vs = fs.readFileSync(new URL('../src/agent/services/vectorStore.js', import.meta.url), 'utf8');
+  // allChunks sits after deleteChunksForDoc in the file, so slice forward from it.
+  const start = vs.indexOf('export async function allChunks');
+  const all = vs.slice(start, vs.indexOf('\n}', start));
+  assert.match(all, /project\(\{ embedding: 0 \}\)/, 'the corpus is fetched without vectors');
+});
+
+test('the $vectorSearch filter is inside the stage and uses the index paths', () => {
+  // Two defects in one line: snake_case paths the index does not declare, and a
+  // Space restriction applied after the search instead of inside it.
+  const vs = fs.readFileSync(new URL('../src/agent/services/vectorStore.js', import.meta.url), 'utf8');
+  const stage = vs.slice(vs.indexOf('export async function nearestChunks'), vs.indexOf('const filter = { user_id: userId };'));
+  assert.match(stage, /const filter = \{ userId \};/, 'the filter uses the declared camelCase path');
+  assert.match(stage, /if \(spaceId\) filter\.spaceId = spaceId;/, 'and restricts the Space inside the stage');
+  assert.match(stage, /filter,\n\s*\},/, 'the filter is passed to $vectorSearch itself');
+  // docId is not a declared filter field, so it is the one thing post-filtered.
+  assert.match(stage, /\$match: \{ docId: \{ \$in: docIds \} \}/, 'docId is post-filtered');
+  assert.ok(!/filter\.user_id|filter\.doc_id/.test(stage), 'no snake_case path reaches the index');
+});
+
+test('chunks are dual-written with the paths the index filters on', () => {
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  for (const field of ['userId: doc.user_id', 'spaceId: doc.space_id ?? null', 'docId: doc.id']) {
+    assert.ok(rag.includes(field), `a chunk carries ${field}`);
+  }
+  // And the snake_case originals stay, because every reader uses them.
+  for (const field of ['user_id: doc.user_id', 'space_id: doc.space_id ?? null', 'doc_id: doc.id']) {
+    assert.ok(rag.includes(field), `and keeps ${field} for the readers`);
+  }
+});
+
+test('a width the index cannot hold is refused at ingest, not discovered at query time', () => {
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  assert.match(rag, /does not match the vector index/, 'indexChunks refuses a mismatched width');
+  assert.match(rag, /throw new Error\(\n\s*`embedding width/, 'and throws rather than warning');
+});
+
+test('a chosen embedding provider that fails throws instead of substituting local vectors', () => {
+  const emb = fs.readFileSync(new URL('../src/agent/services/embeddings.js', import.meta.url), 'utf8');
+  assert.match(emb, /const asked = Boolean\(forced\) \|\| config\.embeddings\.provider !== 'auto';/, 'an explicit choice is distinguished from auto');
+  assert.match(emb, /throw new Error\(`embedding provider \$\{provider\} failed/, 'and a chosen provider failing is an error');
+  // auto still degrades, because that is what auto asks for.
+  assert.match(emb, /embedding_provider_failed_using_local/, 'auto keeps the documented degrade');
 });
 
 /* ------------------------------------------- the boot probe */

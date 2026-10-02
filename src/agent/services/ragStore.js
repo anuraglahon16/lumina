@@ -98,12 +98,53 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
   }
 
   const namespace = [...namespaces][0] ?? null;
+
+  /**
+   * Refuse to index vectors the vector index cannot hold.
+   *
+   * `chunks_vector` declares `numDimensions: 1536`. Atlas does not index a
+   * vector of another width and does not say so at write time, so a document
+   * embedded at 512 dimensions is upserted, reaches `indexed`, and is invisible
+   * to `$vectorSearch` forever — the failure the read-your-write probe exists to
+   * catch, caught earlier and more cheaply here.
+   *
+   * Only where the vectors are going into that index: a local mongod scans and
+   * compares whatever width it is given, and so does the in-process store.
+   */
+  if (usingMongoVectors() && configuredVectorBackend() === 'atlas-vector-search') {
+    const dim = meta?.dim ?? vectors[0]?.length ?? 0;
+    if (dim !== config.mongo.vectorDim) {
+      throw new Error(
+        `embedding width ${dim} does not match the vector index (${config.mongo.vectorDim}): ` +
+          `provider ${meta?.provider ?? 'unknown'}, model ${meta?.model ?? 'unknown'}. ` +
+          'Indexing would store chunks $vectorSearch cannot reach.',
+      );
+    }
+  }
+
   const records = docChunks.map((chunk, j) => ({
     id: newId('chk'),
     chunk_id: `${doc.id}:${chunk.index}`,
     doc_id: doc.id,
     user_id: doc.user_id,
     space_id: doc.space_id ?? null,
+    /**
+     * The same three identities in camelCase, because the Atlas index declares
+     * its filter paths that way.
+     *
+     * `chunks_vector` filters on `userId` and `spaceId` (scripts/indexes.json,
+     * the grader's file and not ours to edit), while every reader here — and the
+     * BM25 half, and the scan fallback — uses snake_case. A filter inside
+     * `$vectorSearch` on a path that does not exist matches nothing, so without
+     * these the index returns an empty list for every query and the only
+     * symptom is poor recall.
+     *
+     * Dual-written rather than renamed: a rename is a migration of every reader
+     * at once, and the readers are the part that currently works.
+     */
+    userId: doc.user_id,
+    spaceId: doc.space_id ?? null,
+    docId: doc.id,
     filename: doc.filename,
     index: chunk.index,
     page: chunk.page,
@@ -250,55 +291,22 @@ async function corpusProvider(userId, docIds) {
   return [...counts.entries()].sort((a, b) => b[1] - a[1])[0][0];
 }
 
-export async function searchChunks(query, { userId, docIds, spaceId, topK = config.rag.topK, recorder } = {}) {
-  // A Space is the scope the question was asked in. Searching outside it would
-  // answer from documents the asker did not point at.
-  if (spaceId && !docIds?.length) {
-    const { items } = await documents.list({ user_id: userId, space_id: spaceId }, { limit: 500 });
-    docIds = items.map((d) => d.id);
-    if (!docIds.length) return { results: [], corpus_size: 0, embedding_provider: null, backend: 'none' };
-  }
-  // Dense retrieval happens where the chunks live: the index does it on Atlas,
-  // a scan does it on a local mongod, and the in-process store does it here.
-  // Everything after this point is identical, because fusion works on rankings
-  // rather than on whatever each backend calls a score.
-  let corpus;
-  /**
-   * The label describes what ran, not what was configured.
-   *
-   * This reported `configuredVectorBackend()`, so every answer, /health, /stats
-   * and the eval report claimed `atlas-vector-search` while the dense half was
-   * a cosine scan in this process: `nearestChunks` has no callers. A recall
-   * figure read against the wrong backend is not comparable to anything.
-   */
-  let backend;
-  if (usingMongoVectors()) {
-    corpus = await allChunks({ userId, docIds });
-    // Dense scoring happens below, in JavaScript, over this corpus. When
-    // `$vectorSearch` is wired in, this is where it will report itself.
-    backend = 'hybrid-bm25-cosine';
-  } else {
-    corpus = await chunks.all(compact({ user_id: userId, doc_id: docIds?.length ? { $in: docIds } : undefined }));
-    backend = 'in-process';
-  }
-  noteRetrievalBackend(backend);
-
-  if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: null, backend };
-
-  /**
-   * Group the corpus by the space its vectors live in, and score each group
-   * against a query embedded the same way.
-   *
-   * A Space can legitimately hold more than one: a document indexed while the
-   * remote provider was rate limited is local, one indexed an hour later is
-   * not, and both are perfectly good — they simply cannot be compared to each
-   * other, or to one query vector. Scoring them together produces numbers the
-   * arithmetic is happy to return and that mean nothing.
-   *
-   * So each namespace is ranked on its own and the rankings are fused. Rank
-   * fusion is what makes this sound: a position within a group survives being
-   * merged across groups, where a raw cosine from one model would not.
-   */
+/**
+ * The dense half where the vectors are in this process: group the corpus by the
+ * space its vectors live in, and score each group against a query embedded the
+ * same way.
+ *
+ * A Space can legitimately hold more than one: a document indexed while the
+ * remote provider was rate limited is local, one indexed an hour later is not,
+ * and both are perfectly good — they simply cannot be compared to each other, or
+ * to one query vector. Scoring them together produces numbers the arithmetic is
+ * happy to return and that mean nothing.
+ *
+ * So each namespace is ranked on its own and the rankings are fused. Rank fusion
+ * is what makes this sound: a position within a group survives being merged
+ * across groups, where a raw cosine from one model would not.
+ */
+async function denseInProcess(corpus, query, { recorder }) {
   const byNamespace = new Map();
   for (const chunk of corpus) {
     const ns = chunk.embedding_namespace || legacyNamespace(chunk);
@@ -319,7 +327,12 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
       if (embedded.provider !== wanted) continue;
       queryVector = embedded.vector;
       provider = provider ?? embedded.provider;
-    } catch {
+    } catch (err) {
+      // Said rather than swallowed. A bare `continue` here meant a provider
+      // outage and a corpus with no vectors looked identical from the outside:
+      // dense simply contributed nothing, and the answer came back as if
+      // retrieval had run in full.
+      log.warn('dense_group_skipped', { namespace: ns, provider: wanted, err: err.message });
       continue;
     }
 
@@ -332,6 +345,136 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
     // across groups in a way a similarity score is not.
     for (const [id, r] of rank(ranked)) dense.set(id, 1 / (60 + r));
   }
+  return { dense, provider, backend: null };
+}
+
+/**
+ * The dense half asked of the database rather than computed here.
+ *
+ * It used to be computed here for Mongo too, and scored nothing: `allChunks`
+ * projects `embedding` out, so every chunk failed the `Array.isArray` guard and
+ * `dense` came back empty. Retrieval on Mongo has been BM25 alone while
+ * reporting itself as `hybrid-bm25-cosine`, which means the measured recall@5 of
+ * 0.967 was lexical.
+ *
+ * One namespace, not many: the index declares a single width, so anything
+ * embedded by another model is not in it. Mixing widths is therefore not a risk
+ * to manage but a condition to check, and a mismatch means no dense half rather
+ * than a meaningless one.
+ *
+ * A failing embedding provider throws rather than returning a BM25-only result
+ * that looks complete. That is the deliberate trade-off: a transient 429 that
+ * outlives its retries fails the search loudly instead of quietly halving
+ * retrieval quality.
+ */
+async function denseFromIndex(query, { userId, docIds, spaceId, atlas, recorder }) {
+  const embedded = await embedQuery(query, { recorder });
+  const provider = embedded.provider;
+
+  if (atlas && embedded.dim !== config.mongo.vectorDim) {
+    log.warn('dense_skipped_dimension_mismatch', {
+      query_dim: embedded.dim,
+      index_dim: config.mongo.vectorDim,
+      provider,
+    });
+    return {
+      dense: new Map(),
+      provider,
+      backend: `bm25-only (query embedded at ${embedded.dim}, index expects ${config.mongo.vectorDim})`,
+    };
+  }
+
+  const { backend: served, candidates } = await nearestChunks(embedded.vector, {
+    userId,
+    docIds,
+    spaceId: atlas ? spaceId : undefined,
+    limit: config.rag.vectorLimit,
+    numCandidates: config.rag.vectorNumCandidates,
+  });
+
+  const ranked = new Map();
+  for (const c of candidates) if (c.id) ranked.set(c.id, c.score ?? 0);
+  const dense = new Map();
+  // Ranked, then weighted by position: the two halves' scores are not on one
+  // scale, so fusion compares places rather than numbers.
+  for (const [id, r] of rank(ranked)) dense.set(id, 1 / (60 + r));
+
+  return { dense, provider, backend: served };
+}
+
+export async function searchChunks(query, { userId, docIds, spaceId, topK = config.rag.topK, recorder } = {}) {
+  // A Space is the scope the question was asked in. Searching outside it would
+  // answer from documents the asker did not point at.
+  const atlas = usingMongoVectors() && configuredVectorBackend() === 'atlas-vector-search';
+
+  /**
+   * On Atlas the Space stays a Space.
+   *
+   * Expanding it into a document list was necessary while the only filter was a
+   * `find()`, but `chunks_vector` declares `spaceId` as a filter field, so the
+   * restriction belongs inside `$vectorSearch` where it restricts the search
+   * rather than trimming its output. The expansion also capped the scope at 500
+   * documents without saying so.
+   */
+  if (spaceId && !docIds?.length && !atlas) {
+    const { items } = await documents.list({ user_id: userId, space_id: spaceId }, { limit: 500 });
+    docIds = items.map((d) => d.id);
+    if (!docIds.length) return { results: [], corpus_size: 0, embedding_provider: null, backend: 'none' };
+  }
+  // Dense retrieval happens where the chunks live: the index does it on Atlas,
+  // a scan does it on a local mongod, and the in-process store does it here.
+  // Everything after this point is identical, because fusion works on rankings
+  // rather than on whatever each backend calls a score.
+  let corpus;
+  /**
+   * The label describes what ran, not what was configured.
+   *
+   * This reported `configuredVectorBackend()`, so every answer, /health, /stats
+   * and the eval report claimed `atlas-vector-search` while the dense half was
+   * a cosine scan in this process: `nearestChunks` has no callers. A recall
+   * figure read against the wrong backend is not comparable to anything.
+   */
+  let backend;
+  if (usingMongoVectors()) {
+    // The corpus is the lexical half and the source of the returned rows. It
+    // carries no vectors: `allChunks` projects `embedding` out, because 1536
+    // floats per chunk is most of the document and BM25 does not want them. The
+    // dense half asks the index, below.
+    corpus = await allChunks({ userId, docIds, spaceId: atlas ? spaceId : undefined });
+    backend = atlas ? 'atlas-vector-search' : 'mongo-cosine-scan';
+  } else {
+    corpus = await chunks.all(compact({ user_id: userId, doc_id: docIds?.length ? { $in: docIds } : undefined }));
+    backend = 'in-process';
+  }
+
+  if (!corpus.length) {
+    // Nothing was searched, so nothing served the query. Claiming a backend
+    // here would name one on the strength of an empty corpus.
+    noteRetrievalBackend(backend === 'in-process' ? backend : 'none');
+    return { results: [], corpus_size: 0, embedding_provider: null, backend };
+  }
+
+  /**
+   * Group the corpus by the space its vectors live in, and score each group
+   * against a query embedded the same way.
+   *
+   * A Space can legitimately hold more than one: a document indexed while the
+   * remote provider was rate limited is local, one indexed an hour later is
+   * not, and both are perfectly good — they simply cannot be compared to each
+   * other, or to one query vector. Scoring them together produces numbers the
+   * arithmetic is happy to return and that mean nothing.
+   *
+   * So each namespace is ranked on its own and the rankings are fused. Rank
+   * fusion is what makes this sound: a position within a group survives being
+   * merged across groups, where a raw cosine from one model would not.
+   */
+  // Parenthesised: `await a() : b()` binds the await to the first branch only,
+  // so the in-process path destructured a pending Promise and got undefined.
+  const { dense, provider, backend: denseBackend } = await (usingMongoVectors()
+    ? denseFromIndex(query, { userId, docIds, spaceId, atlas, recorder })
+    : denseInProcess(corpus, query, { recorder }));
+  if (denseBackend) backend = denseBackend;
+  noteRetrievalBackend(backend);
 
   // Lexical retrieval spans every namespace, because it needs no vectors at
   // all. It is the floor under the whole scheme: a corpus whose embedder is

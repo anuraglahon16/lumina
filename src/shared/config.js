@@ -355,8 +355,19 @@ export const config = {
     chunkChars: num(process.env.RAG_CHUNK_CHARS, 1200),
     chunkOverlap: num(process.env.RAG_CHUNK_OVERLAP, 180),
     topK: num(process.env.RAG_TOP_K, 6),
-    // Hybrid retrieval: dense cosine blended with BM25 lexical score.
+    // Hybrid retrieval: the dense half blended with the BM25 lexical score.
     denseWeight: num(process.env.RAG_DENSE_WEIGHT, 0.65),
+    /**
+     * `$vectorSearch` limit and numCandidates.
+     *
+     * `limit` is well above `topK` because the dense half is one input to rank
+     * fusion, not the answer: a ranking of 6 gives fusion almost nothing to
+     * work with. `numCandidates` is far above `limit` because `docId` can only
+     * be post-filtered - it is not a declared filter field on the index - so
+     * the selected documents' chunks need room to survive the cut.
+     */
+    vectorLimit: num(process.env.RAG_VECTOR_LIMIT, 30),
+    vectorNumCandidates: num(process.env.RAG_VECTOR_NUM_CANDIDATES, 150),
   },
 
   memory: {
