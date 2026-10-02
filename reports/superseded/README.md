@@ -64,3 +64,18 @@ measurement taken the same way.
 `bench-deployed-ec88475.json` is not edited. Read its recall figure as "BM25
 over the gold corpus", and read its `vectorStore` field as a configuration
 value that no query had earned.
+
+## bench-fly-2026-10-02-credit-exhaustion.json / eval-fly-…json
+
+The first full benchmark against the Fly deployment (2026-10-02 12:45–13:15Z).
+74 runs completed cleanly, then the Anthropic credit balance ran out at 13:05:51
+and every run after it failed — 12 of 12 on `"Your credit balance is too low to
+access the Anthropic API"`, after which the circuit breaker opened and cascaded.
+That is why `error rate` reads 0.1235, and why `deep/quick source ratio` reads
+0× and `deepAttribution` 2/4: the two deep runs that errored recorded no sources.
+
+Kept unedited. Its passing numbers are real — citation grounding 0.987 with **0
+dangling citations**, recall@5 0.967, 202 accept p95 227ms, contract probes 4/4,
+19 of 22 caps — and its failures are an exhausted balance, not the system under
+test. `ttft p95` 3900ms against a 2500ms target is the one failure that is
+genuinely the system's.
