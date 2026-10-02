@@ -5,15 +5,26 @@ pages it finds**, answers only from what it actually retrieved, remembers across
 sessions, searches documents you upload, and runs a separate Deep Search mode
 for questions that need decomposition.
 
-Two Express services, as specified:
+Two Express services as specified, plus the worker that the async upload
+requirement implies:
 
-| Service | Port | Responsibility |
-|---|---|---|
-| **Gateway** | 8080 | CORS, request validation, user/request IDs, rate limiting, structured logging, SSE forwarding, UI |
-| **Agent** | 8787 | Agent loop, LLM + tool calls, web search, page fetching, memory, RAG, Deep Search, background jobs, run logs |
+| Service | Responsibility |
+|---|---|
+| **Gateway** | CORS, request validation, user/request IDs, rate limiting, structured logging, SSE forwarding, and serving the built UI |
+| **Agent** | The loop, LLM + tool calls, web search, page fetching, memory, RAG, Deep Search, run logs. Every provider key lives here |
+| **Worker** | Parses, chunks, embeds and indexes uploads. No HTTP listener at all |
 
-The agent binds to loopback and, when `INTERNAL_TOKEN` is set, refuses any
-request that did not come through the gateway.
+Locally all three run from one terminal (`npm run dev`), the agent on loopback.
+Deployed they are two Fly apps: the gateway has the only public address, and the
+agent — with the worker as a second process group — has **no public IP and no Fly
+service**, reachable only over the private network and only with a matching
+`x-internal-token`.
+
+That distinction is the point rather than a detail. An earlier deployment ran the
+whole application as one serverless function with the gateway's middleware in
+front of the agent's routers, which put the provider keys on the public edge and
+left uploads to be indexed inline because there was no worker to do it. The
+separation was documented and not deployed. `DESIGN.md` has the full account.
 
 ---
 
@@ -83,9 +94,16 @@ sounds complete is the failure mode this design exists to prevent.
 
 ### 5. Quick and Deep are separate code paths
 
-`core/quick.js` and `core/deep.js` share the research loop and the synthesis
-step, and nothing else: separate budgets, prompts, phases, and rate-limit
-buckets. Quick never escalates; Deep never silently degrades into Quick.
+They share the synthesis step and nothing else: separate budgets, prompts,
+phases, and rate-limit buckets. Quick never escalates; Deep never silently
+degrades into Quick.
+
+They also retrieve differently, which this section used to get wrong by saying
+they "share the research loop". Only Deep has a model-driven tool loop. Quick is
+deterministic: one search, then a coverage-driven fetch pool that reads pages
+until the evidence covers the question and stops (`core/retrieve.js`). Quick
+never calls `runResearchLoop`, and `plan_research` is not in its toolset at all -
+which is also why a quick run cannot escalate itself into a deep one.
 
 Deep Search: **plan** (decompose into sub-questions) → **branches** (each
 sub-question researched in parallel under its own budget) → **sweep** (fetch
