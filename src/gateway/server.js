@@ -5,7 +5,7 @@ import { config } from '../shared/config.js';
 import { createLogger } from '../shared/logger.js';
 import { errorHandler } from '../shared/errors.js';
 import { demoAuth } from './middleware/demoAuth.js';
-import { identity } from './middleware/identity.js';
+import { identity, assignRequestId } from './middleware/identity.js';
 import { rateLimit, rateLimitStats } from './middleware/rateLimit.js';
 import { apiRouter } from './routes/api.js';
 import { contractRouter } from './routes/contract.js';
@@ -79,11 +79,59 @@ const CONTRACT_PATH = /^\/(health|stats|threads|memory|spaces|evals\/report\.jso
  * by the contract router above, which exempts it from the user header too.
  */
 const PUBLIC_UI = /^\/(assets\/|favicon|manifest|robots|index\.html$|evals$|evals\/|$)/;
+/**
+ * The route a request hit, not the URL it used.
+ *
+ * AGENTS.md asks the gateway line to carry `route`. A path carries ids, so
+ * `/threads/thr_abc/ask` and `/threads/thr_def/ask` group as two routes when
+ * they are one, and a log grouped that way answers no question about latency per
+ * route. Ids are recognised by shape rather than listed, so a new prefix does not
+ * need a change here.
+ */
+function routeOf(req) {
+  return (
+    req.path
+      .split('/')
+      .map((seg) => (/^[a-z]{3,4}_[A-Za-z0-9]{6,}$/.test(seg) || /^[0-9a-f]{24,}$/i.test(seg) ? ':id' : seg))
+      .join('/') || '/'
+  );
+}
+
+/**
+ * One log line per request, for every route.
+ *
+ * This sat below the contract handler, which mounts its router and returns into
+ * it - so `/threads/*`, `/spaces/*` and every other contract route produced no
+ * gateway log line at all. The graded path was the unlogged one, and
+ * "one request is greppable end to end" was true of everything except the
+ * requests that matter.
+ *
+ * `route` rather than `path`: the id in a URL is per-request noise, and grouping
+ * by it makes every line its own group.
+ */
+app.use((req, res, next) => {
+  const started = performance.now();
+  res.on('finish', () => {
+    log.info('request', {
+      request_id: req.requestId,
+      user_id: req.userId,
+      method: req.method,
+      route: routeOf(req),
+      path: req.path,
+      status: res.statusCode,
+      duration_ms: Math.round(performance.now() - started),
+      ua: req.get('user-agent')?.slice(0, 80),
+    });
+  });
+  next();
+});
+
 app.use((req, res, next) => {
   if (!CONTRACT_PATH.test(req.path)) return next();
-  req.requestId = req.get('x-request-id') || newId('req');
+  // The shared derivation, not a second inline one: this path had its own, which
+  // skipped the repeated-header split and broke correlation behind a proxy.
+  assignRequestId(req, res);
   req.userId = req.get('x-user-id') || null;
-  res.set('x-request-id', req.requestId);
   return contractRouter(req, res, next);
 });
 
@@ -94,21 +142,6 @@ app.use(identity);
 
 // JSON body parsing everywhere except the multipart upload route, which streams.
 
-app.use((req, res, next) => {
-  const started = performance.now();
-  res.on('finish', () => {
-    log.info('request', {
-      request_id: req.requestId,
-      user_id: req.userId,
-      method: req.method,
-      path: req.path,
-      status: res.statusCode,
-      duration_ms: Math.round(performance.now() - started),
-      ua: req.get('user-agent')?.slice(0, 80),
-    });
-  });
-  next();
-});
 
 app.get('/health.internal', async (req, res) => {
   let agent = { status: 'unreachable' };

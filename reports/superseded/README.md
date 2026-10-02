@@ -28,3 +28,39 @@ real. It is kept because the run that replaces it was taken after four fixes it
 could not have measured — Deep answers that never streamed to the client, the
 sweep spending outside the 24-call pool, branch allocations that stranded
 capacity, and termination labels that inverted which runs were curtailed.
+
+### What its recall@5 of 0.967 was actually measuring
+
+Lexical retrieval. BM25 alone.
+
+The run reported `vectorStore: atlas-vector-search`, which was read from
+configuration and not from anything that ran. The dense half of retrieval did
+not execute at all on the MongoDB path: `searchChunks` scored
+`chunk.embedding`, and `allChunks` fetches the corpus with
+`.project({ embedding: 0 })`, so every chunk failed the
+`Array.isArray(chunk.embedding)` guard and the dense ranking came back empty.
+`nearestChunks` — the function that issues `$vectorSearch` — had no callers in
+the codebase, and neither did the `memories_vector` index.
+
+Verified rather than reasoned about, on 2026-10-02 against a database holding
+real chunks: a stored chunk carries 1024 floats under `embedding`; the same
+chunk returned by `allChunks` has `embedding === undefined`.
+
+So 0.967 is a real number and it is not a number about vector search. It is the
+recall of BM25 over this corpus, and the `atlas-vector-search` label beside it
+is the thing that was wrong. The contract asks `/health` to name the live
+backend precisely because "a recall number is not comparable without it", and
+that is the comparison the label prevented anyone from making.
+
+Measured again on 2026-10-02 with `$vectorSearch` actually wired in — filters
+inside the stage on the paths the index declares, `numCandidates` 150 over
+`limit` 30, chunks dual-written with the camelCase keys `chunks_vector` filters
+on — **recall@5 is 39/39 = 1.000, with a dense contribution on all 39 queries**.
+That figure is retrieval measured at the `searchChunks` boundary rather than
+end to end through an answer, so it is not interchangeable with the benchmark's
+own recall@5; it is reported here because it is the before-and-after of the same
+measurement taken the same way.
+
+`bench-deployed-ec88475.json` is not edited. Read its recall figure as "BM25
+over the gold corpus", and read its `vectorStore` field as a configuration
+value that no query had earned.

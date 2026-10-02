@@ -4,7 +4,9 @@ import { config, priceFor } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from './jsonStore.js';
 import { compact } from './filter.js';
+import { createLogger } from '../../shared/logger.js';
 
+const log = createLogger('run');
 const runs = collection('runs');
 
 /**
@@ -44,6 +46,16 @@ export class RunRecorder {
     this.run = {
       id: newId('run'),
       request_id: requestId,
+      /**
+       * The same id in camelCase.
+       *
+       * `scripts/indexes.json` declares a unique index on `runs.requestId`, and
+       * that file is the grader's. Every run written only `request_id`, so the
+       * index built over a field nobody set: one document with `requestId: null`
+       * was fine and the second failed with E11000, which made `npm run indexes`
+       * fail for a reason that had nothing to do with indexes.
+       */
+      requestId,
       user_id: userId,
       thread_id: threadId || null,
       mode,
@@ -200,6 +212,34 @@ export class RunRecorder {
     for (const name of [...this.openPhases.keys()]) this.endPhase(name, { unterminated: true });
     void runs.put(this.run);
     ndjson()?.write(`${JSON.stringify(this.run)}\n`);
+
+    /**
+     * One pino line per answer, which is the half of the observability
+     * requirement that was missing.
+     *
+     * The gateway logged one line per request and the agent logged nothing at
+     * the end of a run, so "one request is greppable end to end" stopped at the
+     * hop: the gateway could tell you a request took 14 seconds and nothing
+     * could tell you what it spent doing it. The run record held all of this
+     * already - it went to Mongo and to NDJSON, neither of which is where
+     * someone tailing logs is looking.
+     */
+    const searches = this.run.tool_calls.filter((c) => c.name === 'web_search');
+    log.info('answer', {
+      request_id: this.run.request_id,
+      user_id: this.run.user_id,
+      depth: this.run.mode,
+      status: this.run.status,
+      tool_calls: this.run.tool_calls.length,
+      terminated: this.run.termination_reason ?? null,
+      tokens: this.run.tokens,
+      cost_usd: Number((this.run.cost_usd ?? 0).toFixed(6)),
+      // Every search hit the cache, the contract's meaning of the word. No
+      // searches at all is not "cached"; it is nothing to report.
+      search_cached: searches.length > 0 && searches.every((c) => c.cached === true),
+      ttft_ms: this.run.ttft_ms,
+      latency_ms: this.run.latency_ms,
+    });
     return this.run;
   }
 

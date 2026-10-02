@@ -46,12 +46,24 @@ const USER_ID_PATTERN = /^[A-Za-z0-9_.:-]{3,64}$/;
  * issuing step with a login and sets `req.userId` from the verified subject;
  * everything downstream already keys off `req.userId`.
  */
-export function identity(req, res, next) {
-  // A proxy may send x-request-id more than once, and Express joins repeated
-  // headers with ", ". Taking the first value keeps the id a single token
-  // instead of logging "abc123, abc123" and breaking correlation.
+/**
+ * One derivation of the request id, for every path.
+ *
+ * There were two. This one, and a second inline in `server.js` for the contract
+ * routes - which is the graded path, and which omitted the split below. A proxy
+ * may send `x-request-id` more than once and Express joins repeated headers with
+ * ", ", so that path logged "abc123, abc123" and the id stopped correlating
+ * anything. Reuse the inbound id, or mint one; either way the response carries
+ * it back so a caller can quote it.
+ */
+export function assignRequestId(req, res) {
   req.requestId = (req.get('x-request-id') || '').split(',')[0].trim() || newId('req');
   res.set('x-request-id', req.requestId);
+  return req.requestId;
+}
+
+export function identity(req, res, next) {
+  assignRequestId(req, res);
 
   const secret = config.gateway.authSecret;
   const cookies = parseCookies(req.get('cookie'));

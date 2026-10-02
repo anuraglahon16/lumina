@@ -106,7 +106,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
     // round trips to a remote database in front of a phase the SLA gives four
     // seconds end to end, and none of them depends on another's result.
     const [memories, docs, history] = await Promise.all([
-      searchMemories(query, { userId }).catch(() => []),
+      searchMemories(query, { userId, recorder }).catch(() => []),
       documentStats(userId, { spaceId }),
       threadContext(thread.id),
     ]);

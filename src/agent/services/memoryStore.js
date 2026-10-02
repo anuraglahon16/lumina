@@ -1,6 +1,7 @@
 import { config } from '../../shared/config.js';
 import { newId, sha256 } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
+import { compact } from '../store/filter.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
 import { nearestMemories } from './vectorStore.js';
 import { createLogger } from '../../shared/logger.js';
@@ -72,7 +73,7 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
   return record;
 }
 
-export async function searchMemories(query, { userId, topK = config.memory.injectTopK, nearest = nearestMemories } = {}) {
+export async function searchMemories(query, { userId, topK = config.memory.injectTopK, nearest = nearestMemories, recorder = null } = {}) {
   const { vector, provider } = await embedQuery(query);
   const queryTerms = new Set(tokenize(query));
 
@@ -102,36 +103,73 @@ export async function searchMemories(query, { userId, topK = config.memory.injec
     return denseWeight * dense + (1 - denseWeight) * overlap;
   };
 
+  /**
+   * Three cases, and they are not interchangeable.
+   *
+   *   the index answered with candidates  -> use them, and stop
+   *   the index could not answer (null)   -> there is no index to trust, so the
+   *                                          collection is the only source. This
+   *                                          is the in-process store and a local
+   *                                          mongod, where a scan is the design.
+   *   the index answered, with nothing    -> either the user has no matching
+   *                                          memories, or the index has not
+   *                                          caught up with a write made moments
+   *                                          ago. Only the second is a defect,
+   *                                          and only recent writes can be it.
+   *
+   * The last case is deliberately narrow. Scanning the whole collection there
+   * would turn every genuinely-empty recall into a full-collection cosine pass -
+   * the cost grows with how much a user remembers, and it would hide a broken
+   * index behind acceptable answers instead of surfacing it. A time-boxed query
+   * covers the lag and nothing else: a user with fifty old memories and an empty
+   * index result reads an empty result, which is the honest answer and is also
+   * the one that makes a real index failure visible.
+   */
   let ranked;
+  let path;
   if (fromIndex?.length) {
+    path = 'index';
     ranked = fromIndex.map((m) => ({ memory: m, score: scoreOf(m, m.score ?? 0) }));
-  } else {
-    /**
-     * An empty vector result is confirmed against the primary, not returned.
-     *
-     * Atlas Search is eventually consistent, and measured on this cluster a
-     * memory becomes searchable roughly half a second after the write commits.
-     * `save_memory` followed by a recall inside the same run is comfortably
-     * inside that window, so the index legitimately answers "nothing" for a
-     * memory that exists - and the user, who was just told it was saved, sees it
-     * forgotten. The collection itself is immediately consistent.
-     *
-     * The cost lands only on the empty case, which is also the cheap one: a user
-     * with no memories reads an empty list and stops.
-     */
+  } else if (!fromIndex) {
+    path = 'scan';
     const pool = await memories.all({ user_id: userId });
-    if (!pool.length) return [];
-    if (fromIndex) {
-      log.warn('memory_index_empty_scanning_primary', { user_id: userId, memories: pool.length });
+    if (!pool.length) {
+      recorder?.set({ memory_recall: { path, candidates: 0, returned: 0 } });
+      return [];
     }
     ranked = pool.map((m) => ({ memory: m, score: scoreOf(m, cosine(vector, m.embedding)) }));
+  } else {
+    path = 'recent-write';
+    const since = new Date(Date.now() - config.memory.recentWriteWindowMs).toISOString();
+    // ISO-8601 sorts lexicographically, so a string comparison is the date
+    // comparison, in both stores, with no parsing on either side.
+    const recent = await memories.all(compact({ user_id: userId, created_at: { $gte: since } }));
+    if (!recent.length) {
+      recorder?.set({ memory_recall: { path, window_ms: config.memory.recentWriteWindowMs, candidates: 0, returned: 0 } });
+      return [];
+    }
+    log.warn('memory_index_lagging_recent_writes', { user_id: userId, recent: recent.length, since });
+    ranked = recent.map((m) => ({ memory: m, score: scoreOf(m, cosine(vector, m.embedding)) }));
   }
 
-  return ranked
+  const out = ranked
     .filter((r) => r.score > floor)
     .sort((a, b) => b.score - a.score)
     .slice(0, topK)
     .map((r) => ({ ...publicMemory(r.memory), score: Number(r.score.toFixed(4)) }));
+
+  // Which path answered, in the run log. Without it, a recall that came from
+  // the lag fallback is indistinguishable from one the index served, and the
+  // fallback firing routinely is the signal that the index is not working.
+  recorder?.set({
+    memory_recall: {
+      path,
+      candidates: ranked.length,
+      returned: out.length,
+      ...(path === 'recent-write' ? { window_ms: config.memory.recentWriteWindowMs } : {}),
+    },
+  });
+  return out;
 }
 
 export async function listMemories(userId, opts = {}) {

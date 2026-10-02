@@ -291,7 +291,17 @@ export const config = {
       dailyLimit: num(process.env.DEEP_DAILY_LIMIT, 5),
       maxFetchesPerBranch: num(process.env.DEEP_BRANCH_MAX_FETCHES, 4),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
-      wallClockMs: num(process.env.DEEP_WALL_CLOCK_MS, 420000),
+      /**
+       * 240 seconds, because `expectations.json` says so.
+       *
+       * This was 420. `quality/check.mjs` fails any run whose `wallClockSec`
+       * exceeds `budget.maxWallClockSec`, which that file declares as 240 - so a
+       * deep run lasting between four and seven minutes passed the engine's own
+       * deadline and failed the grader, having spent the whole time to get there.
+       * `expectations.json` is the authority on this number and is not ours to
+       * edit; the engine is what was wrong.
+       */
+      wallClockMs: num(process.env.DEEP_WALL_CLOCK_MS, 240000),
       maxTokens: num(process.env.DEEP_MAX_TOKENS, 16000),
       maxRefunds: num(process.env.DEEP_BRANCH_MAX_REFUNDS, 3),
       effort: process.env.DEEP_EFFORT || 'high',
@@ -302,9 +312,15 @@ export const config = {
       // Deep branches are where depth is the point, so a branch reads until its
       // own budget says otherwise. 0 disables the early stop.
       sufficientSources: num(process.env.DEEP_SUFFICIENT_SOURCES, 0),
-      // Deep merges fifteen or more sources into a long answer, so it gets
-      // proportionally longer before a stall is assumed.
-      synthesisCeilingMs: num(process.env.DEEP_SYNTHESIS_CEILING_MS, 300000),
+      /**
+       * Deep merges fifteen or more sources into a long answer, so it gets
+       * proportionally longer before a stall is assumed - but not longer than
+       * the run it is part of. At 300000 the ceiling exceeded the whole deep
+       * envelope, which made it no ceiling at all: a stalled synthesis would
+       * have been stopped by the run deadline instead, five minutes later and
+       * reported as something else.
+       */
+      synthesisCeilingMs: num(process.env.DEEP_SYNTHESIS_CEILING_MS, 180000),
     },
   },
 
@@ -385,6 +401,17 @@ export const config = {
      * policy one.
      */
     extractEnabled: bool(process.env.MEMORY_EXTRACT_ENABLED, false),
+    /**
+     * How far back the recall fallback looks when the vector index answers
+     * "nothing".
+     *
+     * Atlas Search is eventually consistent; measured on the deployed cluster a
+     * memory becomes searchable roughly half a second after the write commits.
+     * Five seconds is an order of magnitude of headroom over that and still a
+     * window in which "created moments ago" is the only explanation for the
+     * index not knowing about it.
+     */
+    recentWriteWindowMs: num(process.env.MEMORY_RECENT_WRITE_WINDOW_MS, 5000),
   },
 
   logging: {

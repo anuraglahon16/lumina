@@ -93,7 +93,7 @@ function toTerminated(reason, status) {
  * UI's reducer parses every frame against a closed union, so an unknown event is
  * not ignored there, it is a validation error.
  */
-export function contractStream({ send, depth, answerId }) {
+export function contractStream({ send, depth, answerId, requestId = null }) {
   let step = 0;
   let sentSources = false;
   let sentToken = false;
@@ -188,7 +188,21 @@ export function contractStream({ send, depth, answerId }) {
       }
 
       case 'error':
-        send('error', { status: data?.status ?? 502, error: data?.message || 'the run failed' });
+        /**
+         * The error frame names the request, so a user can quote it.
+         *
+         * A 502 reached the browser with a status and a sentence and no way to
+         * tie it to anything: the id was in the response header and in both
+         * services' logs, but the frame the user actually sees carried none of
+         * it. `StreamErrorEvent` is a non-strict object, so the field validates
+         * and a schema parse drops it - it costs the contract nothing and makes
+         * the stream greppable from the one place a person is looking.
+         */
+        send('error', {
+          status: data?.status ?? 502,
+          error: data?.message || 'the run failed',
+          ...(requestId ? { requestId } : {}),
+        });
         return;
 
       default:

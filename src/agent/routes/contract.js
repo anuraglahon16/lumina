@@ -107,7 +107,7 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
   res.on('close', () => controller.abort());
 
   const answerId = newId('ans');
-  const emit = contractStream({ send: (event, data) => sse.send(event, data), depth, answerId });
+  const emit = contractStream({ send: (event, data) => sse.send(event, data), depth, answerId, requestId: req.requestId });
 
   try {
     const run = depth === 'deep' ? runDeepQuery : runQuickQuery;

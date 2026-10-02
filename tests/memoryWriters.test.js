@@ -83,6 +83,64 @@ test('a memory the index has not caught up with is still recalled', async () => 
   assert.match(recalled[0].content, /metric/, 'and the memory that exists is the one recalled');
 });
 
+test('the time-boxed read is actually time-boxed', async () => {
+  // The assertion above counts reads; this one checks the filter, so a read that
+  // is unfiltered cannot pass by being a single read.
+  const { saveMemory, searchMemories, clearMemories } = await import('../src/agent/services/memoryStore.js');
+  const { collection } = await import('../src/agent/store/jsonStore.js');
+  const userId = `usr_window_${Math.random().toString(36).slice(2, 8)}`;
+  await clearMemories(userId);
+  await saveMemory({ userId, content: 'Prefers metric units.', kind: 'preference', source: 'agent' });
+
+  const memories = collection('memories');
+  const realAll = memories.all.bind(memories);
+  const filters = [];
+  memories.all = async (filter) => {
+    filters.push(filter);
+    return realAll(filter);
+  };
+  try {
+    await searchMemories('units?', { userId, topK: 3, nearest: async () => [] });
+    assert.equal(filters.length, 1, 'one read');
+    assert.ok(filters[0]?.created_at?.$gte, `the read is bounded by created_at, got ${JSON.stringify(filters[0])}`);
+    const since = Date.parse(filters[0].created_at.$gte);
+    const age = Date.now() - since;
+    assert.ok(age > 0 && age <= 30_000, `the window is seconds, not open-ended: ${age}ms`);
+  } finally {
+    memories.all = realAll;
+  }
+});
+
+test('the run log says which path answered the recall', async () => {
+  const { saveMemory, searchMemories, clearMemories } = await import('../src/agent/services/memoryStore.js');
+  const userId = `usr_path_${Math.random().toString(36).slice(2, 8)}`;
+  await clearMemories(userId);
+  const saved = await saveMemory({ userId, content: 'Prefers metric units.', kind: 'preference', source: 'agent' });
+
+  const record = (patch) => Object.assign(seen, patch);
+  const seen = {};
+  const recorder = { set: record };
+
+  await searchMemories('units?', { userId, topK: 3, nearest: async () => [{ ...saved, score: 0.9 }], recorder });
+  assert.equal(seen.memory_recall?.path, 'index', 'an index answer is recorded as such');
+
+  const seen2 = {};
+  await searchMemories('units?', { userId, topK: 3, nearest: async () => [], recorder: { set: (p) => Object.assign(seen2, p) } });
+  assert.equal(seen2.memory_recall?.path, 'recent-write', 'and the fallback is named, not silent');
+  assert.equal(seen2.memory_recall?.window_ms, 5000, 'with the window it used');
+
+  const seen3 = {};
+  await searchMemories('units?', { userId, topK: 3, nearest: async () => null, recorder: { set: (p) => Object.assign(seen3, p) } });
+  assert.equal(seen3.memory_recall?.path, 'scan', 'no index at all is a scan, and says so');
+});
+
+test('both callers pass the recorder, or the path never reaches the log', () => {
+  for (const f of ['src/agent/core/quick.js', 'src/agent/core/deep.js']) {
+    const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.match(src, /searchMemories\(query, \{ userId, recorder \}\)/, `${f} passes the recorder`);
+  }
+});
+
 test('a user with no memories still gets an empty list, not a scan result', async () => {
   const { searchMemories, clearMemories } = await import('../src/agent/services/memoryStore.js');
   const userId = `usr_empty_${Math.random().toString(36).slice(2, 8)}`;
