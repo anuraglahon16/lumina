@@ -43,13 +43,80 @@ export function configuredVectorBackend() {
  * what the code would do, marked as not yet exercised.
  */
 let observed = null;
+let probeStatus = 'not_probed';
 
 export function noteRetrievalBackend(name) {
   if (name && name !== 'none') observed = name;
 }
 
+/**
+ * Ask each vector index, once, at boot, whether it can actually be queried.
+ *
+ * Without this `/health` has nothing to report until the first search, and the
+ * benchmark reads `/health` before it asks anything - so the header of every run
+ * recorded a claim that had never been tested. Worse, the claim was the
+ * configured value, which was wrong for months: the index the code names did not
+ * exist, its dimensions did not match the embedder, and its filter paths were
+ * camelCase against snake_case documents. A query returning nothing looks exactly
+ * like a corpus that is empty.
+ *
+ * One minimal `$vectorSearch` per index, with a filter that deliberately matches
+ * nothing. Success means the index exists, accepts this vector width, and accepts
+ * these filter paths - which is everything that was wrong. Failure is recorded
+ * and reported; it never stops the agent from starting, because retrieval still
+ * works by scanning and a refusal to boot would turn a degraded search into an
+ * outage.
+ */
+export async function probeVectorIndexes() {
+  if (!mongoEnabled()) {
+    probeStatus = 'skipped: no MONGODB_URI';
+    return probeStatus;
+  }
+  const dim = config.mongo.vectorDim;
+  // Not a zero vector: Atlas refuses cosine similarity against one, which makes
+  // a healthy index look broken. A unit vector along one axis is valid and
+  // matches nothing meaningful.
+  const probeVector = Array.from({ length: dim }, (_, i) => (i === 0 ? 1 : 0));
+  const targets = [
+    { collection: 'chunks', index: config.mongo.vectorIndex, filter: { userId: '__probe__' } },
+    { collection: 'memories', index: config.mongo.memoryVectorIndex, filter: { userId: '__probe__' } },
+  ];
+
+  const failures = [];
+  for (const t of targets) {
+    try {
+      const col = (await mongoDb()).collection(t.collection);
+      await col
+        .aggregate([
+          { $vectorSearch: { index: t.index, path: 'embedding', queryVector: probeVector, numCandidates: 10, limit: 1, filter: t.filter } },
+          { $limit: 1 },
+        ])
+        .toArray();
+    } catch (err) {
+      failures.push(`${t.collection}/${t.index}: ${String(err.message).split('\n')[0].slice(0, 120)}`);
+    }
+  }
+
+  if (failures.length) {
+    probeStatus = `probe_failed: ${failures.join(' | ')}`;
+    log.warn('vector_probe_failed', { detail: probeStatus });
+  } else {
+    probeStatus = 'ok: both indexes answered at boot';
+    // An index that answers a query is the backend that will serve one.
+    observed = observed ?? 'atlas-vector-search';
+    log.info('vector_probe_ok', { indexes: targets.map((t) => t.index) });
+  }
+  return probeStatus;
+}
+
+/** What the boot probe found. Reported beside the backend so a claim carries its evidence. */
+export function vectorBackendStatus() {
+  return probeStatus;
+}
+
 export function retrievalBackend() {
   if (observed) return observed;
+  if (probeStatus.startsWith('probe_failed')) return `${configuredVectorBackend()} (unavailable: boot probe failed)`;
   return `${configuredVectorBackend()} (unverified: no retrieval yet)`;
 }
 

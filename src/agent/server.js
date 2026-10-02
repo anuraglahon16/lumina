@@ -11,6 +11,7 @@ import { documentsRouter } from './routes/documents.js';
 import { observabilityRouter } from './routes/observability.js';
 import { contractRouter } from './routes/contract.js';
 import { jobQueue } from './services/jobs.js';
+import { probeVectorIndexes } from './services/vectorStore.js';
 import './services/ingest.js'; // registers the index_document job handler
 
 const log = createLogger('agent');
@@ -67,6 +68,21 @@ const host = process.env.AGENT_HOST || '127.0.0.1';
 // Jobs left running by a previous process are reconciled once the store is
 // reachable, rather than in a constructor that cannot await.
 jobQueue.reconcile().catch((err) => log.warn('job_reconcile_failed', { err: err.message }));
+
+/**
+ * Ask the vector indexes, once, whether they can be queried at all.
+ *
+ * `/health` is read by the benchmark before it asks anything, so without this the
+ * header of every run recorded an untested claim - and the claim was the
+ * configured value, which was wrong: the index the code named did not exist, and
+ * a `$vectorSearch` against a missing index returns nothing rather than failing.
+ *
+ * Deliberately not awaited and never fatal. Retrieval still works by scanning, so
+ * refusing to boot would turn a degraded search into an outage.
+ */
+probeVectorIndexes()
+  .then((status) => log.info('vector_probe', { status }))
+  .catch((err) => log.warn('vector_probe_threw', { err: err.message }));
 
 const server = app.listen(config.agent.port, host, () => {
   log.info('agent_listening', {

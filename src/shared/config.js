@@ -65,8 +65,24 @@ export const config = {
     uri: process.env.MONGODB_URI || undefined,
     db: process.env.MONGODB_DB || 'lumina',
     vectorBackend: process.env.VECTOR_BACKEND || (process.env.MONGODB_URI?.includes('mongodb+srv') ? 'atlas-vector-search' : 'mongo-cosine-scan'),
-    vectorIndex: process.env.VECTOR_INDEX || 'chunk_vector_index',
-    vectorDim: num(process.env.VECTOR_DIM, 1024),
+    /**
+     * The names in scripts/indexes.json, which is what actually exists on Atlas.
+     *
+     * This defaulted to `chunk_vector_index`, and no index by that name has ever
+     * been created - `npm run indexes` builds `chunks_vector`. A `$vectorSearch`
+     * against a missing index does not throw, it returns nothing, so the dense
+     * half of retrieval was silently contributing zero while health reported
+     * `atlas-vector-search`.
+     */
+    vectorIndex: process.env.VECTOR_INDEX || 'chunks_vector',
+    memoryVectorIndex: process.env.MEMORY_VECTOR_INDEX || 'memories_vector',
+    /**
+     * 1536, to match scripts/indexes.json and text-embedding-3-small.
+     *
+     * It was 1024, which matched neither: the index is built for 1536 and the
+     * active embedder produced 512. Three numbers, no two the same.
+     */
+    vectorDim: num(process.env.VECTOR_DIM, 1536),
   },
 
   /**

@@ -7,7 +7,7 @@ import { cache } from '../services/cache.js';
 import { searchHealth, resolveProviders } from '../services/search/index.js';
 import { resolveEmbeddingProvider } from '../services/embeddings.js';
 import { breakerReport } from '../../shared/circuitBreaker.js';
-import { retrievalBackend } from '../services/vectorStore.js';
+import { retrievalBackend, vectorBackendStatus } from '../services/vectorStore.js';
 import { pingMongo, mongoEnabled } from '../store/mongo.js';
 
 export const observabilityRouter = express.Router();
@@ -31,6 +31,7 @@ observabilityRouter.get('/health', async (req, res) => {
       // should never be mistaken for the indexed one.
       store: mongoEnabled() ? 'mongodb' : 'json',
       vector_backend: retrievalBackend(),
+      vector_backend_status: vectorBackendStatus(),
       mongo: await pingMongo(),
       // A tripped breaker is why calls are failing fast, so health says so
       // rather than leaving it to be inferred from errors.

@@ -10,7 +10,7 @@ import { contractStream, __testing as contractMap } from '../../gateway/contract
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
-import { retrievalBackend } from '../services/vectorStore.js';
+import { retrievalBackend, vectorBackendStatus } from '../services/vectorStore.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
 import { reserveDeepRun } from '../services/deepQuota.js';
 import { listDocuments } from '../services/ragStore.js';
@@ -336,6 +336,8 @@ contractRouter.get('/health', async (req, res) => {
     // record of the stack under test, which means the wrong backend was written
     // into the header of every run.
     vectorStore: retrievalBackend(),
+    // The evidence behind the claim above, so a reader need not take it on trust.
+    vectorBackendStatus: vectorBackendStatus(),
     db,
     version: '1.0.0',
   });

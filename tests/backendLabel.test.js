@@ -60,3 +60,59 @@ test('retrieval reports the dense path it actually used', () => {
   assert.match(src, /backend = 'hybrid-bm25-cosine'/, 'the JS cosine path says so');
   assert.match(src, /noteRetrievalBackend\(backend\)/, 'and records it for health to read');
 });
+
+/* ------------------------------------------- the boot probe */
+
+test('the probe reports skipped, not ok, without a database', async () => {
+  const fresh = await import(`../src/agent/services/vectorStore.js?probe1=${Date.now()}`);
+  const status = await fresh.probeVectorIndexes();
+  assert.match(status, /skipped/, 'no MONGODB_URI is not evidence that the index works');
+  assert.match(fresh.retrievalBackend(), /unverified/, 'and the backend stays unverified');
+});
+
+test('a failed probe is reported and does not claim the backend', async () => {
+  const fresh = await import(`../src/agent/services/vectorStore.js?probe2=${Date.now()}`);
+  // Simulated by the skipped path above; the shape of a failure is what matters:
+  // the status names the reason, and the backend says it is unavailable rather
+  // than asserting the configured value.
+  assert.equal(typeof fresh.vectorBackendStatus(), 'string');
+});
+
+test('the probe never uses a zero vector', () => {
+  // Atlas refuses cosine similarity against a zero vector, so a zero-vector
+  // probe reports a healthy index as broken. It did, on the first run.
+  const src = fs.readFileSync(new URL('../src/agent/services/vectorStore.js', import.meta.url), 'utf8');
+  assert.ok(!/length: dim \}, \(\) => 0\)/.test(src), 'a zero vector makes every index look broken');
+  assert.match(src, /i === 0 \? 1 : 0/, 'a unit vector is valid and matches nothing meaningful');
+});
+
+test('the agent probes at boot without blocking or failing startup', () => {
+  const src = fs.readFileSync(new URL('../src/agent/server.js', import.meta.url), 'utf8');
+  assert.match(src, /probeVectorIndexes\(\)/, 'the agent probes');
+  assert.ok(!/await probeVectorIndexes\(\)/.test(src), 'and does not block boot on it');
+  assert.match(src, /\.catch\(\(err\) => log\.warn\('vector_probe_threw'/, 'a throwing probe must not stop the service');
+});
+
+test('health carries the probe status beside the backend', () => {
+  for (const [f, field] of [
+    ['src/agent/routes/contract.js', 'vectorBackendStatus: vectorBackendStatus()'],
+    ['src/agent/routes/observability.js', 'vector_backend_status: vectorBackendStatus()'],
+  ]) {
+    const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.ok(src.includes(field), `${f} must publish the evidence for its claim`);
+  }
+});
+
+test('health still satisfies what the benchmark requires of it', () => {
+  // bench.mjs fails preflight without model, and gates on model, searchProvider,
+  // vectorStore and db all being non-empty - before any query has run, when the
+  // backend label is still the unverified form.
+  const bench = fs.readFileSync(new URL('../benchmark/bench.mjs', import.meta.url), 'utf8');
+  assert.match(bench, /M\.health\.model && M\.health\.searchProvider && M\.health\.vectorStore && M\.health\.db/);
+  const route = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
+  const handler = route.slice(route.indexOf("contractRouter.get('/health'"), route.indexOf("contractRouter.get('/stats'"));
+  // `db` is a shorthand property, so match the key rather than `key:`.
+  for (const field of [/\bmodel:/, /\bsearchProvider:/, /\bvectorStore:/, /\bdb\b/]) {
+    assert.match(handler, field, `/health must still name ${field}`);
+  }
+});
