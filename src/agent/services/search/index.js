@@ -1,6 +1,8 @@
 import * as cheerio from 'cheerio';
 import { config } from '../../../shared/config.js';
-import { cached } from '../cache.js';
+import { cached, cache } from '../cache.js';
+import { searchCacheId, readSearchCache, writeSearchCache } from './searchCache.js';
+import { cacheKey } from '../../../shared/ids.js';
 import { createLogger } from '../../../shared/logger.js';
 import { breaker } from '../../../shared/circuitBreaker.js';
 
@@ -224,9 +226,52 @@ export async function webSearch(query, { limit = config.search.resultsPerQuery, 
   if (!trimmed) return { results: [], provider: null, cached: false, degraded: false };
 
   const order = resolveProviders();
-  const { value, cached: wasCached } = await cached(
+  const provider0 = order[0];
+  const normalized = searchCacheKey(trimmed);
+
+  /**
+   * Three tiers, in order: in-process LRU, the durable `searchCache` collection,
+   * then the provider.
+   *
+   * The LRU is fast and dies with the process. The collection is what makes a
+   * restart cheap and what the spec actually asks for - it was never written
+   * before, so every redeploy paid full price for questions already answered.
+   * A hit in the durable tier fills the LRU on the way back, so the second ask
+   * in the same process does not go to the database either.
+   */
+  const lruKey = { q: normalized, limit, order: provider0 };
+  const durableId = searchCacheId(normalized, provider0);
+
+  const fromLru = await cache.get(cacheKey('search', lruKey));
+  if (fromLru) {
+    recorder?.recordCache({ namespace: 'search', hit: true, tier: fromLru.tier });
+    return {
+      results: fromLru.value.results,
+      provider: fromLru.value.provider,
+      cached: true,
+      degraded: fromLru.value.provider === 'duckduckgo',
+      provider_errors: fromLru.value.errors || [],
+    };
+  }
+
+  const fromDurable = await readSearchCache(durableId);
+  if (fromDurable) {
+    recorder?.recordCache({ namespace: 'search', hit: true, tier: 'mongo' });
+    const value = { results: fromDurable.results, provider: fromDurable.provider, errors: [] };
+    // Fill the fast tier so the next ask in this process skips the round trip.
+    await cache.set(cacheKey('search', lruKey), value, config.cache.searchTtlMs);
+    return {
+      results: value.results,
+      provider: value.provider,
+      cached: true,
+      degraded: value.provider === 'duckduckgo',
+      provider_errors: [],
+    };
+  }
+
+  const { value } = await cached(
     'search',
-    { q: searchCacheKey(trimmed), limit, order: order[0] },
+    lruKey,
     config.cache.searchTtlMs,
     async () => {
       const errors = [];
@@ -261,13 +306,25 @@ export async function webSearch(query, { limit = config.search.resultsPerQuery, 
     recorder,
     // Never memoize a search that found nothing. The next attempt deserves a
     // real try rather than a cached failure.
-    (value) => value.results.length > 0,
+    (v) => v.results.length > 0,
   );
+
+  // Write through to the durable tier on the same condition: a search that found
+  // nothing, or failed, is not an answer worth keeping.
+  if (value.results.length && value.provider) {
+    await writeSearchCache({
+      id: searchCacheId(normalized, value.provider),
+      provider: value.provider,
+      query: trimmed,
+      results: value.results,
+      ttlMs: config.cache.searchTtlMs,
+    });
+  }
 
   return {
     results: value.results,
     provider: value.provider,
-    cached: wasCached,
+    cached: false,
     degraded: value.provider === 'duckduckgo',
     provider_errors: value.errors || [],
   };
