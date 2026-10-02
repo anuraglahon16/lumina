@@ -229,3 +229,86 @@ test('the claim is guarded in one place, not asserted at each reader', () => {
   assert.match(src, /servedByVectorSearch/, 'a single flag decides whether the name is earned');
   assert.match(src, /backend_claim_rejected/, 'and a rejected claim is logged rather than silently dropped');
 });
+
+/* ------------------------------------------- results and the label they carry */
+
+/**
+ * Retrieval cannot return results labelled `atlas-vector-search` unless an
+ * aggregation produced them.
+ *
+ * The two were independent before: the label came from configuration, the
+ * results from a scan (or, on Mongo, from BM25 alone). Now the label is set in
+ * the same branch that returns the candidates, so the only way to publish it is
+ * to have run the stage. This pins that structure, because it is what makes the
+ * recall figure comparable to anything.
+ */
+test('the backend label is set in the same branch that returns the candidates', () => {
+  const vs = fs.readFileSync(new URL('../src/agent/services/vectorStore.js', import.meta.url), 'utf8');
+  // putChunks sits before nearestChunks, so slice forward to the next export.
+  const start = vs.indexOf('export async function nearestChunks');
+  const fn = vs.slice(start, vs.indexOf('\nexport ', start + 10));
+
+  // The claim and the return are adjacent and inside the try that ran the pipeline.
+  assert.match(
+    fn,
+    /const candidates = await col\.aggregate\(pipeline\)\.toArray\(\);[\s\S]{0,200}noteVectorSearchServed\(\);\s*\n\s*return \{ backend: 'atlas-vector-search', candidates \};/,
+    'the label is returned by the code that ran the aggregation, not chosen before it',
+  );
+  // And the scan returns its own name, so a degrade is reported as a degrade.
+  assert.match(fn, /return \{ backend: 'mongo-cosine-scan', candidates: scored \};/, 'a scan says it scanned');
+  /**
+   * Nothing else in the module may mint the claim.
+   *
+   * Counted over code only - the literal appears in prose here several times,
+   * because the history of this label is most of what the comments are about.
+   * In code it is legitimate in exactly five places, each named below: one
+   * assignment, one guard, one return, and two questions about which branch to
+   * take - which are about configuration and claim nothing.
+   */
+  const code = vs
+    .split('\n')
+    .filter((l) => !/^\s*(\/\/|\*|\/\*)/.test(l))
+    .join('\n');
+  const sites = code
+    .split('\n')
+    .filter((l) => l.includes("'atlas-vector-search'"))
+    .map((l) => l.trim());
+  assert.deepEqual(
+    sites,
+    [
+      // The one assignment, inside noteVectorSearchServed.
+      "observed = 'atlas-vector-search';",
+      // The guard that rejects anyone else setting it.
+      "if (name === 'atlas-vector-search' && !servedByVectorSearch) {",
+      // Choosing the chunks branch - a question about configuration, not a claim.
+      "if (config.mongo.vectorBackend === 'atlas-vector-search') {",
+      // The one return, beside the aggregation that earned it.
+      "return { backend: 'atlas-vector-search', candidates };",
+      // The same question for memories.
+      "if (config.mongo.vectorBackend !== 'atlas-vector-search') return null;",
+    ],
+    'a new place naming this backend is a new place it can be claimed without being earned',
+  );
+});
+
+test('searchChunks publishes whatever nearestChunks reported, never a configured value', () => {
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  const dense = rag.slice(rag.indexOf('async function denseFromIndex'), rag.indexOf('export async function searchChunks'));
+  assert.match(dense, /const \{ backend: served, candidates \} = await nearestChunks\(/, 'the backend comes back with the candidates');
+  assert.match(dense, /return \{ dense, provider, backend: served \}/, 'and is passed through unchanged');
+  assert.ok(
+    !/backend: 'atlas-vector-search'/.test(dense),
+    'the dense path never names the backend itself',
+  );
+});
+
+test('an empty corpus claims no backend at all', () => {
+  // A corpus of nothing was searched by nothing. Naming a backend there is the
+  // configured-value habit in its last hiding place.
+  const rag = fs.readFileSync(new URL('../src/agent/services/ragStore.js', import.meta.url), 'utf8');
+  assert.match(
+    rag,
+    /noteRetrievalBackend\(backend === 'in-process' \? backend : 'none'\)/,
+    'an empty Mongo corpus reports none, not the backend that would have served',
+  );
+});

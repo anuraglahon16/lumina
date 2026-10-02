@@ -72,7 +72,7 @@ export async function saveMemory({ userId, content, kind = 'fact', source = 'age
   return record;
 }
 
-export async function searchMemories(query, { userId, topK = config.memory.injectTopK } = {}) {
+export async function searchMemories(query, { userId, topK = config.memory.injectTopK, nearest = nearestMemories } = {}) {
   const { vector, provider } = await embedQuery(query);
   const queryTerms = new Set(tokenize(query));
 
@@ -92,7 +92,7 @@ export async function searchMemories(query, { userId, topK = config.memory.injec
    * unchanged, because it needs no vectors and is what keeps a local-embedded
    * memory reachable.
    */
-  const fromIndex = await nearestMemories(vector, { userId, limit: Math.max(topK * 4, 20) });
+  const fromIndex = await nearest(vector, { userId, limit: Math.max(topK * 4, 20) });
   const scoreOf = (m, dense) => {
     const terms = m.tokens?.length ? new Set(m.tokens) : new Set();
     let shared = 0;
@@ -102,11 +102,30 @@ export async function searchMemories(query, { userId, topK = config.memory.injec
     return denseWeight * dense + (1 - denseWeight) * overlap;
   };
 
-  const ranked = fromIndex
-    ? fromIndex.map((m) => ({ memory: m, score: scoreOf(m, m.score ?? 0) }))
-    : (await memories.all({ user_id: userId })).map((m) => ({ memory: m, score: scoreOf(m, cosine(vector, m.embedding)) }));
-
-  if (!ranked.length) return [];
+  let ranked;
+  if (fromIndex?.length) {
+    ranked = fromIndex.map((m) => ({ memory: m, score: scoreOf(m, m.score ?? 0) }));
+  } else {
+    /**
+     * An empty vector result is confirmed against the primary, not returned.
+     *
+     * Atlas Search is eventually consistent, and measured on this cluster a
+     * memory becomes searchable roughly half a second after the write commits.
+     * `save_memory` followed by a recall inside the same run is comfortably
+     * inside that window, so the index legitimately answers "nothing" for a
+     * memory that exists - and the user, who was just told it was saved, sees it
+     * forgotten. The collection itself is immediately consistent.
+     *
+     * The cost lands only on the empty case, which is also the cheap one: a user
+     * with no memories reads an empty list and stops.
+     */
+    const pool = await memories.all({ user_id: userId });
+    if (!pool.length) return [];
+    if (fromIndex) {
+      log.warn('memory_index_empty_scanning_primary', { user_id: userId, memories: pool.length });
+    }
+    ranked = pool.map((m) => ({ memory: m, score: scoreOf(m, cosine(vector, m.embedding)) }));
+  }
 
   return ranked
     .filter((r) => r.score > floor)
