@@ -16,6 +16,21 @@ const OPERATORS = new Set(['$in', '$nin', '$ne', '$exists', '$gte', '$lte', '$gt
 
 export function matchesFilter(item, filter = {}) {
   for (const [field, condition] of Object.entries(filter)) {
+    /**
+     * `$or` is a top-level combinator, not a field.
+     *
+     * Added because claiming a job needs "queued, or running with a lapsed
+     * lease" as one condition: the claim has to be a single conditional write,
+     * and splitting it into two queries reintroduces the read-then-decide gap
+     * it exists to close. Without this the JSON store treated `$or` as a field
+     * name, found nothing, and the queue silently stopped draining.
+     */
+    if (field === '$or') {
+      const branches = Array.isArray(condition) ? condition : [];
+      if (!branches.some((branch) => matchesFilter(item, branch))) return false;
+      continue;
+    }
+
     const value = item?.[field];
 
     if (condition && typeof condition === 'object' && !Array.isArray(condition)) {

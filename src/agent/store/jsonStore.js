@@ -16,6 +16,8 @@ const UNWRITABLE = new Set(['ENOENT', 'EROFS', 'EACCES', 'EPERM', 'ENOTDIR', 'EN
  * this one module, nothing else.
  */
 export class Collection {
+  #claimChain = Promise.resolve();
+
   constructor(name, { dir = config.agent.dataDir } = {}) {
     this.name = name;
     this.file = path.join(dir, `${name}.json`);
@@ -131,6 +133,25 @@ export class Collection {
     let n = 0;
     for (const item of this.items.values()) if (matchesFilter(item, filter)) n += 1;
     return n;
+  }
+
+  /**
+   * The same conditional-claim contract as the Mongo collection.
+   *
+   * There is no atomic primitive here, so claims are serialised through one
+   * promise chain. That is sound for a single process - which is all the local
+   * JSON store ever serves - and the deployed path uses Mongo, where the claim
+   * is one `findOneAndUpdate`.
+   */
+  async claimOne(filter, patch, { sortKey = 'created_at' } = {}) {
+    this.#claimChain = this.#claimChain.then(async () => {
+      const candidates = [...this.items.values()].filter((item) => matchesFilter(item, filter));
+      candidates.sort((a, b) => String(a[sortKey] ?? '').localeCompare(String(b[sortKey] ?? '')));
+      const chosen = candidates[0];
+      if (!chosen) return null;
+      return this.put({ ...chosen, ...patch });
+    }, () => null);
+    return this.#claimChain;
   }
 
   /** Every matching row, for callers that must scan (BM25 over a corpus). */

@@ -14,7 +14,6 @@ const jobs = collection('jobs');
  * which is why every handler is registered by name rather than by closure.
  */
 class JobQueue extends EventEmitter {
-  #claimChain = Promise.resolve();
 
   constructor({ concurrency = 2 } = {}) {
     super();
@@ -128,31 +127,47 @@ class JobQueue extends EventEmitter {
    * winner.
    */
   async claimNext({ types, workerId, leaseMs = 60_000 } = {}) {
-    const wanted = new Set(types ?? []);
-    this.#claimChain = this.#claimChain.then(async () => {
-      const now = Date.now();
-      const { items } = await jobs.list({}, { limit: 500, sortKey: 'created_at', desc: false });
-      const candidate = items.find((job) => {
-        if (!wanted.has(job.type)) return false;
-        if (job.status === 'queued') return true;
+    const now = Date.now();
+    const nowIso = new Date(now).toISOString();
+    const patch = {
+      status: 'running',
+      worker_id: workerId ?? null,
+      lease_until: new Date(now + leaseMs).toISOString(),
+      started_at: nowIso,
+      stage: 'claimed',
+    };
+
+    /**
+     * One conditional write, pushed down to the store.
+     *
+     * This used to list the oldest 500 jobs of any status, pick a candidate in
+     * JavaScript, then patch it. Two defects, both real:
+     *
+     * - Read-then-write is not a claim. Serialising inside one process made the
+     *   single-process test pass and proved nothing about two: both workers saw
+     *   the same queued row, both patched it to running, and both ran the job.
+     *   The lease guards a later claim, never a concurrent one.
+     * - The scan asked for 500 rows of *any* status, oldest first. Once 500 jobs
+     *   existed - and most of them finished - the window held only completed
+     *   work and newly queued jobs were never seen. The queue stopped draining,
+     *   silently.
+     *
+     * The filter now selects only claimable rows, and the store performs the
+     * match and the write together: `findOneAndUpdate` under Mongo, a serialised
+     * chain under the local JSON store where there is only one process anyway.
+     */
+    const claimable = {
+      type: { $in: types ?? [] },
+      $or: [
+        { status: 'queued' },
         // A running job whose lease has lapsed is abandoned, not owned.
-        if (job.status !== 'running') return false;
-        const until = job.lease_until ? Date.parse(job.lease_until) : 0;
-        return !Number.isNaN(until) && until <= now;
-      });
-      if (!candidate) return null;
-      const claimed = await jobs.patch(candidate.id, {
-        status: 'running',
-        worker_id: workerId ?? null,
-        lease_until: new Date(now + leaseMs).toISOString(),
-        attempts: candidate.status === 'queued' ? candidate.attempts : candidate.attempts,
-        started_at: candidate.started_at ?? new Date().toISOString(),
-        stage: 'claimed',
-      });
-      if (claimed) this.emit('update', claimed);
-      return claimed;
-    }, () => null);
-    return this.#claimChain;
+        { status: 'running', lease_until: { $lte: nowIso } },
+      ],
+    };
+
+    const claimed = await jobs.claimOne(claimable, patch, { sortKey: 'created_at' });
+    if (claimed) this.emit('update', claimed);
+    return claimed ?? null;
   }
 
   /** Extend the lease on a job this worker still owns. */

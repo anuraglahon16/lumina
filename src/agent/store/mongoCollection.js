@@ -85,5 +85,25 @@ export class MongoCollection {
   }
 
   /** Writes land immediately, so there is nothing buffered to flush. */
+  /**
+   * Claim one document matching `filter`, atomically.
+   *
+   * One `findOneAndUpdate` is the whole point: read-then-write cannot be made
+   * safe across processes by serialising inside one of them. Two workers both
+   * saw the same queued job, both patched it to running, and both ran it - the
+   * lease guards a later claim, never a concurrent one.
+   */
+  async claimOne(filter, patch, { sortKey = 'created_at' } = {}) {
+    const col = await this.#col();
+    const res = await col.findOneAndUpdate(
+      filter,
+      { $set: { ...patch, updated_at: new Date().toISOString() } },
+      { sort: { [sortKey]: 1 }, returnDocument: 'after', projection: { _id: 0 } },
+    );
+    // Driver versions differ on whether the document is the result or on .value.
+    const doc = res && Object.prototype.hasOwnProperty.call(res, 'value') ? res.value : res;
+    return doc?.id ? doc : null;
+  }
+
   async flush() {}
 }
