@@ -149,6 +149,9 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
     userId: doc.user_id,
     spaceId: doc.space_id ?? null,
     docId: doc.id,
+    // The second half of the declared `{ docId: 1, ord: 1 }` index, which was
+    // never written: the chunk's position carried only the name `index`.
+    ord: chunk.index,
     filename: doc.filename,
     index: chunk.index,
     page: chunk.page,

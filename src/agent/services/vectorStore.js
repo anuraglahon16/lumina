@@ -169,17 +169,40 @@ export function vectorBackend() {
 export async function putChunks(records) {
   if (!records.length) return 0;
   const col = (await mongoDb()).collection('chunks');
-  // Re-indexing a document replaces its chunks rather than accumulating them.
-  const ops = records.map((r) => ({
-    replaceOne: { filter: { chunk_id: r.chunk_id }, replacement: r, upsert: true },
-  }));
-  const res = await col.bulkWrite(ops, { ordered: false });
-  return (res.upsertedCount || 0) + (res.modifiedCount || 0);
+
+  /**
+   * Delete this document's chunks, then insert the new ones. Two writes, not N.
+   *
+   * This was one `bulkWrite` of N `replaceOne … upsert` operations keyed on
+   * `chunk_id` — and `chunk_id` is not indexed. `scripts/indexes.json` declares
+   * `{ docId: 1, ord: 1 }` and `{ spaceId: 1 }` on this collection and nothing
+   * else, so every upsert was a **collection scan**: ten scans of a growing
+   * collection to index a ten-chunk document. Verified with `explain`:
+   * `find({chunk_id})` and `find({doc_id})` are both COLLSCAN, `find({docId})`
+   * is IXSCAN.
+   *
+   * That is the worker's write pressure, and it is what made the acceptance path
+   * slow while anything was indexing — measured on the cluster-adjacent machine,
+   * GridFS p95 went 33ms → 627ms and the job insert 73ms → 628ms during ingest,
+   * while the document insert was untouched.
+   *
+   * Delete-then-insert keeps re-indexing idempotent, which is what the upsert was
+   * for. The delete uses `docId`, the one path with an index behind it.
+   */
+  const docIds = [...new Set(records.map((r) => r.docId ?? r.doc_id).filter(Boolean))];
+  if (docIds.length) await col.deleteMany({ docId: { $in: docIds } });
+  const res = await col.insertMany(records, { ordered: false });
+  return res.insertedCount || 0;
 }
 
 export async function deleteChunksForDoc(docId) {
   const col = (await mongoDb()).collection('chunks');
-  const res = await col.deleteMany({ doc_id: docId });
+  /**
+   * By `docId`, the indexed path. `doc_id` is a COLLSCAN: the declared index is
+   * `{ docId: 1, ord: 1 }`, and deleting a document's chunks by the snake_case
+   * field scanned the collection. Both are written, so this is a free change.
+   */
+  const res = await col.deleteMany({ docId });
   return res.deletedCount || 0;
 }
 

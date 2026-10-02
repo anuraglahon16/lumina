@@ -1,3 +1,4 @@
+import { createLogger } from '../../shared/logger.js';
 /**
  * Translate this engine's stream into the assignment's SSE contract.
  *
@@ -93,6 +94,72 @@ function toTerminated(reason, status) {
  * UI's reducer parses every frame against a closed union, so an unknown event is
  * not ignored there, it is a validation error.
  */
+const log = createLogger('contract');
+
+/**
+ * Hold back a citation marker until its numbers are known to resolve.
+ *
+ * The benchmark reads the streamed `token` deltas - `benchmark/lib.mjs` builds
+ * `answer.text` from them and the contract has no `answer` event, so nothing can
+ * replace what was streamed - and a `[n]` with no matching source is scored as
+ * `dangling`, which bench calls an automatic fail. The post-hoc validator strips
+ * such a marker from the stored answer, which fixes the transcript and not the
+ * stream.
+ *
+ * `sources` is always emitted before the first token, so by the time any text
+ * arrives the full set of valid numbers is known. The check is therefore exact
+ * rather than a guess.
+ *
+ * What is held: only a trailing fragment that could still become a citation.
+ * Anything else passes through untouched, including a `[` that is plainly not one
+ * - a Markdown link, an array index, a quoted bracket.
+ */
+export function createCitationGuard({ allowed, onStripped }) {
+  let held = '';
+  const MAX_HELD = 8;
+  // `[`, digits, and the separators a multi-reference citation uses. A fragment
+  // that cannot continue into `[n]` or `[n, m]` is not a citation.
+  const PARTIAL = /^\[[\d\s,]*$/;
+  const COMPLETE = /\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/;
+
+  /** Drop markers whose numbers do not all resolve; keep the rest verbatim. */
+  const scrub = (text) =>
+    text.replace(/\[(\d{1,3}(?:\s*,\s*\d{1,3})*)\]/g, (marker, inner) => {
+      const ns = inner.split(',').map((x) => Number(x.trim()));
+      const bad = ns.filter((n) => !allowed.has(n));
+      if (!bad.length) return marker;
+      for (const n of bad) onStripped?.(n, marker);
+      return '';
+    });
+
+  return {
+    /** Text safe to send now. The caller sends whatever this returns, if anything. */
+    push(chunk) {
+      let buf = held + String(chunk ?? '');
+      held = '';
+      // A trailing fragment that could still grow into a citation is held, but
+      // only up to a bound: an unclosed `[` is otherwise an unbounded buffer and
+      // a stream that stops mid-bracket would never flush.
+      const open = buf.lastIndexOf('[');
+      if (open !== -1 && !buf.slice(open).includes(']')) {
+        const tail = buf.slice(open);
+        if (PARTIAL.test(tail) && tail.length <= MAX_HELD) {
+          held = tail;
+          buf = buf.slice(0, open);
+        }
+      }
+      return scrub(buf);
+    },
+    /** Whatever is still held at the end of the stream, scrubbed and released. */
+    flush() {
+      const rest = held;
+      held = '';
+      // An unclosed fragment is not a citation, so it goes out as written.
+      return COMPLETE.test(rest) ? scrub(rest) : rest;
+    },
+  };
+}
+
 export function contractStream({ send, depth, answerId, requestId = null }) {
   let step = 0;
   let sentSources = false;
@@ -100,6 +167,16 @@ export function contractStream({ send, depth, answerId, requestId = null }) {
   let subQuestionCount = 0;
   let everyCachedSoFar = null;
   const pending = new Map(); // tool name -> { input, at }
+  // Numbers a citation may use: the sources actually sent to this client.
+  const allowedCitations = new Set();
+  const strippedCitations = [];
+  const guard = createCitationGuard({
+    allowed: allowedCitations,
+    onStripped: (n, marker) => {
+      strippedCitations.push(n);
+      log.warn('citation_stripped_from_stream', { requestId, answerId, n, marker, depth });
+    },
+  });
 
   return function emit(event, data) {
     switch (event) {
@@ -149,10 +226,14 @@ export function contractStream({ send, depth, answerId, requestId = null }) {
         return;
       }
 
-      case 'sources':
+      case 'sources': {
         sentSources = true;
-        send('sources', (data?.sources || []).map(toContractSource));
+        const rows = (data?.sources || []).map(toContractSource);
+        // The guard's allowed set is exactly what the client was told about.
+        for (const r of rows) allowedCitations.add(r.n);
+        send('sources', rows);
         return;
+      }
 
       case 'token':
         if (!sentSources) {
@@ -162,11 +243,25 @@ export function contractStream({ send, depth, answerId, requestId = null }) {
           throw new Error('contract violation: a token was emitted before the sources event');
         }
         sentToken = true;
-        send('token', { text: data?.text ?? '' });
+        {
+          // A frame that is entirely a held fragment sends nothing; the text is
+          // not lost, it arrives with the next frame or at flush.
+          const text = guard.push(data?.text ?? '');
+          if (text) send('token', { text });
+        }
         return;
 
       case 'done': {
         if (!sentSources) send('sources', []);
+        // Release anything still held before the answer is declared finished,
+        // or a stream ending mid-bracket would silently lose its last characters.
+        {
+          const tail = guard.flush();
+          if (tail) send('token', { text: tail });
+        }
+        if (strippedCitations.length) {
+          log.warn('citations_stripped', { requestId, answerId, count: strippedCitations.length, numbers: [...new Set(strippedCitations)] });
+        }
         send('done', {
           answerId,
           latencyMs: data?.latency_ms ?? 0,
