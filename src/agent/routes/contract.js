@@ -10,7 +10,7 @@ import { contractStream, __testing as contractMap } from '../../gateway/contract
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread } from '../services/threads.js';
-import { retrievalBackend, vectorBackendStatus } from '../services/vectorStore.js';
+import { retrievalBackend, vectorIndexStatus } from '../services/vectorStore.js';
 import { listMemories, deleteMemory } from '../services/memoryStore.js';
 import { reserveDeepRun } from '../services/deepQuota.js';
 import { listDocuments } from '../services/ragStore.js';
@@ -335,9 +335,15 @@ contractRouter.get('/health', async (req, res) => {
     // deployment and on every other one. The benchmark prints this field as its
     // record of the stack under test, which means the wrong backend was written
     // into the header of every run.
+    //
+    // Only ever what served a real query. Before the first retrieval it reads
+    // "unexercised", which is less satisfying than a backend name and is the
+    // only honest answer.
     vectorStore: retrievalBackend(),
-    // The evidence behind the claim above, so a reader need not take it on trust.
-    vectorBackendStatus: vectorBackendStatus(),
+    // A different question, kept in a different field: whether the indexes
+    // answer at all. An index that passes its boot probe is usable; that is not
+    // evidence anything queried it, and the two were briefly conflated here.
+    vectorIndexStatus: vectorIndexStatus(),
     db,
     version: '1.0.0',
   });

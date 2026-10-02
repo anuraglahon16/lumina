@@ -7,7 +7,7 @@ import { cache } from '../services/cache.js';
 import { searchHealth, resolveProviders } from '../services/search/index.js';
 import { resolveEmbeddingProvider } from '../services/embeddings.js';
 import { breakerReport } from '../../shared/circuitBreaker.js';
-import { retrievalBackend, vectorBackendStatus } from '../services/vectorStore.js';
+import { retrievalBackend, vectorIndexStatus } from '../services/vectorStore.js';
 import { pingMongo, mongoEnabled } from '../store/mongo.js';
 
 export const observabilityRouter = express.Router();
@@ -30,8 +30,10 @@ observabilityRouter.get('/health', async (req, res) => {
       // means a real database but no Atlas index, which is a working setup that
       // should never be mistaken for the indexed one.
       store: mongoEnabled() ? 'mongodb' : 'json',
+      // What served a real query, and - separately - whether the indexes
+      // answer a probe. The second does not imply the first.
       vector_backend: retrievalBackend(),
-      vector_backend_status: vectorBackendStatus(),
+      vector_index_status: vectorIndexStatus(),
       mongo: await pingMongo(),
       // A tripped breaker is why calls are failing fast, so health says so
       // rather than leaving it to be inferred from errors.

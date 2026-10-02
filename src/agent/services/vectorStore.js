@@ -44,9 +44,30 @@ export function configuredVectorBackend() {
  */
 let observed = null;
 let probeStatus = 'not_probed';
+/** Set only where a real `$vectorSearch` returned for a real query. */
+let servedByVectorSearch = false;
+
+export function noteVectorSearchServed() {
+  servedByVectorSearch = true;
+  observed = 'atlas-vector-search';
+}
 
 export function noteRetrievalBackend(name) {
-  if (name && name !== 'none') observed = name;
+  if (!name || name === 'none') return;
+  /**
+   * The one label that cannot be taken on trust.
+   *
+   * `atlas-vector-search` is only true if an aggregation actually served a
+   * query, so it may be set only through `noteVectorSearchServed`, from inside
+   * that code path. Anything else claiming it is ignored and logged - the whole
+   * history of this field is of it being asserted from configuration rather than
+   * observed.
+   */
+  if (name === 'atlas-vector-search' && !servedByVectorSearch) {
+    log.warn('backend_claim_rejected', { claimed: name, reason: 'no $vectorSearch has served a query' });
+    return;
+  }
+  observed = name;
 }
 
 /**
@@ -67,8 +88,11 @@ export function noteRetrievalBackend(name) {
  * works by scanning and a refusal to boot would turn a degraded search into an
  * outage.
  */
-export async function probeVectorIndexes() {
-  if (!mongoEnabled()) {
+export async function probeVectorIndexes({ client } = {}) {
+  // `client` is a seam for tests only, and deliberately not reachable from a
+  // request: the success path cannot otherwise be exercised without an Atlas
+  // cluster, and the success path is the one that used to lie.
+  if (!client && !mongoEnabled()) {
     probeStatus = 'skipped: no MONGODB_URI';
     return probeStatus;
   }
@@ -85,7 +109,7 @@ export async function probeVectorIndexes() {
   const failures = [];
   for (const t of targets) {
     try {
-      const col = (await mongoDb()).collection(t.collection);
+      const col = (client ?? (await mongoDb())).collection(t.collection);
       await col
         .aggregate([
           { $vectorSearch: { index: t.index, path: 'embedding', queryVector: probeVector, numCandidates: 10, limit: 1, filter: t.filter } },
@@ -102,22 +126,39 @@ export async function probeVectorIndexes() {
     log.warn('vector_probe_failed', { detail: probeStatus });
   } else {
     probeStatus = 'ok: both indexes answered at boot';
-    // An index that answers a query is the backend that will serve one.
-    observed = observed ?? 'atlas-vector-search';
     log.info('vector_probe_ok', { indexes: targets.map((t) => t.index) });
   }
+  /**
+   * Deliberately does not touch `observed`.
+   *
+   * An index that answers a probe is usable; it is not evidence that retrieval
+   * used it. Setting the backend here was the same overclaim this module exists
+   * to prevent, one level up: `nearestChunks` still has no callers, so a probe
+   * success alongside `retrievalBackend() === 'atlas-vector-search'` would have
+   * said the index was serving queries when nothing had asked it one.
+   */
   return probeStatus;
 }
 
-/** What the boot probe found. Reported beside the backend so a claim carries its evidence. */
+/**
+ * The indexes and what the boot probe found, which is a different question from
+ * what served a query. Named so the two cannot be confused in a report.
+ */
+export function vectorIndexStatus() {
+  return `${config.mongo.vectorIndex}+${config.mongo.memoryVectorIndex}: ${probeStatus}`;
+}
+
+/** Kept as an alias so existing readers do not silently change meaning. */
 export function vectorBackendStatus() {
-  return probeStatus;
+  return vectorIndexStatus();
 }
 
+/**
+ * What actually served the last real query. Never derived from configuration,
+ * and never from the boot probe.
+ */
 export function retrievalBackend() {
-  if (observed) return observed;
-  if (probeStatus.startsWith('probe_failed')) return `${configuredVectorBackend()} (unavailable: boot probe failed)`;
-  return `${configuredVectorBackend()} (unverified: no retrieval yet)`;
+  return observed ?? 'unexercised: no query served yet';
 }
 
 /** @deprecated name kept so nothing silently changes meaning; prefer the two above. */
@@ -178,6 +219,8 @@ export async function nearestChunks(vector, { userId, docIds, limit = 50 } = {})
           { $project: { embedding: 0 } },
         ])
         .toArray();
+      // The only place this backend may be claimed from.
+      noteVectorSearchServed();
       return { backend: 'atlas-vector-search', candidates };
     } catch (err) {
       // An index that is still building, or a cluster that is not Atlas after
