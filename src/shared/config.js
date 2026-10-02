@@ -347,7 +347,17 @@ export const config = {
     maxLongTerm: num(process.env.MEMORY_MAX_LONG_TERM, 200),
     injectTopK: num(process.env.MEMORY_INJECT_TOP_K, 5),
     threadWindow: num(process.env.MEMORY_THREAD_WINDOW, 8),
-    extractEnabled: bool(process.env.MEMORY_EXTRACT_ENABLED, true),
+    /**
+     * Off by default.
+     *
+     * The spec is explicit: long-term memory is written only by an explicit
+     * `save_memory` call. A post-run extractor that infers facts and saves them
+     * writes memories the user never asked for - visible in /memory, so not
+     * hidden, but not asked for either. The code stays behind this flag rather
+     * than being deleted, because the extractor is useful and the decision is a
+     * policy one.
+     */
+    extractEnabled: bool(process.env.MEMORY_EXTRACT_ENABLED, false),
   },
 
   logging: {
