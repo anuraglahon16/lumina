@@ -61,3 +61,29 @@ test('a ceiling inside the run is smaller than the run', () => {
   const q = config.budgets.quick;
   assert.ok(q.synthesisCeilingMs <= q.wallClockMs, `quick synthesis ceiling ${q.synthesisCeilingMs}ms is not inside a ${q.wallClockMs}ms run`);
 });
+
+/* ------------------------------------------- the ceiling is measured from now */
+
+/**
+ * A ceiling inside a run has to be measured against the run's deadline.
+ *
+ * Both synthesis calls passed the bare configured ceiling, which starts counting
+ * whenever research happens to finish. For quick that ceiling is 90000 - exactly
+ * the whole quick envelope - so research spending 60s and synthesis then being
+ * allowed its full 90s is a 150s run against a 90s budget. For deep it is 180s
+ * inside a 240s envelope, so research spending 100s makes a 280s run. Neither
+ * overran any individual limit; the run overran.
+ *
+ * Driven with a research phase that deliberately eats most of the budget, and a
+ * synthesis that would happily run far past the end if it were allowed to.
+ */
+
+test('the ceiling handed to synthesis is the time remaining, not the configured value', () => {
+  for (const [f, needle] of [
+    ['src/agent/core/quick.js', /ceilingMs: Math\.min\(config\.budgets\.quick\.synthesisCeilingMs, budget\.remainingMs\)/],
+    ['src/agent/core/deep.js', /ceilingMs: Math\.min\(limits\.synthesisCeilingMs, Math\.max\(0, deadline - Date\.now\(\)\)\)/],
+  ]) {
+    const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.match(src, needle, `${f} bounds the ceiling by what the run has left`);
+  }
+});

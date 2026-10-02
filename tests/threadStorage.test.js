@@ -41,6 +41,41 @@ test('the header validates as a ThreadDoc and a message as a MessageDoc', async 
   await appendMessage(t.id, { role: 'user', content: 'a question' });
   const [m] = await threadMessages(t.id);
   assert.doesNotThrow(() => MessageDoc.parse(m), `MessageDoc: ${JSON.stringify(Object.keys(m))}`);
+
+  /**
+   * An answer turn, with the fields that actually broke.
+   *
+   * This test originally validated only the user turn above - no sources, no
+   * answerId - so it passed while every stored answer failed: `answerId` held a
+   * `run_…` where the contract brands `ans_…`, and sources were persisted in the
+   * ledger's shape (`type`, null `locator`, `doc_id`). Validating the migrated
+   * collection is what found it: 0 of 82 messages conformed.
+   */
+  await appendMessage(t.id, {
+    role: 'assistant',
+    content: 'The answer [1][2].',
+    run_id: 'run_abc',
+    answerId: 'ans_xyz789',
+    mode: 'deep',
+    sources: [
+      { n: 1, type: 'web', title: 'A page', url: 'https://example.test/a', snippet: 'some text', locator: null },
+      { n: 2, type: 'document', title: 'basics.pdf', doc_id: 'doc_abc', snippet: 'a passage', locator: 'p. 3', subQuestion: 2 },
+    ],
+  });
+  const answer = (await threadMessages(t.id))[1];
+  const parsed = MessageDoc.safeParse(answer);
+  assert.ok(
+    parsed.success,
+    `an answer turn must conform: ${parsed.error?.issues.map((i) => `${i.path.join('.')} ${i.message}`).join('; ')}`,
+  );
+  assert.equal(answer.answerId, 'ans_xyz789', 'the answer id is the ans_ the route minted');
+  assert.equal(answer.run_id, 'run_abc', 'and the run id is kept separately');
+  assert.equal(answer.sources[0].kind, 'web', 'sources are stored contract-shaped');
+  assert.ok(!('type' in answer.sources[0]), 'not in the ledger shape');
+  assert.ok(!('locator' in answer.sources[0]), 'a web source has no locator, rather than a null one');
+  assert.deepEqual(answer.sources[1].locator, { page: 3 }, 'and a document source has a real one');
+  assert.equal(answer.sources[1].docId, 'doc_abc');
+  assert.equal(answer.sources[1].subQuestion, 2, 'attribution survives storage');
   assert.equal(m._id, m.id, 'the contract _id is the message id, not a surrogate');
   assert.equal(m.threadId, t.id);
   assert.equal(m.userId, 'u_contract');
@@ -138,12 +173,13 @@ test('an answer turn keeps its answerId and its sources', async () => {
     role: 'assistant',
     content: 'The answer [1].',
     run_id: 'run_abc',
+    answerId: 'ans_abc123',
     mode: 'deep',
-    sources: [{ n: 1, title: 'A page', url: 'https://example.test/a', type: 'web' }],
+    sources: [{ n: 1, title: 'A page', url: 'https://example.test/a', type: 'web', snippet: 'text' }],
   });
   const [m] = await threadMessages(t.id);
-  assert.equal(m.answerId, 'run_abc', 'the contract spelling');
-  assert.equal(m.run_id, 'run_abc', 'and the one existing readers use');
+  assert.equal(m.answerId, 'ans_abc123', 'the answer id the client was given');
+  assert.equal(m.run_id, 'run_abc', 'and the run id, which is a different thing');
   assert.equal(m.sources.length, 1);
   assert.equal(m.mode, 'deep', 'and anything else the caller passed');
 });
@@ -188,4 +224,23 @@ test('messages are scoped to their thread', async () => {
 
 test('appending to a thread that does not exist returns null', async () => {
   assert.equal(await appendMessage('thr_nope', { role: 'user', content: 'x' }), null);
+});
+
+test('the route hands the answer id to the run, or the message cannot carry it', () => {
+  const route = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
+  assert.match(route, /const answerId = newId\('ans'\);/, 'the route mints it');
+  const call = route.slice(route.indexOf('const run = depth ==='), route.indexOf('} catch (err)', route.indexOf('const run = depth ===')));
+  assert.match(call, /\banswerId,/, 'and passes it to the run');
+
+  for (const f of ['src/agent/core/quick.js', 'src/agent/core/deep.js']) {
+    const src = fs.readFileSync(new URL(`../${f}`, import.meta.url), 'utf8');
+    assert.match(src, /\.\.\.\(answerId \? \{ answerId \} : \{\}\),/, `${f} stores it on the assistant turn`);
+  }
+});
+
+test('one mapping produces contract sources, used at write time', () => {
+  const threads = fs.readFileSync(new URL('../src/agent/services/threads.js', import.meta.url), 'utf8');
+  assert.match(threads, /sources: \(sources \?\? \[\]\)\.map\(asContractSource\)/, 'stored in contract shape');
+  const route = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
+  assert.match(route, /m\.sources\.map\(asContractSource\)/, 'and the route no longer has its own conversion');
 });

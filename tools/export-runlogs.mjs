@@ -161,7 +161,18 @@ async function main() {
   // whatever order the collection scan produces.
   const scope = flag('scope', null);
   const since = flag('since', null);
-  const db = client.db(process.env.MONGODB_DB ?? 'lumina');
+  /**
+   * Which database, said out loud.
+   *
+   * The fallback is silent, so an unset MONGODB_DB exports runs from `lumina`
+   * while the deployment under test is `lumina_fly` - and the export looks
+   * entirely normal, because it is a real export of the wrong thing. Naming it
+   * costs one line and makes the mistake visible in the output a reader is
+   * already looking at.
+   */
+  const dbName = process.env.MONGODB_DB ?? 'lumina';
+  console.log(`database: ${dbName}${process.env.MONGODB_DB ? '' : '  (MONGODB_DB is unset; this is the default, not a choice)'}`);
+  const db = client.db(dbName);
 
   let where = {};
   let windowNote = 'every run in the store';

@@ -7,6 +7,7 @@ import { newId } from '../../shared/ids.js';
 import { config, capabilities } from '../../shared/config.js';
 import { createLogger } from '../../shared/logger.js';
 import { contractStream, __testing as contractMap } from '../../gateway/contract/events.js';
+import { asContractSource } from '../core/contractSource.js';
 import { runQuickQuery, modelRoles } from '../core/quick.js';
 import { runDeepQuery } from '../core/deep.js';
 import { createThread, getThread, listThreads, ensureThread, threadMessages } from '../services/threads.js';
@@ -120,6 +121,11 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
       // 'docs' and 'web' are the caller choosing where the answer comes from;
       // the toolset is narrowed accordingly rather than the prompt asking.
       retrievalMode: mode,
+      // The id the `done` event gives the client. It was minted here and never
+      // handed to the run, so the stored message recorded the run id under
+      // `answerId` instead - a `run_…` where the contract brands `ans_…`, and an
+      // id the client could not use to find the answer again.
+      answerId,
       emit,
       signal: controller.signal,
     });
@@ -168,7 +174,9 @@ contractRouter.get('/threads/:threadId', async (req, res, next) => {
       messages: rows.map((m) => ({
         role: m.role,
         content: m.content,
-        ...(m.sources?.length ? { sources: m.sources.map(toContractSourceRow) } : {}),
+        // Stored contract-shaped, so pass through; `asContractSource` still maps
+        // a message written before that change rather than serving its raw shape.
+        ...(m.sources?.length ? { sources: m.sources.map(asContractSource) } : {}),
         ...(m.answerId || m.run_id ? { answerId: m.answerId ?? m.run_id } : {}),
         // `createdAt` first: this read only `m.created_at`, which the old append
         // never set - it wrote `at` - so the field was silently absent from

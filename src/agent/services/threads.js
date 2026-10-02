@@ -1,6 +1,7 @@
 import { config } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
+import { asContractSource } from '../core/contractSource.js';
 
 const threads = collection('threads');
 const messages = collection('messages');
@@ -99,7 +100,7 @@ export async function appendMessage(threadId, message) {
   const seq = header?.messageCount ?? 0;
 
   const id = newId('msg');
-  const { run_id: runId, sources, ...rest } = message;
+  const { run_id: runId, answerId, sources, ...rest } = message;
   return messages.insert({
     id,
     _id: id,
@@ -109,8 +110,26 @@ export async function appendMessage(threadId, message) {
     userId: thread.user_id,
     // Position within the thread, 1-based. What the transcript sorts on.
     seq,
-    sources: sources ?? [],
-    ...(runId ? { run_id: runId, answerId: runId } : {}),
+    /**
+     * Stored in the contract's shape, which is also the shape the user was shown.
+     *
+     * The ledger's own shape was persisted and converted on the way out, so what
+     * was in the database never matched `MessageDoc.sources`: `type` instead of
+     * `kind`, a null `locator`, `doc_id` instead of `docId`. Validating the
+     * migrated collection is what surfaced it - 0 of 82 messages conformed, while
+     * a unit test passed because the message it validated had no sources at all.
+     */
+    sources: (sources ?? []).map(asContractSource),
+    /**
+     * `answerId` is the `ans_…` the route minted for this answer, not the run id.
+     *
+     * This stored `answerId: run_id`, which is a `run_…` - the contract brands
+     * `AnswerId` as `ans_`, so every stored message failed validation on it and
+     * the id the `done` event gave the client matched nothing in the transcript.
+     * The route generates the answer id and now hands it to the run.
+     */
+    ...(runId ? { run_id: runId } : {}),
+    ...(answerId ? { answerId } : {}),
     ...rest,
     createdAt: at,
     // The field the old shape used. Kept because stored messages carry it and a

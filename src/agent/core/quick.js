@@ -81,7 +81,7 @@ async function rememberInstruction({ query, userId, threadId, runId, emit, recor
   return done;
 }
 
-export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto' }) {
+export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto', answerId = null }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
   const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.quickModel });
@@ -296,7 +296,20 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       model: config.llm.quickModel,
       maxTokens: config.budgets.quick.maxTokens,
       effort: config.budgets.quick.effort,
-      ceilingMs: config.budgets.quick.synthesisCeilingMs,
+      /**
+       * Whichever is sooner: the synthesis ceiling, or the time the run has left.
+       *
+       * This was the bare ceiling, which for quick is 90000 - exactly the whole
+       * quick envelope. A fixed ceiling starts whenever research finishes, so
+       * research spending 60s and synthesis then being allowed its full 90s puts
+       * the run at 150s against a 90s envelope. The ceiling has to be measured
+       * from now, against the deadline, or it is not a ceiling on the run.
+       *
+       * No floor: a run with no time left gets no time for synthesis, and ends
+       * as `cap` with whatever it had. Inventing a minimum here is exactly how
+       * the envelope gets exceeded.
+       */
+      ceilingMs: Math.min(config.budgets.quick.synthesisCeilingMs, budget.remainingMs),
       signal,
     });
 
@@ -317,6 +330,7 @@ export async function runQuickQuery({ query, userId, threadId, requestId, emit, 
       role: 'assistant',
       content: answer,
       run_id: recorder.id,
+      ...(answerId ? { answerId } : {}),
       mode: 'quick',
       sources: ledger.publicSources(),
       citations: validation.cited,

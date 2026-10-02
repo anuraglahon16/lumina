@@ -15,6 +15,7 @@
  * rollback is "ignore the new collection".
  */
 import { MongoClient } from 'mongodb';
+import { toContractSource } from '../src/agent/core/contractSource.js';
 
 const APPLY = process.argv.includes('--apply');
 const PRUNE = process.argv.includes('--prune');
@@ -40,6 +41,7 @@ const plan = {
   // Threads whose Mongo _id is not the thread id. Immutable, so the migration
   // reports them rather than claiming it can fix them.
   notes: { threadsKeepingObjectIdUnderscoreId: 0 },
+  nonConforming: { messagesWithRunIdAsAnswerId: 0, messagesWithLedgerShapedSources: 0 },
 };
 
 plan.threads.total = await threads.countDocuments({});
@@ -65,8 +67,18 @@ for await (const t of threads.find({})) {
     seq: i + 1,
     role: m.role,
     content: m.content ?? '',
-    sources: m.sources ?? [],
-    ...(m.run_id ? { run_id: m.run_id, answerId: m.run_id } : {}),
+    // Contract-shaped, like a freshly appended message. The ledger shape was
+    // what the embedded array held, and persisting it unchanged is why 0 of 82
+    // migrated messages validated against MessageDoc.
+    sources: (m.sources ?? []).map(toContractSource),
+    /**
+     * `run_id` only. It is a `run_…`, and `MessageDoc.answerId` is branded
+     * `ans_…`, so copying it across made every migrated message invalid on that
+     * field. The answer ids of these historical runs were never persisted
+     * anywhere, so there is nothing truthful to put here - the field is left
+     * absent rather than filled with the wrong id.
+     */
+    ...(m.run_id ? { run_id: m.run_id } : {}),
     ...(m.mode ? { mode: m.mode } : {}),
     ...(m.citations ? { citations: m.citations } : {}),
     ...(m.capped !== undefined ? { capped: m.capped } : {}),
@@ -86,6 +98,18 @@ for await (const t of threads.find({})) {
 }
 
 // Rows already in the collection that predate the camelCase fields.
+plan.nonConforming.messagesWithRunIdAsAnswerId = await messages.countDocuments({ answerId: { $regex: '^run_' } });
+/**
+ * `$type: 'null'` and not `null`.
+ *
+ * In Mongo a query for `null` also matches a MISSING field, and a web source
+ * legitimately has no `locator` - so this reported 39 non-conforming messages
+ * after the repair had already fixed all of them. The detector was the thing
+ * that was wrong; validating against `MessageDoc` showed 82/82 conforming.
+ */
+plan.nonConforming.messagesWithLedgerShapedSources = await messages.countDocuments({
+  $or: [{ 'sources.type': { $exists: true } }, { 'sources.locator': { $type: 'null' } }],
+});
 plan.messages.missingCamelCase = await messages.countDocuments({
   $or: [{ threadId: { $exists: false } }, { userId: { $exists: false } }, { createdAt: { $exists: false } }, { seq: { $exists: false } }],
 });
@@ -140,6 +164,29 @@ for await (const m of messages.find({ $or: [{ threadId: { $exists: false } }, { 
     { $set: { threadId: m.thread_id, userId: m.user_id, createdAt: m.createdAt ?? m.at ?? m.created_at } },
   );
 }
+
+/**
+ * Repair rows this script's earlier version wrote.
+ *
+ * It copied `run_id` into `answerId` and stored sources in the ledger's shape,
+ * so the first apply produced 82 messages of which none validated. Both are
+ * fixed in place: `answerId` is unset where it does not look like an answer id,
+ * and a ledger-shaped source is mapped. Keyed on the defect rather than on a
+ * version marker, so it is a no-op once clean.
+ */
+let repaired = 0;
+for await (const m of messages.find({
+  $or: [{ answerId: { $exists: true } }, { 'sources.type': { $exists: true } }, { 'sources.locator': { $type: 'null' } }],
+})) {
+  const update = {};
+  if (m.answerId && !String(m.answerId).startsWith('ans_')) update.$unset = { answerId: '' };
+  const needsSources = (m.sources ?? []).some((s) => s && (s.type !== undefined || s.locator === null || s.kind === undefined));
+  if (needsSources) update.$set = { sources: (m.sources ?? []).map(toContractSource) };
+  if (!Object.keys(update).length) continue;
+  await messages.updateOne({ id: m.id }, update);
+  repaired += 1;
+}
+if (repaired) console.log(JSON.stringify({ repaired }, null, 2));
 
 console.log(JSON.stringify({ applied: { messagesInserted: inserted, headersUpdated: headers, arraysPruned: pruned } }, null, 2));
 await client.close();

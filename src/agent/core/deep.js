@@ -39,6 +39,8 @@ export async function runDeepQuery({
   // against an uploaded Space was answered from somewhere else entirely.
   retrievalMode = 'auto',
   spaceId = null,
+  // The `ans_…` the route minted for this answer, stored on the assistant turn.
+  answerId = null,
   // Forwarded to the tool executor so a Deep test can drive the real
   // orchestration - real ledger writes, real deduplication - without touching
   // the network. Production passes neither.
@@ -209,7 +211,11 @@ export async function runDeepQuery({
       model: config.llm.deepSynthesisModel,
       maxTokens: limits.maxTokens,
       effort: limits.effort,
-      ceilingMs: limits.synthesisCeilingMs,
+      // Whichever is sooner: the ceiling, or the time left in the envelope. A
+      // fixed ceiling starts whenever research finishes, so research spending
+      // 100s and synthesis then taking its full 180s is a 280s run against a
+      // 240s envelope. See the fuller note at the same call in quick.js.
+      ceilingMs: Math.min(limits.synthesisCeilingMs, Math.max(0, deadline - Date.now())),
       signal,
       // Only when injected. A test may drive synthesis with its own streaming
       // function, or reuse its model fake; production passes neither and keeps
@@ -224,6 +230,7 @@ export async function runDeepQuery({
       role: 'assistant',
       content: answer,
       run_id: recorder.id,
+      ...(answerId ? { answerId } : {}),
       mode: 'deep',
       sources: ledger.publicSources(),
       citations: validation.cited,
