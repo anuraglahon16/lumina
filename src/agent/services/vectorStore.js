@@ -18,9 +18,44 @@ const log = createLogger('vectorstore');
 
 export const usingMongoVectors = () => mongoEnabled();
 
-export function vectorBackend() {
+/**
+ * What the deployment is *configured* to use. Not what served a query.
+ *
+ * Kept for the one thing it is good for - deciding which branch to take - and
+ * deliberately not reported as fact. See `retrievalBackend()`.
+ */
+export function configuredVectorBackend() {
   if (!mongoEnabled()) return 'in-process';
   return config.mongo.vectorBackend;
+}
+
+/**
+ * The backend that actually served the last retrieval.
+ *
+ * `/health`, `/stats` and the eval report used to print the configured value,
+ * so they claimed `atlas-vector-search` while no `$vectorSearch` had ever run:
+ * `nearestChunks` has no callers and retrieval is a cosine scan in JavaScript
+ * blended with BM25. A recall number is not comparable without knowing which
+ * one produced it, which is exactly why the contract says "name whatever is
+ * live".
+ *
+ * Before any query has run there is nothing observed, so the honest answer is
+ * what the code would do, marked as not yet exercised.
+ */
+let observed = null;
+
+export function noteRetrievalBackend(name) {
+  if (name && name !== 'none') observed = name;
+}
+
+export function retrievalBackend() {
+  if (observed) return observed;
+  return `${configuredVectorBackend()} (unverified: no retrieval yet)`;
+}
+
+/** @deprecated name kept so nothing silently changes meaning; prefer the two above. */
+export function vectorBackend() {
+  return retrievalBackend();
 }
 
 export async function putChunks(records) {

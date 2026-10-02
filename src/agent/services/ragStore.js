@@ -2,7 +2,7 @@ import { config } from '../../shared/config.js';
 import { newId } from '../../shared/ids.js';
 import { collection } from '../store/jsonStore.js';
 import { embedBatch, embedQuery, cosine, tokenize } from './embeddings.js';
-import { usingMongoVectors, vectorBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc, countChunks } from './vectorStore.js';
+import { usingMongoVectors, configuredVectorBackend, noteRetrievalBackend, putChunks, nearestChunks, allChunks, deleteChunksForDoc, countChunks } from './vectorStore.js';
 import { compact } from '../store/filter.js';
 import { createLogger } from '../../shared/logger.js';
 
@@ -133,7 +133,7 @@ export async function indexChunks(doc, docChunks, { onProgress } = {}) {
     dim: meta?.dim ?? null,
     namespace,
     count: docChunks.length,
-    backend: vectorBackend(),
+    backend: configuredVectorBackend(),
   };
 }
 
@@ -263,15 +263,25 @@ export async function searchChunks(query, { userId, docIds, spaceId, topK = conf
   // Everything after this point is identical, because fusion works on rankings
   // rather than on whatever each backend calls a score.
   let corpus;
+  /**
+   * The label describes what ran, not what was configured.
+   *
+   * This reported `configuredVectorBackend()`, so every answer, /health, /stats
+   * and the eval report claimed `atlas-vector-search` while the dense half was
+   * a cosine scan in this process: `nearestChunks` has no callers. A recall
+   * figure read against the wrong backend is not comparable to anything.
+   */
   let backend;
-
   if (usingMongoVectors()) {
     corpus = await allChunks({ userId, docIds });
-    backend = vectorBackend();
+    // Dense scoring happens below, in JavaScript, over this corpus. When
+    // `$vectorSearch` is wired in, this is where it will report itself.
+    backend = 'hybrid-bm25-cosine';
   } else {
-    backend = 'in-process';
     corpus = await chunks.all(compact({ user_id: userId, doc_id: docIds?.length ? { $in: docIds } : undefined }));
+    backend = 'in-process';
   }
+  noteRetrievalBackend(backend);
 
   if (!corpus.length) return { results: [], corpus_size: 0, embedding_provider: null, backend };
 

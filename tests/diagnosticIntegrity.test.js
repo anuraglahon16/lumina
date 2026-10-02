@@ -454,7 +454,15 @@ test('the two health routes agree about the vector backend', async () => {
     fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8'),
   );
 
-  assert.match(source, /vectorStore: vectorBackend\(\)/, 'the contract route asks the same function /v1/health asks');
+  // The property is that both routes ask one function, not what it is called.
+  // That function is now `retrievalBackend()`, which reports the backend that
+  // served the last query rather than the configured value - the configured
+  // value was being published as fact while no $vectorSearch had ever run.
+  assert.match(source, /vectorStore: retrievalBackend\(\)/, 'the contract route asks the same function /v1/health asks');
+  const observability = await import('node:fs').then((fs) =>
+    fs.readFileSync(new URL('../src/agent/routes/observability.js', import.meta.url), 'utf8'),
+  );
+  assert.match(observability, /vector_backend: retrievalBackend\(\)/, 'and /v1/health asks it too');
 
   // Comments stripped first. The comment above the fix names the old path in
   // order to explain it, and a grep over the whole file matches that prose and
