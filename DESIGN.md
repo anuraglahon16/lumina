@@ -233,18 +233,29 @@ seconds of research plus ninety of synthesis is a 150-second run against a
 `min(ceiling, time left)`, with no floor, because inventing a minimum is how the
 envelope gets exceeded.
 
-**The connection pool is kept warm on a timer, which should not have been
-necessary.** Measured from the deployed agent: a pooled round trip costs about
-15ms and opening a new connection to this cluster costs **104–376ms**. Acceptance
-of an upload is three sequential writes inside a 300ms budget, so one cold
-connection is the whole budget — and server-side timings came back bimodal, 40–50ms
-or 390–490ms with almost nothing between, which is exactly "warm" versus "warm
-plus one reconnect". `maxIdleTimeMS: 0` only tells the *driver* not to close a
-connection; something on the other side was closing them, and the driver found
-out on the next operation. So: `minPoolSize` connections, warmed at boot, and
-pinged every twenty seconds. The honest limitation is that this is working around
-a shared-tier cluster rather than fixing it; a dedicated cluster in the same
-region as the Fly app would remove the problem instead of hiding it.
+**Upload acceptance is bounded by contention with the worker, and I misdiagnosed
+it first.** The requirement is a 202 in under 300ms. Measured from the deployed
+agent: a pooled round trip costs about 15ms, opening a *new* connection to this
+cluster costs **104–376ms**, and server-side acceptance came back bimodal — 40–50ms
+or 390–490ms with almost nothing between. I read that as "warm versus warm plus
+one reconnect", cut the path from four sequential writes to three, set
+`minPoolSize`, and added a keepalive ping because `maxIdleTimeMS: 0` only tells
+the *driver* not to close a connection.
+
+It barely moved: p95 over twenty uploads went from 623ms to 626ms. The actual
+cause was the worker. Stopping it and repeating the same twenty uploads gives a
+median of 173ms and **p95 245ms**, inside the budget, with the climb gone — so
+what I had been attributing to cold connections was the worker's own writes
+competing for a shared-tier cluster. Each document costs about a dozen writes
+across two collections, and the per-batch progress writes scale with its size, so
+those are now throttled to one a second and issued concurrently.
+
+The honest limitation: acceptance meets its budget when little else is indexing,
+and degrades under concurrent ingest in proportion to how much. The fix that
+would remove it rather than reduce it is a dedicated Atlas tier in the Fly app's
+region — a configuration change this project cannot make — and the pool work,
+while it did not solve this, is kept because the 104–376ms cost of a cold
+connection is real and will bite the next cold path.
 
 **The lexical half of retrieval reads the corpus, not an index.** `chunks_text` is
 declared and unbuilt, so BM25 is computed in this process over every chunk for the
