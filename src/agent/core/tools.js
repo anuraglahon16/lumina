@@ -368,6 +368,22 @@ export function createToolExecutor({
       // caps how often this can happen and never refunds the wall clock.
       const refunded = result.ok ? false : budget.refund(name, result.summary);
       recorder?.recordToolCall({ name, input, durationMs, ok: result.ok, summary: result.summary, cached: result.cached, branch });
+      /**
+       * Tell the model what it has left, on every result.
+       *
+       * Deep runs terminate `cap` because the model issues several tool_use
+       * blocks in one turn when its branch has one call left: the extras are
+       * refused, correctly, and any refusal marks the run cut short. A limit
+       * stated once in the system prompt is not visible at the moment the model
+       * decides how many tools to ask for; a number on the result it just read
+       * is.
+       */
+      if (branch && result.ok !== false) {
+        const left = budget.snapshot?.()?.remaining?.tool_calls;
+        if (Number.isInteger(left)) {
+          result.content = `${result.content ?? ''}\n\n[budget: ${left} tool call${left === 1 ? '' : 's'} left for this sub-question. Do not request more than ${Math.max(0, left)} tool${left === 1 ? '' : 's'} in your next turn.]`;
+        }
+      }
       emit?.('tool_result', {
         tool: name,
         ok: result.ok,

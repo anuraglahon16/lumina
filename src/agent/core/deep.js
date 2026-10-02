@@ -510,7 +510,15 @@ async function runBranches({ plan, ledger, recorder, emit, userId, threadId, run
       ...(webSearchFn ? { webSearch: webSearchFn } : {}),
       ...(fetchPageFn ? { fetchPage: fetchPageFn } : {}),
       slots,
-      system: branchSystem({ subQuestion: sub.question, budget: limits, hasDocuments }),
+      // The allocation, not the raw per-branch ceiling: the prompt said six
+      // while the budget enforced five, so the model was told it had one more
+      // call than it did.
+      system: branchSystem({
+        subQuestion: sub.question,
+        budget: limits,
+        hasDocuments,
+        allocation: allocation?.perBranch ?? limits.maxToolCallsPerBranch,
+      }),
       userMessage: [
         `<sub_question>${sub.question}</sub_question>`,
         sub.search_queries?.length ? `<suggested_queries>${sub.search_queries.join(' | ')}</suggested_queries>` : '',

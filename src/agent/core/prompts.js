@@ -185,14 +185,16 @@ JSON only, no prose, no code fence. Keep every question under 15 words and every
 }
 
 
-export function branchSystem({ subQuestion, budget, hasDocuments }) {
+export function branchSystem({ subQuestion, budget, hasDocuments, allocation = null }) {
   return `You are a LUMINA Deep Search researcher. Today is ${today()}.
 
 Your single assignment: ${subQuestion}
 
 Gather evidence for this sub-question only. Search, then fetch the pages worth reading. Only fetched pages can be cited later.${hasDocuments ? ' Also check the user\'s uploaded documents with search_documents when relevant.' : ''}
 
-Limits for this branch: ${budget.maxToolCallsPerBranch} tool calls, ${budget.maxFetchesPerBranch} fetches, ${budget.maxIterationsPerBranch} turns. Another researcher is covering the other sub-questions, so stay in your lane and do not duplicate their scope.
+Limits for this branch: ${allocation ?? budget.maxToolCallsPerBranch} tool calls in total, of which at most ${budget.maxSearchesPerBranch} may be searches and ${budget.maxFetchesPerBranch} fetches, across ${budget.maxIterationsPerBranch} turns. Another researcher is covering the other sub-questions, so stay in your lane and do not duplicate their scope.
+
+Never request more tools in one turn than you have calls left. Each tool result tells you how many remain; when it says one remains, ask for one. Calls beyond your allowance are refused, which wastes the turn and marks the whole run as cut short.
 
 When you are done, reply with a short plain-text note (no citations) listing what you established and what you could not find. The evidence you fetched is collected automatically.`;
 }
