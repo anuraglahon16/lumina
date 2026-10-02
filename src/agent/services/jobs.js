@@ -70,9 +70,17 @@ class JobQueue extends EventEmitter {
     this.handlers.set(type, handler);
   }
 
-  async enqueue(type, payload, { maxAttempts = 2, userId = null } = {}) {
+  /**
+   * `id` may be supplied by the caller.
+   *
+   * The upload path needs the job id before the job exists, so it can write it
+   * into the document in the same insert instead of coming back to update the
+   * document afterwards. An id is generated the same way either way; which side
+   * generates it is not a property of the queue.
+   */
+  async enqueue(type, payload, { maxAttempts = 2, userId = null, id = null } = {}) {
     const job = await jobs.put({
-      id: newId('job'),
+      id: id || newId('job'),
       type,
       payload,
       user_id: userId,

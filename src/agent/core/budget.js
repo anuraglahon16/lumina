@@ -408,6 +408,15 @@ export class ToolSlots {
       refused: this.refused,
       branch_refused: this.branchRefused,
       borrowed: this.borrowed,
+      // What is held back, and what each active branch is still owed. Without
+      // these, a refusal recorded beside `claimed: 13` of a limit of 24 looks
+      // like the pool refusing a call it had room for - the room was committed,
+      // and these are the commitments.
+      sweep_reserve: this.sweepReserve,
+      owed_to_active_branches: [...this.branches.values()].reduce(
+        (n, b) => n + (b.active ? Math.max(0, b.allocation - b.claimed) : 0),
+        0,
+      ),
       by_owner: { ...this.byOwner },
     };
   }

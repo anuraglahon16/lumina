@@ -11,6 +11,7 @@ import { documentsRouter } from './routes/documents.js';
 import { observabilityRouter } from './routes/observability.js';
 import { contractRouter } from './routes/contract.js';
 import { jobQueue } from './services/jobs.js';
+import { warmMongoPool } from './store/mongo.js';
 import { probeVectorIndexes } from './services/vectorStore.js';
 import './services/ingest.js'; // registers the index_document job handler
 
@@ -80,6 +81,17 @@ jobQueue.reconcile().catch((err) => log.warn('job_reconcile_failed', { err: err.
  * Deliberately not awaited and never fatal. Retrieval still works by scanning, so
  * refusing to boot would turn a degraded search into an outage.
  */
+/**
+ * Warm the connection pool before the first request, then probe the indexes.
+ *
+ * Sequenced deliberately: the probe needs a connection, so warming first means
+ * the probe is measuring the index rather than a handshake. Neither blocks the
+ * listener and neither can stop the agent starting.
+ */
+warmMongoPool()
+  .then((status) => log.info('mongo_pool', { status }))
+  .catch((err) => log.warn('mongo_pool_threw', { err: err.message }));
+
 probeVectorIndexes()
   .then((status) => log.info('vector_probe', { status }))
   .catch((err) => log.warn('vector_probe_threw', { err: err.message }));

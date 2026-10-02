@@ -312,7 +312,18 @@ export function createToolExecutor({
     if (!gate.ok) {
       budget.markCapped(gate.reason);
       slots?.noteBranchRefusal();
-      emit?.('tool_blocked', { tool: name, reason: gate.reason, branch, budget: budget.snapshot() });
+      // The pool as it stood when the refusal happened, not just the branch's own
+      // budget. "Was there capacity left?" is the first question anyone asks of a
+      // capped run, and answering it from the end-of-run snapshot is guesswork:
+      // by then the sweep has spent and the reserve has been released.
+      emit?.('tool_blocked', {
+        tool: name,
+        reason: gate.reason,
+        branch,
+        budget: budget.snapshot(),
+        pool: slots?.snapshot?.() ?? null,
+        borrowable: slots?.borrowable?.(branch) ?? null,
+      });
       // A refusal, not a call: nothing executed. See RunRecorder.recordRefusal.
       recorder?.recordRefusal({ name, input, reason: gate.reason, branch });
       return {
@@ -329,7 +340,14 @@ export function createToolExecutor({
     const permit = slots ? slots.tryClaim('branch', branch) : null;
     if (slots && !permit) {
       budget.markCapped(slots.capReason);
-      emit?.('tool_blocked', { tool: name, reason: slots.capReason, branch, budget: budget.snapshot() });
+      emit?.('tool_blocked', {
+        tool: name,
+        reason: slots.capReason,
+        branch,
+        budget: budget.snapshot(),
+        pool: slots.snapshot?.() ?? null,
+        borrowable: 0,
+      });
       recorder?.recordRefusal({ name, input, reason: slots.capReason, branch });
       return {
         ok: false,

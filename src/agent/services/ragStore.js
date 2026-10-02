@@ -11,14 +11,18 @@ const log = createLogger('rag');
 const documents = collection('documents');
 const chunks = collection('chunks');
 
-export async function createDocument({ userId, filename, mimetype, size, spaceId = null }) {
+export async function createDocument({ userId, filename, mimetype, size, spaceId = null, docId = null, jobId = null }) {
   return documents.put({
-    id: newId('doc'),
+    id: docId || newId('doc'),
     user_id: userId,
     space_id: spaceId,
     filename,
     mimetype,
     size_bytes: size,
+    // Written here rather than patched in afterwards. The update was a fourth
+    // sequential database round trip inside a 300ms acceptance budget, on a
+    // cluster where a cold connection alone can cost more than that.
+    job_id: jobId,
     status: 'queued',
     stage: 'queued',
     progress: 0,

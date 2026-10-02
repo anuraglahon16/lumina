@@ -83,6 +83,16 @@ export const config = {
      * active embedder produced 512. Three numbers, no two the same.
      */
     vectorDim: num(process.env.VECTOR_DIM, 1536),
+    /**
+     * Connections held open from startup.
+     *
+     * Opening one to this cluster costs 104-376ms measured from the deployed
+     * agent, against roughly 15ms for a pooled round-trip, and the upload path
+     * has a 300ms budget. Five covers the upload's three calls plus a concurrent
+     * request without any of them paying for a handshake.
+     */
+    minPoolSize: num(process.env.MONGO_MIN_POOL_SIZE, 5),
+    maxPoolSize: num(process.env.MONGO_MAX_POOL_SIZE, 20),
   },
 
   /**

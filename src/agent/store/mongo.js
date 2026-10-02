@@ -26,7 +26,27 @@ export async function mongoDb() {
   if (client) return client.db(config.mongo.db);
   if (!connecting) {
     connecting = (async () => {
-      const c = new MongoClient(config.mongo.uri, { serverSelectionTimeoutMS: 5000 });
+      /**
+       * Keep connections open, because establishing one is expensive here.
+       *
+       * Measured from the deployed agent: an established pooled round-trip costs
+       * roughly fifteen milliseconds, and opening a NEW connection to this
+       * cluster costs between 104 and 376. The upload path makes three database
+       * calls inside a 300ms budget, so one cold connection in the middle of it
+       * is the whole budget - which is exactly what two of eight deployed
+       * uploads did, at 411ms and 478ms server-side while the median was 74.
+       *
+       * `minPoolSize` keeps that many connections established from startup, so a
+       * request finds one rather than paying for one. `maxIdleTimeMS: 0` is the
+       * driver default and means "never reap for idleness"; it is written out
+       * because the whole point here is that idle connections must survive.
+       */
+      const c = new MongoClient(config.mongo.uri, {
+        serverSelectionTimeoutMS: 5000,
+        minPoolSize: config.mongo.minPoolSize,
+        maxPoolSize: config.mongo.maxPoolSize,
+        maxIdleTimeMS: 0,
+      });
       await c.connect();
       client = c;
       log.info('mongo_connected', { db: config.mongo.db, vector_backend: config.mongo.vectorBackend });
@@ -38,6 +58,33 @@ export async function mongoDb() {
   }
   await connecting;
   return client.db(config.mongo.db);
+}
+
+/**
+ * Open the pool before the first request needs it.
+ *
+ * `minPoolSize` is filled in the background, so the first requests after boot
+ * can still race ahead of it. Issuing that many concurrent pings forces the
+ * connections to exist and, more usefully, makes a cluster that cannot be
+ * reached a startup log line rather than a slow first upload.
+ *
+ * Never fatal: the agent runs without Mongo, and a cold pool is slow rather
+ * than broken.
+ */
+export async function warmMongoPool() {
+  if (!mongoEnabled()) return 'skipped: no MONGODB_URI';
+  const started = Date.now();
+  try {
+    const db = await mongoDb();
+    const n = Math.max(1, config.mongo.minPoolSize);
+    await Promise.all(Array.from({ length: n }, () => db.command({ ping: 1 })));
+    const ms = Date.now() - started;
+    log.info('mongo_pool_warm', { connections: n, ms });
+    return `ok: ${n} connection(s) in ${ms}ms`;
+  } catch (err) {
+    log.warn('mongo_pool_warm_failed', { err: err.message, ms: Date.now() - started });
+    return `failed: ${err.message}`;
+  }
 }
 
 export async function pingMongo() {

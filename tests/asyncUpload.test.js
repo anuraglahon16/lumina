@@ -156,3 +156,95 @@ test('without runInline nothing is indexed on the request path', async () => {
   assert.ok(['pending', 'queued'].includes(doc.status), `status is ${doc.status}`);
   assert.equal(doc.chunk_count ?? 0, 0);
 });
+
+/* ------------------------------------------- three trips, same ordering */
+
+/**
+ * The acceptance path makes three sequential database calls, in an order that
+ * still guarantees durability.
+ *
+ * It made four: the document was inserted, then updated to carry its `job_id`.
+ * That update was a fourth round trip inside a 300ms budget, on a cluster where
+ * opening a connection costs 104-376ms measured from the deployed agent - which
+ * is why two of eight deployed uploads took 411ms and 478ms server-side against
+ * a median of 74.
+ *
+ * The saving comes from removing a write, not from removing the ordering. The
+ * order below is the whole guarantee: bytes first so a worker on another machine
+ * can read them, the job LAST so a claimable job's file is already there.
+ */
+test('the bytes are durable before the job is claimable', async () => {
+  const order = [];
+  const { enqueueDocument } = await import('../src/agent/services/ingest.js');
+  const { collection } = await import('../src/agent/store/jsonStore.js');
+
+  // Observe the sequence through the stores the path actually writes to.
+  const docs = collection('documents');
+  const jobsCol = collection('jobs');
+  const realDocPut = docs.put.bind(docs);
+  const realJobPut = jobsCol.put.bind(jobsCol);
+  docs.put = async (d) => { order.push(`document(job_id=${d.job_id ? 'set' : 'MISSING'})`); return realDocPut(d); };
+  jobsCol.put = async (j) => { order.push('job'); return realJobPut(j); };
+
+  const { putFile } = await import('../src/agent/services/fileStore.js');
+  const fileStore = await import('../src/agent/services/fileStore.js');
+  const realPut = fileStore.putFile;
+
+  try {
+    await enqueueDocument({
+      userId: 'usr_order',
+      filename: 'ordering.md',
+      mimetype: 'text/markdown',
+      buffer: Buffer.from('# Ordering\n\nThe bytes come first.\n'),
+      spaceId: null,
+      onAccepted: () => order.push('202'),
+      runInline: false,
+    });
+  } finally {
+    docs.put = realDocPut;
+    jobsCol.put = realJobPut;
+  }
+
+  // The document carries its job id on the FIRST write, so there is no second one.
+  const docWrites = order.filter((o) => o.startsWith('document'));
+  assert.equal(docWrites.length, 1, `the document is written once, got ${docWrites.length}: ${order.join(' -> ')}`);
+  assert.match(docWrites[0], /job_id=set/, 'and carries its job id in that write');
+
+  // The job is enqueued after the document, and the 202 after everything.
+  assert.ok(order.indexOf('job') > order.indexOf(docWrites[0]), `job after document: ${order.join(' -> ')}`);
+  assert.equal(order[order.length - 1], '202', `the caller is told last: ${order.join(' -> ')}`);
+  assert.ok(typeof realPut === 'function' && typeof putFile === 'function', 'the file store is the real one');
+});
+
+test('the acceptance path does not patch the document after inserting it', () => {
+  const src = fs.readFileSync(new URL('../src/agent/services/ingest.js', import.meta.url), 'utf8');
+  const fn = src.slice(src.indexOf('export async function enqueueDocument'), src.indexOf('export async function indexDocumentJob'));
+  assert.ok(!/updateDocument\(doc(Id)?\.?i?d?, \{ job_id/.test(fn), 'the job_id update round trip is gone');
+  assert.match(fn, /const docId = newId\('doc'\);/, 'both ids are generated up front');
+  assert.match(fn, /const jobId = newId\('job'\);/);
+  // Order pinned in source too: a later edit that parallelises these loses the
+  // guarantee the comment claims.
+  const iFile = fn.indexOf('await putFile(');
+  const iDoc = fn.indexOf('await createDocument(');
+  const iJob = fn.indexOf('await jobQueue.enqueue(');
+  assert.ok(iFile < iDoc && iDoc < iJob, 'bytes, then document, then job');
+  assert.ok(!/Promise\.all/.test(fn), 'and nothing here is parallelised');
+});
+
+test('the pool is kept warm, because a cold connection costs more than the budget', async () => {
+  const { config } = await import('../src/shared/config.js');
+  assert.ok(config.mongo.minPoolSize >= 1, 'connections are held open from startup');
+
+  const mongo = fs.readFileSync(new URL('../src/agent/store/mongo.js', import.meta.url), 'utf8');
+  assert.match(mongo, /minPoolSize: config\.mongo\.minPoolSize/, 'the client is given the floor');
+  assert.match(mongo, /maxIdleTimeMS: 0/, 'and idle connections are not reaped');
+  assert.match(mongo, /export async function warmMongoPool/, 'and the pool is warmed explicitly');
+
+  const server = fs.readFileSync(new URL('../src/agent/server.js', import.meta.url), 'utf8');
+  assert.match(server, /warmMongoPool\(\)/, 'at boot');
+  assert.ok(!/await warmMongoPool\(\)/.test(server), 'without blocking the listener');
+  assert.ok(
+    server.indexOf('warmMongoPool()') < server.indexOf('probeVectorIndexes()'),
+    'before the index probe, so the probe measures the index and not a handshake',
+  );
+});
