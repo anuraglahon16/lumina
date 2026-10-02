@@ -41,6 +41,8 @@ export async function runDeepQuery({
   spaceId = null,
   // The `ans_…` the route minted for this answer, stored on the assistant turn.
   answerId = null,
+  // The route's recorder, already persisted as `running`. See quick.js.
+  recorder: injectedRecorder = null,
   // Forwarded to the tool executor so a Deep test can drive the real
   // orchestration - real ledger writes, real deduplication - without touching
   // the network. Production passes neither.
@@ -71,7 +73,7 @@ export async function runDeepQuery({
   const limits = config.budgets.deep;
   const deadline = Date.now() + limits.wallClockMs;
   const ledger = new EvidenceLedger();
-  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'deep', query, model: config.llm.deepSynthesisModel });
+  const recorder = injectedRecorder ?? new RunRecorder({ requestId, userId, threadId, mode: 'deep', query, model: config.llm.deepSynthesisModel });
   const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {

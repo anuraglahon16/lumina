@@ -81,10 +81,12 @@ async function rememberInstruction({ query, userId, threadId, runId, emit, recor
   return done;
 }
 
-export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto', answerId = null }) {
+export async function runQuickQuery({ query, userId, threadId, requestId, emit, signal, spaceId = null, retrievalMode = 'auto', answerId = null, recorder: injectedRecorder = null }) {
   const budget = new Budget(config.budgets.quick, { label: 'quick' });
   const ledger = new EvidenceLedger();
-  const recorder = new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.quickModel });
+  // The route may already have created and persisted the recorder, so the run
+  // record exists before any context is loaded. Without one, this run owns it.
+  const recorder = injectedRecorder ?? new RunRecorder({ requestId, userId, threadId, mode: 'quick', query, model: config.llm.quickModel });
   const thread = await ensureThread({ threadId, userId, title: query });
 
   emit('run_start', {

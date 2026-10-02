@@ -84,6 +84,8 @@ export class RunRecorder {
       answer_chars: 0,
     };
     this.t0 = performance.now();
+    /** Set by finish(); a second call is a no-op, so the first outcome wins. */
+    this.finished = false;
     this.openPhases = new Map();
   }
 
@@ -229,7 +231,36 @@ export class RunRecorder {
     Object.assign(this.run, patch);
   }
 
+  /**
+   * Persist the run as `running`, before anything can await.
+   *
+   * The record was only ever written by `finish()`, so a request that arrived
+   * and was then abandoned left nothing at all - and four asks in a deployed
+   * benchmark did exactly that. The absence looked like a crash and was not:
+   * there was simply nothing to write a record from until the run ended. Now
+   * arrival and completion are two writes to one row, and "arrived but no
+   * record" cannot happen silently.
+   *
+   * Awaited by the caller, because the point is that the row exists before the
+   * work starts.
+   */
+  async begin() {
+    this.run.status = 'running';
+    await runs.put(this.run);
+    return this.run;
+  }
+
+  /**
+   * First call wins.
+   *
+   * A disconnect can fire `close` after a run has already finished, and twice
+   * over, so without this the record would be overwritten with an `aborted`
+   * status after a perfectly good answer - which is worse than the gap it was
+   * added to close.
+   */
   finish({ status = 'ok', terminationReason, answer, citations, sources } = {}) {
+    if (this.finished) return this.run;
+    this.finished = true;
     this.run.status = status;
     this.run.ended_at = new Date().toISOString();
     this.run.latency_ms = this.elapsedMs();

@@ -19,7 +19,7 @@ import { listDocuments } from '../services/ragStore.js';
 import { enqueueDocument } from '../services/ingest.js';
 import { jobQueue } from '../services/jobs.js';
 import { createSpace, listSpaces, getSpace } from '../services/spaces.js';
-import { listRuns, runStats } from '../store/runLog.js';
+import { listRuns, runStats, RunRecorder } from '../store/runLog.js';
 import { pingMongo } from '../store/mongo.js';
 import { resolveProviders } from '../services/search/index.js';
 
@@ -98,18 +98,74 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
     }
   }
 
+  /**
+   * The run record exists before any context is loaded.
+   *
+   * It used to be written only by `finish()`, so a request that arrived and was
+   * then abandoned left nothing - four asks in a deployed benchmark did exactly
+   * that, and the absence looked like a crash it was not. The row is created
+   * here, as `running`, before the thread lookup and before the run starts, and
+   * `finish()` updates the same row.
+   *
+   * `req.params.threadId` rather than the ensured thread, because this has to
+   * happen before that await.
+   */
+  const recorder = new RunRecorder({
+    requestId: req.requestId,
+    userId,
+    threadId: req.params.threadId,
+    mode: depth,
+    query,
+    model: depth === 'deep' ? config.llm.deepSynthesisModel : config.llm.quickModel,
+  });
+  await recorder.begin();
+
   // The thread is addressed in the path, so it has to exist before the run
   // rather than being created by it.
   const thread = await ensureThread({ threadId: req.params.threadId, userId, title: query });
 
   const sse = openSse(res, { requestId: req.requestId });
   const controller = new AbortController();
-  // The client leaving closes the response; the request stream has already ended
-  // once the body was parsed, so listening there aborts immediately.
-  res.on('close', () => controller.abort());
+
+  /**
+   * Who closed the stream, when, and how far it had got.
+   *
+   * A disconnect logged nothing and finalised nothing, so an abandoned run was
+   * invisible from both ends. This says what was sent before the stream died -
+   * and finalises the record, so the run lands in the export as
+   * `client_disconnected` instead of vanishing.
+   *
+   * `finish()` is idempotent and first-call-wins, so a close that arrives after
+   * a normal completion leaves the real outcome alone.
+   */
+  const openedAt = Date.now();
+  // Declared before the close handler that reads it. The handler only runs
+  // later, but a reader should not have to prove that to rule out a TDZ error.
+  let lastEventSent = 'none';
+  res.on('close', () => {
+    controller.abort();
+    log.warn('client_closed', {
+      request_id: req.requestId,
+      writable_ended: res.writableEnded,
+      elapsed_ms: Date.now() - openedAt,
+      last_event: lastEventSent,
+      bytes_written: res.socket?.bytesWritten ?? null,
+    });
+    if (!res.writableEnded) {
+      recorder.finish({ status: 'aborted', terminationReason: 'client_disconnected' });
+    }
+  });
 
   const answerId = newId('ans');
-  const emit = contractStream({ send: (event, data) => sse.send(event, data), depth, answerId, requestId: req.requestId });
+  const emit = contractStream({
+    send: (event, data) => {
+      lastEventSent = event;
+      sse.send(event, data);
+    },
+    depth,
+    answerId,
+    requestId: req.requestId,
+  });
 
   try {
     const run = depth === 'deep' ? runDeepQuery : runQuickQuery;
@@ -129,6 +185,8 @@ contractRouter.post('/threads/:threadId/ask', async (req, res, next) => {
       answerId,
       emit,
       signal: controller.signal,
+      // Already persisted as `running`; the run updates this same row.
+      recorder,
     });
   } catch (err) {
     log.error('contract_ask_failed', { request_id: req.requestId, err: err.message });

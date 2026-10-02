@@ -43,9 +43,25 @@ function requireUser(req, res, next) {
 contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next) => {
   const target = AGENT(`/contract/threads/${encodeURIComponent(req.params.threadId)}/ask`);
   const controller = new AbortController();
-  // The client leaving closes the response; the request stream has already ended
-  // once the body was parsed, so listening there aborts immediately.
-  res.on('close', () => controller.abort());
+  const openedAt = Date.now();
+  /**
+   * Which side closed, and when.
+   *
+   * A dropped stream logged nothing on either side, so four benchmark failures
+   * were only visible as an absence. `downstream_closed` is the browser or bench
+   * hanging up; `upstream_closed` and `upstream_error` are the agent's end. Each
+   * carries elapsed ms, so "seconds" and "minutes" are distinguishable - which
+   * is the difference between a network fault and a server stall.
+   */
+  res.on('close', () => {
+    controller.abort();
+    log.warn('downstream_closed', {
+      request_id: req.requestId,
+      writable_ended: res.writableEnded,
+      elapsed_ms: Date.now() - openedAt,
+      headers_sent: res.headersSent,
+    });
+  });
 
   /**
    * A deadline on the silence before the agent answers.
@@ -111,8 +127,16 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
     // down with it. A disconnect is the most ordinary thing that can happen to
     // a stream and must not be fatal to everyone else's requests.
     await pipeline(Readable.fromWeb(upstream.body), res);
+    log.info('upstream_closed', { request_id: req.requestId, elapsed_ms: Date.now() - openedAt, reason: 'stream ended' });
   } catch (err) {
     clearTimeout(ttfb);
+    log.warn('upstream_error', {
+      request_id: req.requestId,
+      elapsed_ms: Date.now() - openedAt,
+      err: err?.message,
+      name: err?.name,
+      headers_sent: res.headersSent,
+    });
     /**
      * An abort before any headers is OUR deadline, not the client leaving.
      *
