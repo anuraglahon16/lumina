@@ -313,7 +313,8 @@ export function createToolExecutor({
       budget.markCapped(gate.reason);
       slots?.noteBranchRefusal();
       emit?.('tool_blocked', { tool: name, reason: gate.reason, branch, budget: budget.snapshot() });
-      recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${gate.reason}`, error: gate.reason, branch });
+      // A refusal, not a call: nothing executed. See RunRecorder.recordRefusal.
+      recorder?.recordRefusal({ name, input, reason: gate.reason, branch });
       return {
         ok: false,
         blocked: true,
@@ -329,7 +330,7 @@ export function createToolExecutor({
     if (slots && !permit) {
       budget.markCapped(slots.capReason);
       emit?.('tool_blocked', { tool: name, reason: slots.capReason, branch, budget: budget.snapshot() });
-      recorder?.recordToolCall({ name, input, durationMs: 0, ok: false, summary: `blocked: ${slots.capReason}`, error: slots.capReason, branch });
+      recorder?.recordRefusal({ name, input, reason: slots.capReason, branch });
       return {
         ok: false,
         blocked: true,

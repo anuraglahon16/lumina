@@ -171,3 +171,54 @@ test('listRuns filters rather than returning everything', async () => {
   assert.ok(items.length >= 1);
   assert.ok(items.every((r) => r.mode === 'deep' && r.user_id === 'group_user'));
 });
+
+/* ------------------------------------------- a refusal is not a call */
+
+/**
+ * The run log counted refused calls as tool calls.
+ *
+ * A deployed deep run logged `tool_calls: 29` against a streamed trace of 23 and
+ * a pool that had claimed 23. The six extras were per-branch refusals: nothing
+ * executed, no provider was contacted. Three records of one run disagreeing is
+ * three numbers a reader has to choose between.
+ *
+ * They stay recorded, with their reason, because they are why the run terminated
+ * as `cap`. The trace already excludes them and has to: the grader counts trace
+ * events against a ceiling of 24, so tracing refusals would fail a run precisely
+ * for enforcing its budget.
+ */
+test('a refused call is recorded as a refusal, not as a tool call', async () => {
+  const { RunRecorder } = await import('../src/agent/store/runLog.js');
+  const r = new RunRecorder({ requestId: 'req_refusals', userId: 'u', threadId: null, mode: 'deep', query: 'q', model: 'm' });
+
+  r.recordToolCall({ name: 'web_search', input: { query: 'a' }, durationMs: 5, ok: true });
+  r.recordToolCall({ name: 'fetch_page', input: { url: 'https://x.test' }, durationMs: 5, ok: false, error: 'HTTP 403' });
+  r.recordRefusal({ name: 'fetch_page', input: { url: 'https://y.test' }, reason: 'branch_tool_calls_exhausted', branch: 'q2' });
+  r.recordRefusal({ name: 'web_search', input: { query: 'b' }, reason: 'pool_exhausted', branch: 'q3' });
+
+  const run = r.snapshot();
+  assert.equal(run.tool_calls.length, 2, 'two calls were made');
+  assert.equal(run.refusals.length, 2, 'two were refused');
+  assert.deepEqual(run.tool_calls.map((t) => t.name), ['web_search', 'fetch_page']);
+
+  // A refusal carries why, and which sub-question wanted it.
+  assert.equal(run.refusals[0].reason, 'branch_tool_calls_exhausted');
+  assert.equal(run.refusals[0].branch, 'q2');
+  assert.equal(run.refusals[1].seq, 2, 'ordered');
+  assert.ok(Number.isInteger(run.refusals[0].at_ms), 'and placed in the run');
+
+  // The executed failure keeps its error, which quality/check.mjs requires.
+  const failed = run.tool_calls.filter((t) => t.ok === false);
+  assert.equal(failed.length, 1);
+  assert.ok(failed[0].error, 'a failed call that executed still carries a non-empty error');
+});
+
+test('the tool executor records a block as a refusal', () => {
+  const src = fs.readFileSync(new URL('../src/agent/core/tools.js', import.meta.url), 'utf8');
+  assert.match(src, /recorder\?\.recordRefusal\(\{ name, input, reason: gate\.reason, branch \}\)/, 'the per-branch gate');
+  assert.match(src, /recorder\?\.recordRefusal\(\{ name, input, reason: slots\.capReason, branch \}\)/, 'and the shared pool');
+  assert.ok(
+    !/recordToolCall\(\{ name, input, durationMs: 0, ok: false, summary: `blocked/.test(src),
+    'a block is no longer written as a zero-duration tool call',
+  );
+});

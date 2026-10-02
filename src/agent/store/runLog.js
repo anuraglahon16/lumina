@@ -69,6 +69,8 @@ export class RunRecorder {
       phases: [],
       llm_calls: [],
       tool_calls: [],
+      // Calls the budget refused. See recordRefusal.
+      refusals: [],
       errors: [],
       // Degradations the run recovered from. Never counted as failures.
       warnings: [],
@@ -162,6 +164,32 @@ export class RunRecorder {
     });
   }
 
+  /**
+   * A call the budget refused, which is not a call that happened.
+   *
+   * These went into `tool_calls`, so a deployed deep run logged 29 tool calls
+   * against a streamed trace of 23 and a pool that had claimed 23 - the six
+   * extras were per-branch refusals, where nothing executed and no provider was
+   * contacted. Three records of one run disagreeing is three numbers a reader
+   * has to choose between.
+   *
+   * They stay recorded, with their reason, because they are why the run
+   * terminated as `cap`. They are simply not counted as work done. The streamed
+   * trace already excludes them, and it has to: the grader counts trace events
+   * against a ceiling of 24, so tracing refusals would fail a run precisely for
+   * enforcing its budget.
+   */
+  recordRefusal({ name, input, reason, branch }) {
+    this.run.refusals.push({
+      seq: this.run.refusals.length + 1,
+      name,
+      branch: branch || null,
+      input,
+      reason,
+      at_ms: this.elapsedMs(),
+    });
+  }
+
   recordCache({ namespace, hit, write }) {
     const bucket = (this.run.cache.by_namespace[namespace] ||= { hits: 0, misses: 0, writes: 0 });
     if (write) {
@@ -231,6 +259,8 @@ export class RunRecorder {
       depth: this.run.mode,
       status: this.run.status,
       tool_calls: this.run.tool_calls.length,
+      // Why a `cap` was a cap. Separate from the count above, which is work done.
+      refused: this.run.refusals.length,
       terminated: this.run.termination_reason ?? null,
       tokens: this.run.tokens,
       cost_usd: Number((this.run.cost_usd ?? 0).toFixed(6)),

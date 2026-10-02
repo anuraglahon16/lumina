@@ -88,3 +88,62 @@ test('a child logger keeps redaction', () => {
   const [line] = capture(() => child.error('job', { token: 'should-not-appear' }));
   assert.equal(line.token, '[redacted]');
 });
+
+/* ------------------------------------------- counts are not credentials */
+
+/**
+ * `tokens` contains `token`, so the secret rule redacted it.
+ *
+ * The per-answer line logged `"tokens":"[redacted]"` on the deployed agent - a
+ * required observability field, hidden by the rule that protects
+ * `INTERNAL_TOKEN`. Found by reading a deployed log line.
+ *
+ * The allowlist is deliberately a list and not a cleverer pattern: anchoring
+ * `token` on word boundaries would let `access_token` and `auth_token` through,
+ * because `_` is a word character.
+ */
+test('a token count is logged, and every real secret is not', async () => {
+  const { createLogger } = await import('../src/shared/logger.js');
+  const lines = [];
+  const real = process.stdout.write.bind(process.stdout);
+  process.stdout.write = (chunk, ...rest) => {
+    const text = typeof chunk === 'string' ? chunk : Buffer.from(chunk).toString();
+    for (const l of text.split('\n')) {
+      if (!l.trim()) continue;
+      try { lines.push(JSON.parse(l)); } catch { /* not ours */ }
+    }
+    return real(chunk, ...rest);
+  };
+  try {
+    createLogger('redaction-probe').info('answer', {
+      tokens: { input: 10, output: 20 },
+      max_tokens: 4000,
+      INTERNAL_TOKEN: 'super-secret-value',
+      api_key: 'sk-ant-xxxx',
+      auth_token: 'abc',
+      access_token: 'def',
+      authorization: 'Bearer y',
+      MONGODB_URI: 'mongodb+srv://u:p@host',
+      nested: { password: 'p', tokens: 5 },
+    });
+  } finally {
+    process.stdout.write = real;
+  }
+
+  const line = lines.find((l) => l.msg === 'answer' && l.service === 'redaction-probe');
+  assert.ok(line, 'the line was emitted');
+
+  // Readable: these are counts.
+  assert.deepEqual(line.tokens, { input: 10, output: 20 }, 'a token count is not a token');
+  assert.equal(line.max_tokens, 4000);
+  assert.equal(line.nested.tokens, 5, 'including nested');
+
+  // Redacted: these are credentials.
+  for (const k of ['INTERNAL_TOKEN', 'api_key', 'auth_token', 'access_token', 'authorization']) {
+    assert.equal(line[k], '[redacted]', `${k} must stay redacted`);
+  }
+  assert.equal(line.nested.password, '[redacted]');
+  // A connection string is not caught by key name; it must not be logged at all,
+  // which is a caller's responsibility - asserted here so the gap is on record.
+  assert.ok(line.MONGODB_URI === undefined || typeof line.MONGODB_URI === 'string');
+});

@@ -5,13 +5,28 @@ const threshold = LEVELS[config.logging.level] ?? LEVELS.info;
 
 const SECRET_KEYS = /(api[-_]?key|authorization|token|secret|password|x-api-key)/i;
 
+/**
+ * Keys that look secret and are not.
+ *
+ * `tokens` contains `token`, so the per-answer line logged
+ * `"tokens":"[redacted]"` - a required observability field, redacted by the rule
+ * meant to protect `INTERNAL_TOKEN`. Found by reading a deployed log line, not
+ * by reading this file.
+ *
+ * An allowlist rather than a cleverer pattern: anchoring `token` on word
+ * boundaries would let `access_token` and `auth_token` through, because `_` is a
+ * word character, which trades a cosmetic problem for a real one. These are the
+ * names that are counts.
+ */
+const NOT_SECRET = /^(tokens|token_count|tokens_in|tokens_out|max_tokens|maxTokens)$/i;
+
 /** Never let a key reach a log line, even if someone passes the whole config. */
 function redact(value, depth = 0) {
   if (depth > 4 || value === null || typeof value !== 'object') return value;
   if (Array.isArray(value)) return value.map((v) => redact(v, depth + 1));
   const out = {};
   for (const [k, v] of Object.entries(value)) {
-    out[k] = SECRET_KEYS.test(k) ? '[redacted]' : redact(v, depth + 1);
+    out[k] = SECRET_KEYS.test(k) && !NOT_SECRET.test(k) ? '[redacted]' : redact(v, depth + 1);
   }
   return out;
 }
