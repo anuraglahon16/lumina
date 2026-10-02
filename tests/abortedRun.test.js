@@ -142,3 +142,29 @@ test('the gateway names which side closed', () => {
   }
   assert.equal((src.match(/elapsed_ms: Date\.now\(\) - openedAt/g) ?? []).length >= 3, true, 'each with elapsed ms');
 });
+
+test('an abandoned run never exports as done', async () => {
+  /**
+   * `done` was the fall-through in terminatedOf, so `client_disconnected`
+   * inherited it: eight runs cut off after five minutes exported as "finished
+   * the work they planned". A2 then saw 86 runs all `done` while B2 flagged the
+   * same eight for 300s against a 240s budget - two rules disagreeing about one
+   * run, which is what a false label looks like from outside.
+   */
+  const { terminatedOf } = await import('../tools/export-runlogs.mjs');
+
+  assert.equal(terminatedOf({ status: 'aborted', termination_reason: 'client_disconnected' }), 'error');
+  assert.equal(terminatedOf({ status: 'ok', termination_reason: 'client_disconnected' }), 'error');
+  // The honest words for the other outcomes are unchanged.
+  assert.equal(terminatedOf({ status: 'ok', termination_reason: 'sufficient_evidence' }), 'done');
+  assert.equal(terminatedOf({ status: 'ok', termination_reason: 'deep_tool_budget_exhausted' }), 'cap');
+  assert.equal(terminatedOf({ status: 'error', errors: [{ where: 'llm' }] }), 'error');
+});
+
+test('an abandoned run exports under runs/failing', async () => {
+  const src = fs.readFileSync(new URL('../tools/export-runlogs.mjs', import.meta.url), 'utf8');
+  // The split is on `terminated === 'done'`, so anything else is a failing run.
+  assert.match(src, /log\?\.terminated === 'done' \? 'completed' : 'failing'/, 'the bucket follows the label');
+  const { terminatedOf } = await import('../tools/export-runlogs.mjs');
+  assert.notEqual(terminatedOf({ status: 'aborted', termination_reason: 'client_disconnected' }), 'done');
+});

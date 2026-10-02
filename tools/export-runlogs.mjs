@@ -86,7 +86,22 @@ export function populationFor(log) {
 
 export function terminatedOf(run) {
   if (run.status === 'error' || (run.errors ?? []).length > 0) return 'error';
+  /**
+   * An abandoned run is not a finished one.
+   *
+   * `done` is the fall-through, so when `client_disconnected` was introduced it
+   * inherited it: eight runs that were cut off after five minutes exported as
+   * "finished the work they planned", which is the relabelling this file exists
+   * to avoid. It also hid them from A2 - all 86 looked `done` - while B2 flagged
+   * the same eight for running 300s against a 240s budget. Two rules disagreeing
+   * about one run is the symptom of a label that is not true.
+   *
+   * `error` of the contract's three words: the run produced no answer. `cap` is
+   * reserved for a budget that was spent, and this budget never was.
+   */
+  if (run.status === 'aborted') return 'error';
   const reason = run.termination_reason ?? '';
+  if (reason === 'client_disconnected') return 'error';
   if (CAP_REASONS.has(reason)) return 'cap';
   if (run.budget?.capped) return 'cap';
   return 'done';
