@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { existsSync } from 'node:fs';
 import express from 'express';
 import cors from 'cors';
 import { config } from '../shared/config.js';
@@ -143,6 +144,17 @@ app.use(identity);
 // JSON body parsing everywhere except the multipart upload route, which streams.
 
 
+/**
+ * Which UI this container serves, decided once at startup.
+ *
+ * Declared here rather than beside the static mount below, because `/health`
+ * reports it: a `const` is not hoisted, and while the handler only runs long
+ * after module evaluation, code that reads as a use-before-declaration is code
+ * someone has to reason about to dismiss.
+ */
+const WEB_DIST = path.join(config.root, 'web/dist');
+export const uiRoot = existsSync(path.join(WEB_DIST, 'index.html')) ? WEB_DIST : path.join(config.root, 'src/gateway/public');
+
 app.get('/health.internal', async (req, res) => {
   let agent = { status: 'unreachable' };
   try {
@@ -155,6 +167,10 @@ app.get('/health.internal', async (req, res) => {
     status: agent.status === 'unreachable' ? 'degraded' : agent.status,
     service: 'gateway',
     uptime_s: Math.round(process.uptime()),
+    // Which UI this container is actually serving. The fallback is a different
+    // application with a different feature set, and from the outside the two are
+    // hard to tell apart until something is missing.
+    ui: uiRoot.endsWith('web/dist') ? 'web/dist' : 'src/gateway/public (fallback: no web build in this image)',
     agent,
   });
 });
@@ -177,19 +193,58 @@ app.get('/runs', rateLimit('global'), runsPage);
 
 app.use('/api', apiRouter);
 
-// The UI is served by the gateway so one origin covers page, API, and SSE.
-app.use(rateLimit('global', 0), express.static(path.join(config.root, 'src/gateway/public'), { maxAge: '5m', index: 'index.html' }));
+/**
+ * The UI is served by the gateway, so one origin covers page, API and SSE.
+ *
+ * `web/dist` is the provided React app, built into the image. The original
+ * vanilla UI is the fallback, so a container built without a web build still
+ * serves something rather than a wall of 404s - but a deployment is expected to
+ * have the build, and `/health` says which one is live so the two are never
+ * confused from the outside.
+ *
+ * This used to live in `api/index.js`, the single Vercel function that was the
+ * whole application: gateway middleware in front of the agent's routers, in one
+ * process, with the provider keys on the public edge. Serving the UI was the one
+ * part of that file which was genuinely the gateway's job.
+ */
+app.use(rateLimit('global', 0), express.static(uiRoot, { maxAge: '5m', index: 'index.html' }));
+
+/**
+ * A single-page app owns its own routing.
+ *
+ * `/evals` is a client route, not a file, so anything unmatched above that is a
+ * GET for a page belongs to the app rather than being a 404. Scoped to the real
+ * build: with the vanilla fallback there is no SPA to hand control to, and
+ * swallowing unknown paths there would turn a missing route into a blank page.
+ *
+ * API-shaped paths are excluded so a typo'd endpoint still returns JSON. A
+ * client asking for `/threadz` wants an error it can read, not index.html.
+ */
+if (uiRoot === WEB_DIST) {
+  app.get('*', (req, res, next) => {
+    if (req.path.startsWith('/api') || CONTRACT_PATH.test(req.path)) return next();
+    if (!req.accepts('html')) return next();
+    return res.sendFile(path.join(WEB_DIST, 'index.html'));
+  });
+}
 
 app.use((req, res) => res.status(404).json({ error: { code: 'not_found', message: `No route for ${req.method} ${req.path}` } }));
 app.use(errorHandler(log));
 
-const server = app.listen(config.gateway.port, () => {
+/**
+ * Exported so a test can drive the real server rather than a second one wrapped
+ * around the same app. With GATEWAY_PORT=0 the OS picks the port and
+ * `server.address().port` is the only way to learn it - the configured value is
+ * 0, which is how an earlier agent log announced `"port":0`.
+ */
+export const server = app.listen(config.gateway.port, () => {
   log.info('gateway_listening', {
-    port: config.gateway.port,
+    port: server.address()?.port ?? config.gateway.port,
     agent_url: config.gateway.agentUrl,
     cors: config.gateway.corsOrigins,
     auth_gate: Boolean(config.gateway.demoPassword) ? 'shared-password' : 'open',
-    ui: `http://localhost:${config.gateway.port}`,
+    ui: `http://localhost:${server.address()?.port ?? config.gateway.port}`,
+    ui_root: uiRoot.endsWith('web/dist') ? 'web/dist' : 'src/gateway/public (fallback)',
   });
 });
 

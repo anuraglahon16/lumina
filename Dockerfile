@@ -8,6 +8,26 @@
 # Node 22 on purpose. `engines` pins ">=20.19 <24" because the pdf.js build
 # vendored by pdf-parse throws `bad XRef entry` on Node 24, which is how every
 # PDF upload failed on a deployment whose platform default had moved on.
+# ---- stage 1: build the provided React app -----------------------------------
+#
+# The UI used to be deployed separately to Vercel while the API ran here, so the
+# page and the API it talked to came from two different origins and two different
+# commits. The Gateway serves `web/dist` now, which means the image has to contain
+# it, which means building it - with dev dependencies, which the runtime stage
+# does not have and should not.
+FROM node:22-slim AS web
+WORKDIR /app
+COPY package.json package-lock.json ./
+COPY packages/contract/package.json packages/contract/
+COPY web/package.json web/
+RUN npm ci
+COPY packages/contract ./packages/contract
+COPY web ./web
+# `npm run build` in web/ typechecks first, so a UI that does not compile fails
+# the image build instead of being quietly left out of it.
+RUN npm run build -w @lumina/web
+
+# ---- stage 2: the runtime image ----------------------------------------------
 FROM node:22-slim
 
 ENV NODE_ENV=production
@@ -19,16 +39,17 @@ COPY packages/contract/package.json packages/contract/
 COPY web/package.json web/
 RUN npm ci --omit=dev --workspace-root --include-workspace-root || npm ci --omit=dev
 
-# The contract's compiled types ship with the repo; the React app is deployed
-# separately to Vercel and is deliberately not in this image.
+# The contract's compiled types ship with the repo.
 COPY packages/contract ./packages/contract
 COPY src ./src
-COPY api ./api
 COPY eval ./eval
 COPY benchmark ./benchmark
 COPY quality ./quality
 COPY tools ./tools
 COPY reports ./reports
+
+# The built UI, from stage 1. Only the output: no sources, no dev dependencies.
+COPY --from=web /app/web/dist ./web/dist
 
 # Writable scratch for the local JSON store fallback and page cache. Neither is
 # the deployed path - Mongo is - but a container that cannot write anywhere at

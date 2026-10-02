@@ -27,3 +27,24 @@ hf-space/
 # They are a snapshot of a live database, not source, and 400 files of it
 # would bury every real diff in this repository.
 runs/
+
+# The built UI. AGENTS.md requires this ignored, and it was tracked - so a
+# commit carried a bundle built from whatever the working tree happened to hold,
+# and reviewing a UI change meant reading minified output. The Gateway image
+# builds it (Dockerfile stage 1), which is the only place it needs to exist.
+web/dist/
+
+# Generated measurement output.
+#
+# `reports/*` rather than `reports/`: an excluded DIRECTORY is not descended
+# into, so negations for files inside it never apply - the first version of this
+# had `reports/` with two `!` lines under it that did nothing at all.
+#
+# The hand-written evidence is re-included, because the point of those files is
+# that a later run cannot quietly replace an earlier one. Files already tracked
+# stay tracked either way; this governs what a new run can add by accident.
+reports/*
+!reports/*.md
+!reports/*/
+reports/*/*.json
+!reports/*/*.md

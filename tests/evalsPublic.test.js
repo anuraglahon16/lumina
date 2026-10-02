@@ -24,10 +24,46 @@ process.env.MONGODB_URI = '';
 process.env.DEMO_PASSWORD = 'a-password-nobody-sending-these-requests-has';
 process.env.ANTHROPIC_API_KEY = 'test-key-not-used';
 
-const app = (await import('../api/index.js')).default;
+/**
+ * Driven against the gateway, which is now the only entry point.
+ *
+ * This imported `api/index.js` - the single Vercel function that was the whole
+ * application in one process, provider keys included. That file is gone, and
+ * with it the possibility of these two paths behaving differently: there is one
+ * place where /evals is served and one place where the password gate decides
+ * what it covers.
+ *
+ * The gateway listens on import, so the port it chose is what the tests use
+ * rather than a second server wrapping the same app.
+ */
+process.env.GATEWAY_PORT = '0';
 
-const server = http.createServer(app);
-await new Promise((resolve) => server.listen(0, resolve));
+/**
+ * A stub agent, because these tests are about the gateway's password gate.
+ *
+ * `/evals/report.json` is a contract path, so the gateway proxies it rather than
+ * answering it - under `api/index.js` the agent's routers ran in the same
+ * process and there was nothing to proxy to. Pointing AGENT_URL at a closed port
+ * made the gate test fail with 502, which is the proxy working, not the gate.
+ * The stub answers that one path so the assertions are about who is let through.
+ */
+const upstream = http.createServer((req, res) => {
+  // The gateway forwards to `/contract/evals/report.json`, not `/v1/...`:
+  // src/gateway/routes/contract.js names the upstream path explicitly.
+  if (req.url?.startsWith('/contract/evals/report.json')) {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ generatedAt: new Date().toISOString(), suites: [], target: 'stub' }));
+    return;
+  }
+  res.writeHead(404, { 'content-type': 'application/json' });
+  res.end('{"error":"not found"}');
+});
+await new Promise((resolve) => upstream.listen(0, '127.0.0.1', resolve));
+process.env.AGENT_URL = `http://127.0.0.1:${upstream.address().port}`;
+test.after(() => upstream.close());
+
+const { server } = await import('../src/gateway/server.js');
+await new Promise((resolve) => (server.listening ? resolve() : server.once('listening', resolve)));
 const BASE = `http://127.0.0.1:${server.address().port}`;
 test.after(() => server.close());
 

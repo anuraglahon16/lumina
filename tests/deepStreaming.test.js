@@ -186,15 +186,26 @@ test('production defaults synthesis to the streaming function', () => {
   assert.match(src, /streamComplete: streamFn = null,/, 'synthesis has its own injection seam');
 });
 
-test('both entry points reach synthesis through the same seam', async () => {
-  // The Vercel function and the two-process gateway mount the same router, so
-  // the callback path is shared by construction. Pinned because a divergence
-  // between those two copies is what made an earlier defect deploy-only.
-  const api = fs.readFileSync(new URL('../api/index.js', import.meta.url), 'utf8');
+test('there is one entry point, and it reaches synthesis through the same seam', async () => {
+  /**
+   * There were two: the two-process gateway, and `api/index.js` - the whole
+   * application as one Vercel function, with the agent's routers mounted behind
+   * the gateway's middleware and the provider keys on the public edge. This test
+   * asserted the two copies agreed, which is the best a test can do about a
+   * duplicate. The duplicate is gone, so the stronger assertion is available:
+   * there is nothing to diverge from.
+   */
+  assert.ok(!fs.existsSync(new URL('../api/index.js', import.meta.url)), 'the collapsed single-process entry point is gone');
+  assert.ok(!fs.existsSync(new URL('../api', import.meta.url)), 'and so is the directory it lived in');
+
   const gw = fs.readFileSync(new URL('../src/gateway/server.js', import.meta.url), 'utf8');
-  for (const [name, src] of [['api/index.js', api], ['gateway/server.js', gw]]) {
-    assert.match(src, /contractRouter/, `${name} mounts the contract router rather than its own ask path`);
-  }
+  assert.match(gw, /contractRouter/, 'the gateway mounts the contract router rather than its own ask path');
+  // And it proxies rather than running the loop: the keys live in the agent.
+  assert.ok(
+    !/runDeepQuery|runQuickQuery/.test(gw),
+    'the gateway must not call the loop directly - that is what put provider keys on the edge',
+  );
+
   const route = fs.readFileSync(new URL('../src/agent/routes/contract.js', import.meta.url), 'utf8');
   assert.match(route, /const run = depth === 'deep' \? runDeepQuery : runQuickQuery;/, 'one call site for both depths');
 });
