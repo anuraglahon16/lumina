@@ -1,5 +1,7 @@
 import dns from 'node:dns/promises';
+import { Resolver } from 'node:dns/promises';
 import net from 'node:net';
+import { Agent } from 'undici';
 import * as cheerio from 'cheerio';
 import { config } from '../../shared/config.js';
 import { safeSlice } from '../../shared/text.js';
@@ -30,23 +32,107 @@ function isPrivateAddress(ip) {
 }
 
 /**
+ * Resolution that cannot hang, and cannot starve anything else.
+ *
+ * This used `dns.lookup`, which is `getaddrinfo` on libuv's threadpool: it takes
+ * no signal, has no timeout, and occupies one of four threads while it waits.
+ * Eight quick runs in a deployed benchmark stalled for 295-300 seconds inside
+ * retrieval because an aborted fetch was stuck there and `Promise.allSettled`
+ * could not drain - and because the threadpool was being consumed, the failures
+ * arrived in clusters: a stuck lookup delays DNS for Mongo, Anthropic and the
+ * search provider too.
+ *
+ * `Resolver` is c-ares. It does its own UDP I/O on the event loop, so it touches
+ * no thread, takes a real timeout, and can be cancelled. A and AAAA are queried
+ * together because a host with only one of them must still resolve.
+ */
+const resolverFor = () => {
+  const r = new Resolver({ timeout: config.fetcher.dnsTimeoutMs, tries: config.fetcher.dnsTries });
+  return r;
+};
+
+/** Addresses for a host, bounded and cancellable. Throws rather than hanging. */
+export async function resolveHost(hostname, { signal, resolver = null } = {}) {
+  if (net.isIP(hostname)) return [{ address: hostname, family: net.isIPv6(hostname) ? 6 : 4 }];
+  const r = resolver ?? resolverFor();
+  let onAbort = null;
+  try {
+    /**
+     * Cancelled AND raced.
+     *
+     * `cancel()` is what stops the queries, and the real c-ares resolver rejects
+     * its pending promises when it is called. But a resolver that ignores cancel
+     * would leave this awaiting forever - which is the whole failure being fixed,
+     * reintroduced one layer up. A stub that never answers proved it: the abort
+     * fired, `cancelled` was set, and the caller still hung. So the abort also
+     * loses the race on its own.
+     */
+    const aborted = new Promise((_, reject) => {
+      if (signal?.aborted) return reject(abortReason('aborted before dns'));
+      onAbort = () => {
+        r.cancel?.();
+        reject(abortReason('aborted during dns'));
+      };
+      signal?.addEventListener('abort', onAbort, { once: true });
+    });
+
+    // Both families, and a failure of one is not a failure of the host.
+    const [v4, v6] = await Promise.race([
+      Promise.allSettled([r.resolve4(hostname), r.resolve6(hostname)]),
+      aborted,
+    ]);
+    const addrs = [
+      ...(v4.status === 'fulfilled' ? v4.value.map((a) => ({ address: a, family: 4 })) : []),
+      ...(v6.status === 'fulfilled' ? v6.value.map((a) => ({ address: a, family: 6 })) : []),
+    ];
+    if (!addrs.length) {
+      const why = [v4, v6].map((x) => (x.status === 'rejected' ? x.reason?.code ?? x.reason?.message : null)).filter(Boolean).join('/');
+      throw new Error(`dns failure for ${hostname}${why ? `: ${why}` : ''}`);
+    }
+    return addrs;
+  } finally {
+    if (onAbort) signal?.removeEventListener('abort', onAbort);
+  }
+};
+
+/**
  * The agent fetches URLs the model chose, so every fetch is an SSRF risk.
  * Scheme allowlist + DNS resolution + private-range rejection before any request.
+ *
+ * Returns the validated addresses as well as the URL, so the connection can be
+ * made to an address that passed this check rather than resolving again. A
+ * second resolution is a second answer, and the gap between them is the TOCTOU
+ * window this check otherwise leaves open.
  */
-async function assertFetchable(url) {
+async function assertFetchable(url, { signal } = {}) {
   const parsed = new URL(url);
   if (!/^https?:$/.test(parsed.protocol)) throw new Error(`blocked scheme: ${parsed.protocol}`);
   if (BLOCKED_HOST.test(parsed.hostname)) throw new Error(`blocked host: ${parsed.hostname}`);
   if (net.isIP(parsed.hostname) && isPrivateAddress(parsed.hostname)) throw new Error('blocked private address');
-  const addrs = await dns.lookup(parsed.hostname, { all: true }).catch(() => []);
-  if (!addrs.length) throw new Error(`dns failure for ${parsed.hostname}`);
+  const addrs = await resolveHost(parsed.hostname, { signal });
   if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error('host resolves to a private address');
-  return parsed;
+  return { parsed, addrs };
+}
+
+/**
+ * A dispatcher that connects only to the addresses the SSRF check approved.
+ *
+ * undici would otherwise resolve the hostname itself, through `getaddrinfo` -
+ * putting the unbounded lookup back on the threadpool after all the work above,
+ * and resolving a second time to an answer nobody validated.
+ */
+function dispatcherFor(addrs) {
+  return new Agent({
+    connect: {
+      lookup: (_hostname, _opts, cb) => cb(null, addrs.map((a) => ({ address: a.address, family: a.family }))),
+    },
+    connectTimeout: config.fetcher.connectTimeoutMs,
+  });
 }
 
 const robotsCache = new Map();
 
-async function robotsAllows(parsed, { signal } = {}) {
+async function robotsAllows(parsed, { signal, dispatcher = null } = {}) {
   if (!config.fetcher.respectRobots) return true;
   if (signal?.aborted) throw abortReason('aborted before robots.txt');
   const origin = parsed.origin;
@@ -65,6 +151,7 @@ async function robotsAllows(parsed, { signal } = {}) {
             res = await fetch(`${origin}/robots.txt`, {
               headers: { 'user-agent': config.fetcher.userAgent },
               signal: robotsBound.signal,
+              ...(dispatcher ? { dispatcher } : {}),
             });
           } finally {
             robotsBound.release();
@@ -273,14 +360,51 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
   // just slow; with it, a slow resolver and a slow server and a heavy document
   // are three different problems with three different answers.
   const timings = { resolve_ms: null, robots_ms: null, headers_ms: null, body_ms: null, extract_ms: null };
+  /**
+   * Declared outside the try, because the finally closes it.
+   *
+   * As a `const` inside the try it was in the temporal dead zone whenever
+   * resolution threw first - so a DNS failure would have been replaced by a
+   * ReferenceError from the cleanup, which is the worst possible place to lose
+   * the real error.
+   */
+  let dispatcher = null;
 
   try {
   const resolveStart = performance.now();
-  const parsed = await assertFetchable(url);
+  /**
+   * A failure here is a failed fetch, not an exception.
+   *
+   * `assertFetchable` sits outside the `cached(...).catch(...)` below, so a DNS
+   * failure propagated out of `fetchPage` as a rejection while every other
+   * failure came back as `{ ok: false, error }`. The caller then had two shapes
+   * to handle for one outcome, and the funnel recorded the thrown one as an
+   * attempt that never reached a terminal status.
+   */
+  let parsed;
+  let addrs;
+  try {
+    ({ parsed, addrs } = await assertFetchable(url, { signal: bound.signal }));
+  } catch (err) {
+    timings.resolve_ms = Math.round(performance.now() - resolveStart);
+    return {
+      ok: false,
+      url,
+      status: null,
+      aborted: err?.name === 'AbortError' || err?.code === 'ABORT_ERR',
+      error: err.message || 'could not resolve or validate the url',
+      duration_ms: at(),
+      timings,
+    };
+  }
   timings.resolve_ms = Math.round(performance.now() - resolveStart);
+  // Connect only to what the check approved, and never resolve a second time.
+  dispatcher = dispatcherFor(addrs);
 
   const robotsStart = performance.now();
-  const allowed = await robotsAllows(parsed, { signal: bound.signal });
+  // robots.txt goes to the same approved addresses: it is a fetch to the same
+  // host, and leaving it on getaddrinfo would leave the hazard in place for it.
+  const allowed = await robotsAllows(parsed, { signal: bound.signal, dispatcher });
   timings.robots_ms = Math.round(performance.now() - robotsStart);
   if (!allowed) {
     return { ok: false, url, error: 'disallowed by robots.txt', status: null, duration_ms: at(), timings };
@@ -311,6 +435,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
           },
           redirect: 'follow',
           signal: bound.signal,
+          dispatcher,
         });
       } finally {
         timings.headers_ms = Math.round(performance.now() - headersStart);
@@ -368,6 +493,8 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
 
   return { ...value, cached: wasCached, duration_ms: at(), timings };
   } finally {
+    // Sockets are per-dispatcher, so one left open per fetch is a leak.
+    dispatcher?.close?.().catch(() => {});
     bound.release();
   }
 }

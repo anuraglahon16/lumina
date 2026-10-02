@@ -326,13 +326,70 @@ async function fetchUntilCovered({ query, searchQuery, candidates, ledger, budge
     }
     funnel?.stopped(funnel.stop_reason ?? (queue.length ? 'budget_exhausted' : 'candidates_exhausted'));
   } finally {
-    // Whatever is still running is no longer wanted. Aborting stops the work;
-    // settling it before returning is what guarantees nothing lands afterwards
-    // — a fetch that resolved during the gap would otherwise add a source to a
-    // ledger the answer had already been written from.
+    /**
+     * Whatever is still running is no longer wanted, and the wait for it is
+     * bounded.
+     *
+     * Aborting stops the work and settling it before returning used to be what
+     * guaranteed nothing landed afterwards. That holds only while every fetch is
+     * cancellable - and one was not: `dns.lookup` takes no signal, so eight
+     * quick runs sat in this `allSettled` for 295-300 seconds until the client
+     * gave up, ignoring their own 90-second envelope because an uncancellable
+     * lookup cannot be interrupted by a deadline.
+     *
+     * So: a short grace period, then stop waiting and close the ledger. The
+     * guarantee moves from "every fetch has settled" to "nothing more can be
+     * added", which is the property that actually mattered. An abandoned fetch
+     * is recorded as cancelled, because a fetch whose outcome is unknown and a
+     * fetch that was cancelled are different things and only one of them is
+     * true here.
+     */
     pool.abort(abortReason('retrieval_complete'));
     bound.release();
-    await Promise.allSettled([...inFlight.values()]);
+
+    const pending = [...inFlight.entries()];
+    const drained = Promise.allSettled(pending.map(([, p]) => p));
+    /**
+     * The grace timer is NOT unref'd, and that is the point.
+     *
+     * An unref'd timer does not keep the event loop alive, so when the only
+     * remaining work was this timer and a promise that would never settle, node
+     * exited instead of firing it - `gatherFromWeb` simply never returned and
+     * the process ended silently. A timer whose job is to break a deadlock has
+     * to be the thing that holds the loop open until it fires. It is cleared as
+     * soon as the drain wins, so a healthy run pays nothing for it.
+     */
+    let graceTimer = null;
+    const abandoned = await Promise.race([
+      drained.then(() => []),
+      new Promise((resolve) => {
+        graceTimer = setTimeout(() => resolve(pending.map(([url]) => url)), config.fetcher.drainGraceMs);
+      }),
+    ]).finally(() => {
+      if (graceTimer) clearTimeout(graceTimer);
+    });
+
+    if (abandoned.length) {
+      ledger.close();
+      for (const url of abandoned) {
+        funnel?.fetched(
+          { eventId: null, candidateId: null, url },
+          {
+            status: 'cancelled',
+            httpStatus: null,
+            durationMs: null,
+            chars: 0,
+            admitted: false,
+            reason: 'abandoned after the drain grace period',
+          },
+        );
+      }
+      log.warn('fetch_drain_abandoned', {
+        count: abandoned.length,
+        grace_ms: config.fetcher.drainGraceMs,
+        urls: abandoned.slice(0, 3),
+      });
+    }
     inFlight.clear();
   }
 

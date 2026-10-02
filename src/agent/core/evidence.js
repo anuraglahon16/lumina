@@ -2,6 +2,9 @@ import { tokenize } from '../services/embeddings.js';
 import { chunkPassages } from '../services/chunker.js';
 import { reorderPassages } from './passageOrder.js';
 import { safeSlice } from '../../shared/text.js';
+import { createLogger } from '../../shared/logger.js';
+
+const log = createLogger('evidence');
 
 const STOPWORDS = new Set(
   'the a an and or but if then than that this these those of in on at to for with from by as is are was were be been being it its it\'s they them their there here what which who whom how why when where can could should would may might will shall do does did not no yes we you i he she his her our your my me us also more most some any each other into over under about after before between during such only very'.split(' '),
@@ -251,7 +254,27 @@ export class EvidenceLedger {
     return this.sources;
   }
 
+  /**
+   * Stop accepting evidence.
+   *
+   * The fetch pool used to guarantee this by draining every in-flight fetch
+   * before returning - which is sound until a fetch cannot be cancelled, and
+   * then it waits forever: eight runs stalled 295-300s on a DNS lookup that
+   * takes no signal. The drain is now bounded, so the guarantee has to live
+   * here instead: once the answer is being written, a straggler that lands is
+   * dropped rather than added to a ledger the answer did not come from.
+   */
+  close() {
+    this.closed = true;
+  }
+
   addWebSource(page, { branch = null, query = null } = {}) {
+    if (this.closed) {
+      // Not an error: a cancelled fetch landing late is ordinary. It must simply
+      // not become a source, and the trace should say it happened.
+      log.warn('source_rejected_after_close', { url: page?.final_url ?? page?.url, branch });
+      return null;
+    }
     const key = page.final_url || page.url;
     const existing = this.byUrl.get(key);
     if (existing) {

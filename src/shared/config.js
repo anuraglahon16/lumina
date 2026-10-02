@@ -395,6 +395,27 @@ export const config = {
 
   fetcher: {
     timeoutMs: num(process.env.FETCH_TIMEOUT_MS, 15000),
+    /**
+     * DNS, bounded and off the threadpool.
+     *
+     * `dns.lookup` is getaddrinfo on libuv's four threads: no timeout, no
+     * signal, and one thread held for the duration. Eight quick runs stalled
+     * 295-300s inside retrieval on exactly that, in clusters, because a held
+     * thread also delays DNS for Mongo and every provider. c-ares takes these.
+     */
+    dnsTimeoutMs: num(process.env.FETCH_DNS_TIMEOUT_MS, 2000),
+    dnsTries: num(process.env.FETCH_DNS_TRIES, 2),
+    connectTimeoutMs: num(process.env.FETCH_CONNECT_TIMEOUT_MS, 5000),
+    /**
+     * How long retrieval waits for aborted fetches to settle before giving up
+     * on them and closing the ledger.
+     *
+     * Two seconds, because a cancellable fetch settles in milliseconds once
+     * aborted; anything still running after that is not going to stop, and the
+     * run has an envelope to keep. The old behaviour was an unbounded wait,
+     * which is how a single stuck lookup held a 90-second run for 300.
+     */
+    drainGraceMs: num(process.env.FETCH_DRAIN_GRACE_MS, 2000),
     maxBytes: num(process.env.FETCH_MAX_BYTES, 3 * 1024 * 1024),
     maxChars: num(process.env.FETCH_MAX_CHARS, 24000),
     userAgent: process.env.FETCH_USER_AGENT || 'LuminaBot/1.0 (+research agent; respects robots)',
