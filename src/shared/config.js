@@ -313,12 +313,27 @@ export const config = {
        *
        * It had no cap of its own: `maxSearches` was the branch's whole
        * allocation, so a branch could spend all five slots searching and never
-       * read a page. A deployed deep run shows what that looks like - nine
-       * searches before any fetch, then six refusals when branches wanted to
-       * read what they had found. Searching is cheap and finding is not the
-       * point; reading is. Two leaves three of a five-slot allocation for pages.
+       * read a page - nine searches before any fetch on a deployed run.
+       *
+       * Three, not two, and the difference was measured on the deployed stack:
+       *
+       *   unlimited  6 refusals (max_tool_calls)  every branch fetched   10 sources
+       *   two        2 refusals (max_searches)    q3 fetched NOTHING      9 sources
+       *   three      6 refusals (max_tool_calls)  every branch fetched    9 sources
+       *
+       * Two looked better by refusal count and was worse by the thing that
+       * matters: a branch whose first two searches returned poor leads had no
+       * way to look again, and contributed no pages at all. Three bounds the
+       * search phase without starving a sub-question.
+       *
+       * None of the three reaches `terminated: done`, because the branch
+       * allocation is five, the model asks for more than five in a single turn,
+       * and any refusal marks the run capped. That label is honest - something
+       * was asked for and denied - and the only change that would earn `done` is
+       * telling the branch how many calls it has left so its parallelism matches
+       * its budget.
        */
-      maxSearchesPerBranch: num(process.env.DEEP_BRANCH_MAX_SEARCHES, 2),
+      maxSearchesPerBranch: num(process.env.DEEP_BRANCH_MAX_SEARCHES, 3),
       branchConcurrency: num(process.env.DEEP_BRANCH_CONCURRENCY, 3),
       /**
        * 240 seconds, because `expectations.json` says so.
