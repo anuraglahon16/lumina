@@ -16,6 +16,21 @@ export const config = {
   env: process.env.NODE_ENV || 'development',
 
   gateway: {
+    /**
+     * How long the gateway waits for the agent to START answering an SSE ask.
+     *
+     * The ask forwarder had no deadline at all: its AbortController fired only
+     * on `res.on('close')`, so a stalled agent meant the gateway waited for as
+     * long as the client would. Measured in the deployed benchmark - 4 of 40 web
+     * asks produced no run record and the phase stalled five minutes, ending
+     * exactly at bench's 300s client abort, while every sibling upstream call
+     * was bounded at 60s, 120s or 3s.
+     *
+     * Bounded on time-to-first-byte only. A deep answer legitimately streams for
+     * minutes; what must not be unbounded is the silence before it begins. Deep
+     * streams its plan in about three seconds, so thirty is generous.
+     */
+    agentTtfbTimeoutMs: num(process.env.AGENT_TTFB_TIMEOUT_MS, 30000),
     port: num(process.env.GATEWAY_PORT, 8080),
     agentUrl: process.env.AGENT_URL || 'http://127.0.0.1:8787',
     corsOrigins: (process.env.CORS_ORIGINS || '*').split(',').map((s) => s.trim()),

@@ -52,6 +52,9 @@ export async function forwardSse(req, res, next, { path, body, method = 'POST' }
     if (!res.writableEnded) controller.abort();
   });
 
+  // The same time-to-first-byte bound as the contract ask forwarder, for the
+  // same reason: this controller fires only on client disconnect.
+  const ttfb = setTimeout(() => controller.abort(), config.gateway.agentTtfbTimeoutMs);
   let upstream;
   try {
     upstream = await fetch(target, {
@@ -60,7 +63,13 @@ export async function forwardSse(req, res, next, { path, body, method = 'POST' }
       body: method === 'POST' ? JSON.stringify(body ?? req.body ?? {}) : undefined,
       signal: controller.signal,
     });
+    clearTimeout(ttfb);
   } catch (err) {
+    clearTimeout(ttfb);
+    if (controller.signal.aborted && !res.headersSent) {
+      log.warn('sse_upstream_timeout', { request_id: req.requestId, after_ms: config.gateway.agentTtfbTimeoutMs });
+      return next(upstreamError('The agent service did not start answering in time', { cause: `no response within ${config.gateway.agentTtfbTimeoutMs}ms` }));
+    }
     return next(upstreamError('Could not reach the agent service', { cause: err.message }));
   }
 

@@ -47,6 +47,21 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
   // once the body was parsed, so listening there aborts immediately.
   res.on('close', () => controller.abort());
 
+  /**
+   * A deadline on the silence before the agent answers.
+   *
+   * This controller used to fire only on client disconnect, so the gateway's wait
+   * for the agent was unbounded and the client's own timeout was the only thing
+   * that ended it. Four of forty asks in a deployed benchmark produced no run
+   * record while the phase stalled five minutes, ending exactly at the client's
+   * 300s abort.
+   *
+   * Cleared the moment `fetch` resolves, which is when headers arrive: the bound
+   * is on time-to-first-byte, never on the stream. A deep answer streams for
+   * minutes and must not be cut off for doing so.
+   */
+  const ttfb = setTimeout(() => controller.abort(), config.gateway.agentTtfbTimeoutMs);
+
   try {
     const upstream = await fetch(target, {
       method: 'POST',
@@ -59,6 +74,7 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
       body: JSON.stringify(req.body ?? {}),
       signal: controller.signal,
     });
+    clearTimeout(ttfb);
 
     if (!upstream.ok && !upstream.headers.get('content-type')?.includes('text/event-stream')) {
       const text = await upstream.text();
@@ -82,7 +98,20 @@ contractRouter.post('/threads/:threadId/ask', requireUser, async (req, res, next
     // a stream and must not be fatal to everyone else's requests.
     await pipeline(Readable.fromWeb(upstream.body), res);
   } catch (err) {
-    if (controller.signal.aborted || err?.name === 'AbortError' || err?.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
+    clearTimeout(ttfb);
+    /**
+     * An abort before any headers is OUR deadline, not the client leaving.
+     *
+     * Returning silently here - which is right for a client that hung up - would
+     * have left a timed-out upstream looking like a successful empty stream. The
+     * two are told apart by whether we had sent headers yet.
+     */
+    const aborted = controller.signal.aborted || err?.name === 'AbortError';
+    if (aborted && !res.headersSent) {
+      log.warn('contract_ask_upstream_timeout', { request_id: req.requestId, after_ms: config.gateway.agentTtfbTimeoutMs });
+      return next(upstreamError('The agent service did not start answering in time', { cause: `no response within ${config.gateway.agentTtfbTimeoutMs}ms` }));
+    }
+    if (aborted || err?.code === 'ERR_STREAM_PREMATURE_CLOSE') return;
     log.error('contract_ask_forward_failed', { request_id: req.requestId, err: err.message });
     if (!res.headersSent) return next(upstreamError('The agent service is unreachable', { cause: err.message }));
     res.end();
