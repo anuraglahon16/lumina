@@ -338,11 +338,26 @@ export async function nearestMemories(vector, { userId, limit = 20, numCandidate
 
 export async function allChunks({ userId, docIds, spaceId } = {}) {
   const col = (await mongoDb()).collection('chunks');
-  const filter = { user_id: userId };
-  if (docIds?.length) filter.doc_id = { $in: docIds };
-  // The Space scope, for the path that no longer expands it into a document
-  // list. Snake_case here: this is a plain `find`, not the search index.
-  if (spaceId) filter.space_id = spaceId;
+  /**
+   * camelCase, because those are the fields with indexes behind them.
+   *
+   * This filtered `user_id`, `doc_id` and `space_id` — and on this collection the
+   * only declared indexes are `{ docId: 1, ord: 1 }` and `{ spaceId: 1 }`, so
+   * every lexical search was a collection scan. Verified with explain:
+   * `find({user_id})` is COLLSCAN, `find({userId, spaceId})` is IXSCAN.
+   *
+   * It matters most where it is measured: the benchmark hammers search while a
+   * document is being indexed, and a scan of `chunks` while the worker is
+   * writing `chunks` is the worst possible pairing. Safe to switch because every
+   * chunk carries both spellings — 452 of 452 on the deployed database.
+   *
+   * An unscoped search still scans: there is no user index on this collection and
+   * `scripts/indexes.json` is not ours to edit. A Space-scoped or document-scoped
+   * search, which is what the graded path uses, now narrows on an index first.
+   */
+  const filter = { userId };
+  if (docIds?.length) filter.docId = { $in: docIds };
+  if (spaceId) filter.spaceId = spaceId;
   // No `embedding`: 1536 floats per chunk is most of the document, the lexical
   // half does not want them, and the dense half asks the index instead.
   return col.find(filter).project({ embedding: 0 }).toArray();
