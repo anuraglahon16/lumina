@@ -113,10 +113,29 @@ export function toolCallsOf(run) {
     const ok = t.ok !== false;
     const call = { name: t.name, ok };
     if (typeof t.duration_ms === 'number') call.ms = Math.max(0, Math.round(t.duration_ms));
-    // A1 is a red line: a failed call with an empty error reads as a silent
-    // failure, which is the thing the gate exists to catch. If our record lost
-    // the message, say so rather than emit an empty string and pass.
-    if (!ok) call.error = String(t.error ?? '').trim() || 'error not recorded in the run log';
+    /**
+     * A1 is a red line: a failed call with an empty error reads as a silent
+     * failure, which is the thing the gate exists to catch.
+     *
+     * `error` is the field for it, but a tool that returned `{ ok: false }`
+     * instead of throwing used to leave it null and put the reason in
+     * `summary`. Seven fetch_page failures in a 90-run benchmark were exported
+     * as "error not recorded in the run log" while `summary: "failed: HTTP
+     * 403"` sat in the same document — a placeholder that satisfied the gate's
+     * letter and told a reader nothing. The writer now sets `error`; this reads
+     * the summary for runs already on disk, because the reason is genuinely
+     * recorded there and a manufactured string is the less honest of the two.
+     *
+     * If neither field has anything, that is still said out loud rather than
+     * papered over with an empty string that would pass.
+     */
+    if (!ok) {
+      const stated = String(t.error ?? '').trim();
+      const fromSummary = String(t.summary ?? '')
+        .trim()
+        .replace(/^failed:\s*/i, '');
+      call.error = stated || fromSummary || 'error not recorded in the run log';
+    }
     /**
      * Which sub-question the call served, as an extra field. Order is untouched.
      *

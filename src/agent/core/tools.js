@@ -166,6 +166,7 @@ export function createToolExecutor({
       return {
         ok: false,
         summary: `invalid arguments: ${checked.message}`,
+        error: `invalid arguments: ${checked.message}`,
         detail: { tool: name, problem: checked.message },
         content: `Invalid arguments for ${name}: ${checked.message}. Check the tool's schema and call it again with corrected arguments.`,
       };
@@ -195,6 +196,9 @@ export function createToolExecutor({
         ok: false,
         cached,
         summary: `0 results (${provider || 'no provider'})`,
+        error: provider_errors?.length
+          ? `no results for "${q}": ${provider_errors.join('; ')}`
+          : `no results for "${q}" via ${provider || 'no provider'}`,
         detail: { query: q, provider, provider_errors },
         content: `No results for "${q}". ${provider_errors?.length ? `Provider errors: ${provider_errors.join('; ')}. ` : ''}Try different keywords.`,
       };
@@ -221,6 +225,7 @@ export function createToolExecutor({
         ok: false,
         cached: page.cached,
         summary: `failed: ${page.error}`,
+        error: page.error || 'fetch failed with no reason given',
         detail: { url, error: page.error, status: page.status },
         content: `Could not read ${url}: ${page.error}. Do not cite it; try another source.`,
       };
@@ -245,6 +250,9 @@ export function createToolExecutor({
       return {
         ok: false,
         summary: `0 passages (corpus ${corpus_size} chunks)`,
+        error: corpus_size
+          ? `no passages matched "${query}" in ${corpus_size} indexed chunk(s)`
+          : 'no indexed documents to search',
         detail: { query, corpus_size },
         content: corpus_size
           ? `No passages in the uploaded documents matched "${query}".`
@@ -367,7 +375,29 @@ export function createToolExecutor({
       // slot rather than letting a blocked site truncate the run. Budget.refund
       // caps how often this can happen and never refunds the wall clock.
       const refunded = result.ok ? false : budget.refund(name, result.summary);
-      recorder?.recordToolCall({ name, input, durationMs, ok: result.ok, summary: result.summary, cached: result.cached, branch });
+      /**
+       * A failed call records why it failed.
+       *
+       * `error` was simply not passed here, so only a tool that *threw* ever
+       * stored a reason: a tool that returned `{ ok: false }` put its reason in
+       * `summary` and left `error` null. Seven fetch_page failures in a
+       * 90-run benchmark came out as `error: null` with the reason sitting in
+       * `summary: "failed: HTTP 403"` right beside it, and the exporter then
+       * wrote "error not recorded in the run log" into the trajectory — a
+       * non-empty string that satisfied the contract's letter while saying
+       * nothing. The summary is the fallback, not the source: a tool that knows
+       * its reason should say so in the field meant for it.
+       */
+      recorder?.recordToolCall({
+        name,
+        input,
+        durationMs,
+        ok: result.ok,
+        summary: result.summary,
+        error: result.ok ? null : result.error || result.summary || null,
+        cached: result.cached,
+        branch,
+      });
       /**
        * Tell the model what it has left, on every result.
        *
