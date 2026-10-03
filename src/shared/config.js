@@ -407,6 +407,15 @@ export const config = {
     dnsTries: num(process.env.FETCH_DNS_TRIES, 2),
     connectTimeoutMs: num(process.env.FETCH_CONNECT_TIMEOUT_MS, 5000),
     /**
+     * How many redirects one fetch will follow, each one re-checked.
+     *
+     * Five, not the fetch spec's twenty: every hop costs a DNS round trip and a
+     * connection inside a 90-second run's budget, and a legitimate article is
+     * never five redirects deep. The cap also ends a redirect loop, which the
+     * per-hop check alone would happily follow forever.
+     */
+    maxRedirects: num(process.env.FETCH_MAX_REDIRECTS, 5),
+    /**
      * How long retrieval waits for aborted fetches to settle before giving up
      * on them and closing the ledger.
      *

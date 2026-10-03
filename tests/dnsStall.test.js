@@ -74,13 +74,57 @@ test('an IP literal needs no resolution at all', async () => {
   assert.deepEqual(addrs, [{ address: '93.184.216.34', family: 4 }]);
 });
 
-test('the connection uses only addresses the SSRF check approved', () => {
+/**
+ * The connection goes to the approved addresses, and nowhere else.
+ *
+ * This used to assert the shape of `dispatcherFor` against the file's own text,
+ * including `lookup: (_hostname, _opts, cb)` — and that ignored `_hostname` was
+ * the bug: the dispatcher answered with the approved addresses whatever host it
+ * was asked about, so a redirect to another host was delivered to the original
+ * host's address. A test that pins the defect in place is worse than no test,
+ * so this one asks the dispatcher instead of reading it.
+ */
+test('the dispatcher answers only for the host that passed the SSRF check', async () => {
+  const { pinnedLookup } = await import('../src/agent/services/fetcher.js');
+  const approved = [{ address: '93.184.216.34', family: 4 }];
+  const lookup = pinnedLookup('news.example.com', approved);
+
+  const ask = (host) => new Promise((resolve) => lookup(host, {}, (err, addrs) => resolve({ err, addrs })));
+
+  const same = await ask('news.example.com');
+  assert.equal(same.err, null, 'the approved host is answered');
+  assert.deepEqual(same.addrs, approved, 'with exactly the approved addresses');
+
+  // Same host, two other legal spellings.
+  assert.deepEqual((await ask('NEWS.example.com')).addrs, approved, 'case is not a different host');
+  assert.deepEqual((await ask('news.example.com.')).addrs, approved, 'the FQDN dot is not a different host');
+
+  for (const other of ['evil.example.com', '169.254.169.254', 'lumina-al-agent.internal']) {
+    const res = await ask(other);
+    assert.ok(res.err instanceof Error, `${other} is refused, not answered`);
+    assert.match(res.err.message, /refusing to connect/);
+    assert.equal(res.addrs, undefined, `${other} gets no addresses`);
+  }
+});
+
+// No comment stripping here, deliberately.
+//
+// The first version of this test stripped block comments with a non-greedy
+// /\/\*...\*\//g before searching, and that regex ate real code: the `accept`
+// header's value contains a star-slash-star wildcard, so the match ran from an
+// earlier comment opener all the way through it and took the `redirect:` lines
+// with it -- 14k of 30k characters gone, and an assertion failing for a reason
+// that had nothing to do with the fetcher. (Written as line comments, because
+// spelling that wildcard inside a block comment closes the block comment --
+// which is how the first attempt at this very note failed to parse.)
+//
+// `dns.lookup(` with its parenthesis appears only in code; the prose in
+// fetcher.js writes `dns.lookup` without one, which is what the second
+// assertion pins.
+test('the unbounded getaddrinfo call is not on the fetch path', () => {
   const src = fs.readFileSync(new URL('../src/agent/services/fetcher.js', import.meta.url), 'utf8');
-  assert.match(src, /function dispatcherFor\(addrs\)/, 'there is a dispatcher built from the approved addresses');
-  assert.match(src, /lookup: \(_hostname, _opts, cb\) => cb\(null, addrs/, 'and it answers undici with those addresses');
-  assert.match(src, /dispatcher,/, 'the fetch uses it');
-  // The old unbounded call must not come back.
-  assert.ok(!/await dns\.lookup\(/.test(src), 'getaddrinfo is no longer on the fetch path');
+  assert.ok(!/dns\.lookup\(/.test(src), 'the unbounded threadpool call must not come back');
+  assert.match(src, /dns\.lookup/, 'but the comment explaining why is still there (so this is not vacuous)');
 });
 
 test('retrieval stops waiting for a fetch that will not settle', () => {

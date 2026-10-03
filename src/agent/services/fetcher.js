@@ -1,4 +1,3 @@
-import dns from 'node:dns/promises';
 import { Resolver } from 'node:dns/promises';
 import net from 'node:net';
 import { Agent } from 'undici';
@@ -14,21 +13,115 @@ const log = createLogger('fetcher');
 
 const BLOCKED_HOST = /^(localhost|.*\.local|.*\.internal|metadata\.google\.internal)$/i;
 
-function isPrivateAddress(ip) {
-  if (net.isIPv4(ip)) {
-    const [a, b] = ip.split('.').map(Number);
-    return (
-      a === 10 ||
-      a === 127 ||
-      a === 0 ||
-      (a === 172 && b >= 16 && b <= 31) ||
-      (a === 192 && b === 168) ||
-      (a === 169 && b === 254) ||
-      (a === 100 && b >= 64 && b <= 127)
-    );
+/**
+ * A hostname in the form the checks expect.
+ *
+ * Two spellings of the same host were getting past these checks.
+ *
+ * `example.internal.` is the same name as `example.internal` — the trailing dot
+ * only says "already fully qualified" — but `/\.internal$/` does not match it,
+ * so the fully-qualified spelling walked past the name check. On Fly the
+ * address check caught it anyway, because the name resolves into `fdaa::/16`,
+ * but relying on that makes the name check decorative.
+ *
+ * The brackets were worse. `new URL('http://[fdaa:0:1::3]/').hostname` is
+ * `"[fdaa:0:1::3]"`, brackets included, and `net.isIP` says 0 for that — so the
+ * IP-literal branch of `assertFetchable` never fired for *any* v6 literal, and
+ * no v6 literal was ever handed to `isPrivateAddress`. It was still refused,
+ * but only because c-ares returns EBADNAME for a bracketed name: a
+ * fail-closed accident one normalisation away from being a hole, and the test
+ * that caught it was asserting on the reason rather than just the refusal.
+ */
+export const normalizeHostname = (hostname) =>
+  String(hostname ?? '')
+    .replace(/^\[|\]$/g, '')
+    .replace(/\.$/, '')
+    .toLowerCase();
+
+/** Is this hostname one we refuse to resolve at all? */
+export const isBlockedHostname = (hostname) => BLOCKED_HOST.test(normalizeHostname(hostname));
+
+function isPrivateV4(ip) {
+  const [a, b] = ip.split('.').map(Number);
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    (a === 169 && b === 254) ||
+    (a === 100 && b >= 64 && b <= 127) ||
+    (a === 192 && b === 0) ||
+    (a === 198 && (b === 18 || b === 19)) ||
+    (a === 198 && b === 51) ||
+    (a === 203 && b === 0) ||
+    a >= 224
+  );
+}
+
+/** The eight 16-bit groups of an IPv6 address, or null if it will not parse. */
+function hextets(ip) {
+  let rest = ip.split('%')[0];
+  let tail4 = null;
+  const lastColon = rest.lastIndexOf(':');
+  const maybeV4 = rest.slice(lastColon + 1);
+  if (maybeV4.includes('.')) {
+    if (!net.isIPv4(maybeV4)) return null;
+    const o = maybeV4.split('.').map(Number);
+    tail4 = [(o[0] << 8) | o[1], (o[2] << 8) | o[3]];
+    rest = rest.slice(0, lastColon + 1) + '0:0';
   }
-  const lower = ip.toLowerCase();
-  return lower === '::1' || lower.startsWith('fc') || lower.startsWith('fd') || lower.startsWith('fe80') || lower === '::';
+  const halves = rest.split('::');
+  if (halves.length > 2) return null;
+  const head = halves[0] ? halves[0].split(':') : [];
+  const tail = halves.length === 2 && halves[1] ? halves[1].split(':') : [];
+  const fill = 8 - head.length - tail.length;
+  if (halves.length === 1 ? head.length !== 8 : fill < 0) return null;
+  const groups = halves.length === 1 ? head : [...head, ...Array(fill).fill('0'), ...tail];
+  const out = groups.map((g) => {
+    if (!/^[0-9a-f]{1,4}$/i.test(g)) return NaN;
+    return parseInt(g, 16);
+  });
+  if (out.some(Number.isNaN)) return null;
+  if (tail4) {
+    out[6] = tail4[0];
+    out[7] = tail4[1];
+  }
+  return out;
+}
+
+/**
+ * Is this address somewhere we must never connect?
+ *
+ * String prefixes are the wrong tool for v6 and this used them. Three families
+ * walked through: `fe80::/10` is `fe80`–`febf`, so `startsWith('fe80')` missed
+ * `febf::1`; an IPv4-mapped address like `::ffff:169.254.169.254` is the cloud
+ * metadata endpoint written in v6 and matched none of the prefixes at all; and
+ * `ff00::/8` multicast was never considered. So the groups are parsed and
+ * compared as numbers, and any address carrying an embedded IPv4 one — mapped,
+ * compatible, or NAT64 — is judged on that IPv4 address as well as its prefix.
+ */
+export function isPrivateAddress(ip) {
+  if (net.isIPv4(ip)) return isPrivateV4(ip);
+  const h = hextets(ip.toLowerCase());
+  // Unparseable is not safe. Refusing to connect is the conservative failure.
+  if (!h) return true;
+
+  if (h.every((g) => g === 0)) return true; // ::
+  if (h.slice(0, 7).every((g) => g === 0) && h[7] === 1) return true; // ::1
+  if ((h[0] & 0xfe00) === 0xfc00) return true; // fc00::/7 — ULA, incl. Fly's fdaa::/16
+  if ((h[0] & 0xffc0) === 0xfe80) return true; // fe80::/10 — link-local
+  if ((h[0] & 0xff00) === 0xff00) return true; // ff00::/8 — multicast
+
+  // The embedded-IPv4 forms: ::a.b.c.d, ::ffff:a.b.c.d, ::ffff:0:a.b.c.d and
+  // 64:ff9b::/96 (NAT64) all deliver traffic to an IPv4 destination.
+  const embedded = () => `${h[6] >> 8}.${h[6] & 0xff}.${h[7] >> 8}.${h[7] & 0xff}`;
+  const zeroHead = h.slice(0, 5).every((g) => g === 0);
+  if (zeroHead && (h[5] === 0 || h[5] === 0xffff)) return isPrivateV4(embedded());
+  if (h.slice(0, 4).every((g) => g === 0) && h[4] === 0xffff && h[5] === 0) return isPrivateV4(embedded()); // ::ffff:0:a.b.c.d
+  if (h[0] === 0x0064 && h[1] === 0xff9b) return isPrivateV4(embedded());
+
+  return false;
 }
 
 /**
@@ -52,7 +145,10 @@ const resolverFor = () => {
 };
 
 /** Addresses for a host, bounded and cancellable. Throws rather than hanging. */
-export async function resolveHost(hostname, { signal, resolver = null } = {}) {
+export async function resolveHost(rawHostname, { signal, resolver = null } = {}) {
+  // A v6 literal arrives from `URL.hostname` wrapped in brackets, which is not
+  // an IP as far as `net.isIP` is concerned and is not a name either.
+  const hostname = normalizeHostname(rawHostname);
   if (net.isIP(hostname)) return [{ address: hostname, family: net.isIPv6(hostname) ? 6 : 4 }];
   const r = resolver ?? resolverFor();
   let onAbort = null;
@@ -107,9 +203,12 @@ export async function resolveHost(hostname, { signal, resolver = null } = {}) {
 async function assertFetchable(url, { signal } = {}) {
   const parsed = new URL(url);
   if (!/^https?:$/.test(parsed.protocol)) throw new Error(`blocked scheme: ${parsed.protocol}`);
-  if (BLOCKED_HOST.test(parsed.hostname)) throw new Error(`blocked host: ${parsed.hostname}`);
-  if (net.isIP(parsed.hostname) && isPrivateAddress(parsed.hostname)) throw new Error('blocked private address');
-  const addrs = await resolveHost(parsed.hostname, { signal });
+  // Normalised first: a v6 literal's brackets and a FQDN's trailing dot both
+  // hid the host from the checks below.
+  const host = normalizeHostname(parsed.hostname);
+  if (isBlockedHostname(host)) throw new Error(`blocked host: ${host}`);
+  if (net.isIP(host) && isPrivateAddress(host)) throw new Error(`blocked private address: ${host}`);
+  const addrs = await resolveHost(host, { signal });
   if (addrs.some((a) => isPrivateAddress(a.address))) throw new Error('host resolves to a private address');
   return { parsed, addrs };
 }
@@ -121,14 +220,43 @@ async function assertFetchable(url, { signal } = {}) {
  * putting the unbounded lookup back on the threadpool after all the work above,
  * and resolving a second time to an answer nobody validated.
  */
-function dispatcherFor(addrs) {
+/**
+ * A `lookup` that answers for one host and refuses every other.
+ *
+ * The old version ignored its `hostname` argument and handed back the approved
+ * addresses whatever it was asked about. That is wrong in both directions on a
+ * redirect: a hop to another host would have been sent to the original host's
+ * address wearing the new host's `Host` header, and a hop whose host was never
+ * validated would have been answered as though it had been. Refusing is the
+ * only safe answer, and it is loud.
+ *
+ * Exported because it is the security boundary, and reaching it through an
+ * `Agent`'s internals is not a test of anything stable.
+ */
+export function pinnedLookup(hostname, addrs) {
+  const approved = normalizeHostname(hostname);
+  const answer = addrs.map((a) => ({ address: a.address, family: a.family }));
+  return (host, _opts, cb) => {
+    if (normalizeHostname(host) !== approved)
+      return cb(new Error(`refusing to connect to ${host}: only ${approved} passed the SSRF check`));
+    cb(null, answer);
+  };
+}
+
+export function dispatcherFor(hostname, addrs) {
   return new Agent({
-    connect: {
-      lookup: (_hostname, _opts, cb) => cb(null, addrs.map((a) => ({ address: a.address, family: a.family }))),
-    },
+    connect: { lookup: pinnedLookup(hostname, addrs) },
     connectTimeout: config.fetcher.connectTimeoutMs,
   });
 }
+
+/**
+ * The statuses that carry a `Location` we are willing to follow.
+ *
+ * All of these are followed as GET: this fetcher only ever issues GET, so the
+ * 303-vs-307 method-rewriting distinction does not arise.
+ */
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
 const robotsCache = new Map();
 
@@ -334,6 +462,82 @@ async function readLimited(res, maxBytes, signal) {
 }
 
 /**
+ * Follow a redirect chain, checking every hop.
+ *
+ * `redirect: 'follow'` let undici walk the chain internally, which meant
+ * `assertFetchable` only ever saw the URL the model asked for. Two ways out of
+ * the SSRF check followed from that. A hop to another hostname was answered by
+ * the dispatcher's pinned `lookup`, which ignored the name it was handed — so
+ * the request went to the original host's address wearing the new host's `Host`
+ * header. Worse, a hop to a bare IP literal never consults `lookup` at all:
+ * `net.connect` skips DNS when the host is already an address, so
+ * `Location: http://169.254.169.254/latest/meta-data/` connected straight to
+ * the metadata service with nothing in the way. That is measured rather than
+ * reasoned about — a custom `lookup` is called for a hostname and is not called
+ * for an IP literal.
+ *
+ * So each hop is resolved through the bounded resolver, re-checked against the
+ * same rules as the first URL, and given its own dispatcher pinned to the
+ * addresses that just passed. A hop that fails throws, and `fetchPage` turns
+ * that into `{ ok: false, error }`: a failed fetch with a reason, never a
+ * silent connection.
+ *
+ * The dependencies are arguments because this is the security boundary, and a
+ * boundary that can only be exercised by reaching the real internet is a
+ * boundary nobody tests. Production passes the real three.
+ */
+export async function followRedirects({
+  start,
+  dispatcher,
+  signal,
+  onDispatcher = () => {},
+  maxRedirects = config.fetcher.maxRedirects,
+  doFetch = fetch,
+  validate = assertFetchable,
+  makeDispatcher = dispatcherFor,
+} = {}) {
+  let current = start;
+  const redirectChain = [];
+  for (;;) {
+    const res = await doFetch(current, {
+      headers: {
+        'user-agent': config.fetcher.userAgent,
+        accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.8,*/*;q=0.5',
+        'accept-language': 'en',
+      },
+      redirect: 'manual',
+      signal,
+      dispatcher,
+    });
+
+    const location = REDIRECT_STATUS.has(res.status) ? res.headers.get('location') : null;
+    if (!location) return { res, finalUrl: current.toString(), redirectChain };
+
+    // A redirect's body is not evidence, and leaving it holds the socket.
+    await res.body?.cancel().catch(() => {});
+
+    // Checked before resolving the next hop, so a redirect loop ends here
+    // rather than being followed forever by a check that keeps passing.
+    if (redirectChain.length >= maxRedirects)
+      throw new Error(`too many redirects (max ${maxRedirects}) starting at ${start.toString()}`);
+
+    let next;
+    try {
+      next = new URL(location, current);
+    } catch {
+      throw new Error(`unparseable redirect to "${location}"`);
+    }
+
+    // The same gate as the first URL: scheme, name, resolution, ranges.
+    const hop = await validate(next.toString(), { signal });
+    dispatcher = makeDispatcher(hop.parsed.hostname, hop.addrs);
+    onDispatcher(dispatcher);
+    current = hop.parsed;
+    redirectChain.push(current.toString());
+  }
+}
+
+/**
  * Fetch one URL and return cleaned, citable evidence.
  * Cached by URL, so repeated runs over the same source cost nothing.
  */
@@ -350,10 +554,9 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
    * outside both the timeout and the caller's control. A cancelled request went
    * on downloading.
    *
-   * One thing this genuinely cannot cancel is the DNS lookup inside the SSRF
-   * check: `dns.promises.lookup` takes no signal, so an abort during resolution
-   * is noticed after it returns rather than during. The resolver has its own
-   * timeout and the window is short, but it is a gap and not a cancellation.
+   * This now covers resolution too: `resolveHost` takes the signal, cancels the
+   * c-ares queries on abort and loses the race to the abort besides, so there is
+   * no longer a window where an abort is noticed only after DNS returns.
    */
   const bound = deadlineSignal(config.fetcher.timeoutMs, signal);
   // Where the time inside one fetch actually goes. Without this, a slow page is
@@ -399,7 +602,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
   }
   timings.resolve_ms = Math.round(performance.now() - resolveStart);
   // Connect only to what the check approved, and never resolve a second time.
-  dispatcher = dispatcherFor(addrs);
+  dispatcher = dispatcherFor(parsed.hostname, addrs);
 
   const robotsStart = performance.now();
   // robots.txt goes to the same approved addresses: it is a fetch to the same
@@ -424,28 +627,32 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
     { url: parsed.toString(), maxChars },
     config.cache.fetchTtlMs,
     async () => hostBreaker.run(async () => {
+      const hopStart = performance.now();
       let res;
-      const headersStart = performance.now();
+      let current;
+      let redirectChain;
       try {
-        res = await fetch(parsed, {
-          headers: {
-            'user-agent': config.fetcher.userAgent,
-            accept: 'text/html,application/xhtml+xml,text/plain,application/json;q=0.8,*/*;q=0.5',
-            'accept-language': 'en',
-          },
-          redirect: 'follow',
-          signal: bound.signal,
+        ({ res, finalUrl: current, redirectChain } = await followRedirects({
+          start: parsed,
           dispatcher,
-        });
+          signal: bound.signal,
+          onDispatcher: (next) => {
+            const previous = dispatcher;
+            dispatcher = next;
+            previous?.close?.().catch(() => {});
+          },
+        }));
       } finally {
-        timings.headers_ms = Math.round(performance.now() - headersStart);
+        timings.headers_ms = Math.round(performance.now() - hopStart);
       }
 
+      const finalUrl = current;
+      const chain = redirectChain.length ? { redirect_chain: redirectChain } : {};
       const contentType = res.headers.get('content-type') || '';
       if (res.status >= 500) throw new Error(`HTTP ${res.status}`);
-      if (!res.ok) return { ok: false, url: res.url || parsed.toString(), status: res.status, error: `HTTP ${res.status}` };
+      if (!res.ok) return { ok: false, url: finalUrl, status: res.status, error: `HTTP ${res.status}`, ...chain };
       if (/image|video|audio|font|zip|octet-stream/.test(contentType)) {
-        return { ok: false, url: res.url, status: res.status, error: `unsupported content-type: ${contentType}` };
+        return { ok: false, url: finalUrl, status: res.status, error: `unsupported content-type: ${contentType}`, ...chain };
       }
 
       const bodyStart = performance.now();
@@ -454,7 +661,7 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
       const extractStart = performance.now();
       const isHtml = /html|xml/.test(contentType) || /^\s*<(!doctype|html)/i.test(body);
       const extracted = isHtml
-        ? extractArticle(body, res.url || parsed.toString())
+        ? extractArticle(body, finalUrl)
         : {
             title: parsed.pathname.split('/').filter(Boolean).pop() || parsed.hostname,
             published_at: null,
@@ -467,8 +674,9 @@ export async function fetchPage(url, { recorder, maxChars = config.fetcher.maxCh
 
       return {
         ok: extracted.text.length > 0,
-        url: res.url || parsed.toString(),
-        final_url: res.url,
+        url: finalUrl,
+        final_url: finalUrl,
+        ...chain,
         status: res.status,
         content_type: contentType,
         truncated,
