@@ -16,8 +16,26 @@ const USER = `usr_smoke${Date.now().toString(36)}`;
  * minted identity, and of course one stranger cannot see another's data.
  */
 const SECRET = process.env.AUTH_SECRET || '';
-const authHeaders = (userId) =>
-  SECRET ? { authorization: `Bearer ${signToken({ sub: userId }, SECRET, 3600)}` } : { 'x-user-id': userId };
+
+/**
+ * Identity goes in `x-lumina-token`, not `Authorization: Bearer`.
+ *
+ * On a deployment with DEMO_PASSWORD set, `Authorization` is already taken: the
+ * demo gate reads it and accepts only `Basic`, so a Bearer token there is not a
+ * token the gate recognises and every `/api/*` request came back 401. The
+ * contract routes (`/threads`, `/memory`, `/spaces`, `/health`, `/stats`) are
+ * routed before that middleware, which is why the benchmark never met the gate
+ * and this suite did. `identity` reads `x-lumina-token` first precisely so an
+ * API client can carry both credentials at once.
+ */
+const DEMO_PASSWORD = process.env.DEMO_PASSWORD || process.env.SMOKE_PASSWORD || '';
+const demoHeader = DEMO_PASSWORD
+  ? { authorization: `Basic ${Buffer.from(`smoke:${DEMO_PASSWORD}`).toString('base64')}` }
+  : {};
+const authHeaders = (userId) => ({
+  ...demoHeader,
+  ...(SECRET ? { 'x-lumina-token': signToken({ sub: userId }, SECRET, 3600) } : { 'x-user-id': userId }),
+});
 
 let passed = 0;
 let failed = 0;
@@ -53,7 +71,16 @@ async function main() {
   section('health & capabilities');
   const health = await call('/health');
   check('gateway /health responds', health.status === 200 || health.status === 503, `status ${health.status}`);
-  check('gateway reports agent health', Boolean(health.json?.agent?.checks), JSON.stringify(health.json?.agent).slice(0, 120));
+  /**
+   * The contract nests the agent service's health under `ai`, not `agent`
+   * (HealthResponse in packages/contract/src/http.ts). This read `agent`, so it
+   * could not pass against a conformant response — and because
+   * `JSON.stringify(undefined)` is `undefined` rather than a string, the detail
+   * argument threw and aborted the whole suite at check 2 instead of failing
+   * one assertion. A stale assertion that crashes hides every check behind it.
+   */
+  check('gateway nests the agent service health under ai', health.json?.ai?.status === 'ok', JSON.stringify(health.json?.ai ?? null).slice(0, 120));
+  check('health names the four things it must', Boolean(health.json?.model && health.json?.searchProvider && health.json?.vectorStore && health.json?.db), `model=${health.json?.model} search=${health.json?.searchProvider} vector=${health.json?.vectorStore} db=${health.json?.db}`);
   const caps = await call('/api/capabilities');
   check('capabilities lists active providers', Boolean(caps.json?.active?.search), JSON.stringify(caps.json?.active));
   check('secrets are never returned', !JSON.stringify(caps.json).includes('sk-'), 'a key-like string appeared in the response');
