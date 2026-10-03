@@ -665,11 +665,35 @@ async function sweepUnreadCandidates({ ledger, recorder, emit, deadline, limits,
     try {
       const page = await fetch(candidate.url, { recorder });
       if (!page.ok) {
+        /**
+         * A failed sweep fetch is logged, not only traced.
+         *
+         * This branch emitted the trace frame and then `continue`d, so the step
+         * never reached the run log — the exact inverse of the bug the comment
+         * above describes fixing, and in the worse direction: the trace showed
+         * a step the log denied. It was measurable from the run's own numbers.
+         * Five of nine deep runs in a 90-run benchmark recorded `claimed: 24`
+         * in the pool snapshot beside 23 entries in `tool_calls`, and the
+         * missing one was always a failed sweep fetch. A log that drops exactly
+         * the failures is worse than no log, because every rule that reads it
+         * reads a cleaner run than happened.
+         */
+        const why = page.error || 'fetch_page returned ok:false with no reason';
+        recorder.recordToolCall({
+          name: 'fetch_page',
+          input: { url: candidate.url },
+          durationMs: page.duration_ms,
+          ok: false,
+          summary: `sweep: failed: ${why}`,
+          error: why,
+          cached: page.cached,
+          branch,
+        });
         emit('tool_result', {
           tool: 'fetch_page',
           ok: false,
-          summary: 'sweep: fetch returned no readable text',
-          detail: page.error || 'fetch_page returned ok:false',
+          summary: `sweep: failed: ${why}`,
+          detail: why,
           duration_ms: page.duration_ms,
           branch,
         });

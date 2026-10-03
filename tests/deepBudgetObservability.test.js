@@ -229,7 +229,7 @@ function thriftyModel(n) {
 }
 
 /** runDeep with the sweeping fixture, and the sweep's own count returned. */
-async function runSweeping(branches = 3) {
+async function runSweeping(branches = 3, fetchPage = okFetch) {
   const contract = [];
   const raw = [];
   let providerCalls = 0;
@@ -241,7 +241,7 @@ async function runSweeping(branches = 3) {
     requestId: `req_sweep_${Math.random().toString(36).slice(2, 8)}`,
     complete: thriftyModel(branches),
     webSearch: async (...a) => { providerCalls += 1; return sweepLeads(...a); },
-    fetchPage: async (...a) => { providerCalls += 1; return okFetch(...a); },
+    fetchPage: async (...a) => { providerCalls += 1; return fetchPage(...a); },
     emit: (e, d) => { raw.push({ event: e, data: d }); mapped(e, d); },
   });
   return {
@@ -253,6 +253,40 @@ async function runSweeping(branches = 3) {
     swept: raw.filter((e) => e.event === 'sweep_done').reduce((n, e) => n + (e.data?.fetched ?? 0), 0),
   };
 }
+
+/**
+ * The sweep's candidates are the `unread-*` leads; a branch only ever fetches
+ * `read-*`. So failing the former fails exactly the sweep's fetches, which is
+ * the case the all-succeeding fixture could never reach.
+ */
+const sweepFetchFails = async (url) =>
+  /unread-/.test(String(url))
+    ? { ok: false, url, status: 403, error: 'HTTP 403', cached: false, duration_ms: 3 }
+    : okFetch(url);
+
+test('a failed sweep fetch is logged, not only traced', async () => {
+  const run = await runSweeping(3, sweepFetchFails);
+
+  const sweepAttempts = run.traces.filter((t) => t.tool === 'fetch_page' && /^sweep: /.test(t.reason ?? ''));
+  const failedSweeps = sweepAttempts.filter((t) => t.ok === false);
+  // Without this the test is vacuous: an all-succeeding fixture is how the bug
+  // survived the agreement test above for as long as it did.
+  assert.ok(failedSweeps.length > 0, 'the fixture produced at least one failed sweep fetch');
+
+  // The defect: this branch emitted the trace frame and then `continue`d, so
+  // the step never reached the run log. Five of nine deep runs in a 90-run
+  // benchmark recorded `claimed: 24` beside 23 logged calls, and the missing
+  // one was always a failed sweep fetch.
+  assert.equal(run.traces.length, run.logged.length, 'the trace and the log count the same steps');
+  assert.equal(run.pool.claimed, run.logged.length, 'and the pool agrees with both');
+
+  const loggedFailures = run.logged.filter((c) => c.ok === false && /^sweep: /.test(c.summary ?? ''));
+  assert.equal(loggedFailures.length, failedSweeps.length, 'every failed sweep fetch is in the log');
+  for (const c of loggedFailures) {
+    assert.ok(String(c.error ?? '').trim().length > 0, `a failed call carries a reason, got ${JSON.stringify(c.error)}`);
+    assert.match(c.error, /HTTP 403/, 'and it is the real reason, not a placeholder');
+  }
+});
 
 test('the streamed trace accounts for every tool call the run log records', async () => {
   // The sweep wrote itself to the run log and emitted no tool_result, so the
